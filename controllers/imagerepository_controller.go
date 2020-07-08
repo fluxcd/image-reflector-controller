@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/name"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,10 +39,31 @@ type ImageRepositoryReconciler struct {
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories/status,verbs=get;update;patch
 
 func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("imagerepository", req.NamespacedName)
+	ctx := context.Background()
+	log := r.Log.WithValues("imagerepository", req.NamespacedName)
 
-	// your logic here
+	var imageRepo imagev1alpha1.ImageRepository
+	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	ref, err := name.ParseReference(imageRepo.Spec.ImageName)
+	if err != nil {
+		imageRepo.Status.LastError = err.Error()
+		if err := r.Status().Update(ctx, &imageRepo); err != nil {
+			return ctrl.Result{}, err
+		}
+		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.ImageName)
+		return ctrl.Result{}, nil
+	}
+
+	canonicalName := ref.Context().String()
+	if imageRepo.Status.CanonicalImageName != canonicalName {
+		imageRepo.Status.CanonicalImageName = canonicalName
+		if err := r.Status().Update(ctx, &imageRepo); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }

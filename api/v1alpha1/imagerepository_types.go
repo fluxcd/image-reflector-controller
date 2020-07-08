@@ -20,22 +20,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// ImageRepositorySpec defines the desired state of ImageRepository
+// ImageRepositorySpec defines the parameters for scanning an image
+// repository, e.g., `fluxcd/flux`.
 type ImageRepositorySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of ImageRepository. Edit ImageRepository_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// ImageName is the name of the image repository
+	// +required
+	ImageName string `json:"image,omitempty"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository
 type ImageRepositoryStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// CannonicalName is the name of the image repository with all the
+	// implied bits made explicit; e.g., `docker.io/library/alpine`
+	// rather than `alpine`.
+	CanonicalImageName string `json:"canonicalImageName,omitempty"`
+	LastError          string `json:"lastError"`
 }
 
 // +kubebuilder:object:root=true
