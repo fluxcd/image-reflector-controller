@@ -1,0 +1,7 @@
+domain: fluxcd.io
+repo: github.com/squaremo/image-update
+resources:
+- group: image
+  kind: ImageRepository
+  version: v1alpha1
+version: "2"
