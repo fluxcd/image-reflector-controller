@@ -23,9 +23,9 @@ import (
 // ImageRepositorySpec defines the parameters for scanning an image
 // repository, e.g., `fluxcd/flux`.
 type ImageRepositorySpec struct {
-	// ImageName is the name of the image repository
+	// Image is the name of the image repository
 	// +required
-	ImageName string `json:"image,omitempty"`
+	Image string `json:"image,omitempty"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository
@@ -34,10 +34,13 @@ type ImageRepositoryStatus struct {
 	// implied bits made explicit; e.g., `docker.io/library/alpine`
 	// rather than `alpine`.
 	CanonicalImageName string `json:"canonicalImageName,omitempty"`
-	LastError          string `json:"lastError"`
+	// LastError is the error from last reconciliation, or empty if
+	// reconciliation was successful.
+	LastError string `json:"lastError"`
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // ImageRepository is the Schema for the imagerepositories API
 type ImageRepository struct {

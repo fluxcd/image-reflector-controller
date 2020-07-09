@@ -59,7 +59,7 @@ func main() {
 		MetricsBindAddress: metricsAddr,
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "e189b2df.my.domain",
+		LeaderElectionID:   "e189b2df.fluxcd.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

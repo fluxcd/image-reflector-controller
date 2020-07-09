@@ -15,6 +15,8 @@ spec:
     plural: imagerepositories
     singular: imagerepository
   scope: Namespaced
+  subresources:
+    status: {}
   validation:
     openAPIV3Schema:
       description: ImageRepository is the Schema for the imagerepositories API
@@ -36,7 +38,7 @@ spec:
             image repository, e.g., `fluxcd/flux`.
           properties:
             image:
-              description: ImageName is the name of the image repository
+              description: Image is the name of the image repository
               type: string
           type: object
         status:
@@ -48,6 +50,8 @@ spec:
                 rather than `alpine`.
               type: string
             lastError:
+              description: LastError is the error from last reconciliation, or empty
+                if reconciliation was successful.
               type: string
           required:
           - lastError

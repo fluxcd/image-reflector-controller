@@ -1,7 +1,6 @@
 apiVersion: image.fluxcd.io/v1alpha1
 kind: ImageRepository
 metadata:
-  name: imagerepository-sample
+  name: flux-repo
 spec:
-  # Add fields here
-  foo: bar
+  image: fluxcd/flux

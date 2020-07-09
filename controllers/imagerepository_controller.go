@@ -47,19 +47,20 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	ref, err := name.ParseReference(imageRepo.Spec.ImageName)
+	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
 		imageRepo.Status.LastError = err.Error()
 		if err := r.Status().Update(ctx, &imageRepo); err != nil {
 			return ctrl.Result{}, err
 		}
-		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.ImageName)
+		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
 		return ctrl.Result{}, nil
 	}
 
 	canonicalName := ref.Context().String()
 	if imageRepo.Status.CanonicalImageName != canonicalName {
 		imageRepo.Status.CanonicalImageName = canonicalName
+		imageRepo.Status.LastError = ""
 		if err := r.Status().Update(ctx, &imageRepo); err != nil {
 			return ctrl.Result{}, err
 		}
