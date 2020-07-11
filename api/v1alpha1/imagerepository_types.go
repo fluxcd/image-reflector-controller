@@ -26,6 +26,14 @@ type ImageRepositorySpec struct {
 	// Image is the name of the image repository
 	// +required
 	Image string `json:"image,omitempty"`
+	// ScanInterval is the (minimum) length of time to wait between
+	// scans of the image repository.
+	// +optional
+	ScanInterval *metav1.Duration `json:"scanInterval,omitempty"`
+}
+
+type ScanResult struct {
+	TagCount int `json:"tagCount"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository
@@ -37,10 +45,17 @@ type ImageRepositoryStatus struct {
 	// LastError is the error from last reconciliation, or empty if
 	// reconciliation was successful.
 	LastError string `json:"lastError"`
+	// LastScanTime records the last time the repository was
+	// successfully scanned.
+	// +optional
+	LastScanTime   *metav1.Time `json:"lastScanTime,omitempty"`
+	LastScanResult ScanResult   `json:"lastScanResult,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Last scan",type=string,JSONPath=`.status.lastScanTime`
+// +kubebuilder:printcolumn:name="Tags",type=string,JSONPath=`.status.lastScanResult.tagCount`
 
 // ImageRepository is the Schema for the imagerepositories API
 type ImageRepository struct {

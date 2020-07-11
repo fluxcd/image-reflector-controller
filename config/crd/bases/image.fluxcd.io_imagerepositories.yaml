@@ -8,6 +8,13 @@ metadata:
   creationTimestamp: null
   name: imagerepositories.image.fluxcd.io
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.lastScanTime
+    name: Last scan
+    type: string
+  - JSONPath: .status.lastScanResult.tagCount
+    name: Tags
+    type: string
   group: image.fluxcd.io
   names:
     kind: ImageRepository
@@ -40,6 +47,10 @@ spec:
             image:
               description: Image is the name of the image repository
               type: string
+            scanInterval:
+              description: ScanInterval is the (minimum) length of time to wait between
+                scans of the image repository.
+              type: string
           type: object
         status:
           description: ImageRepositoryStatus defines the observed state of ImageRepository
@@ -52,6 +63,18 @@ spec:
             lastError:
               description: LastError is the error from last reconciliation, or empty
                 if reconciliation was successful.
+              type: string
+            lastScanResult:
+              properties:
+                tagCount:
+                  type: integer
+              required:
+              - tagCount
+              type: object
+            lastScanTime:
+              description: LastScanTime records the last time the repository was successfully
+                scanned.
+              format: date-time
               type: string
           required:
           - lastError
