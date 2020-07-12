@@ -1,7 +1,10 @@
 apiVersion: image.fluxcd.io/v1alpha1
 kind: ImagePolicy
 metadata:
-  name: imagepolicy-sample
+  name: latest-flux
 spec:
-  # Add fields here
-  foo: bar
+  imageRepository:
+    name: flux-repo
+  policy:
+    semver:
+      range: 1.x
