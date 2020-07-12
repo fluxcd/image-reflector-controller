@@ -82,6 +82,9 @@ var _ = BeforeSuite(func(done Done) {
 	err = imagev1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = imagev1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	k8sMgr, err = ctrl.NewManager(cfg, ctrl.Options{
