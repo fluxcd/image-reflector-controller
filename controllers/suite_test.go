@@ -17,14 +17,17 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/registry"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,6 +56,7 @@ var k8sClient client.Client
 var k8sMgr ctrl.Manager
 var imageRepoReconciler *ImageRepositoryReconciler
 var testEnv *envtest.Environment
+var registryServer *httptest.Server
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -103,44 +107,68 @@ var _ = BeforeSuite(func(done Done) {
 	k8sClient = k8sMgr.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
 
+	// set up a local registry for testing scanning
+	regHandler := registry.New()
+	registryServer = httptest.NewServer(&tagListHandler{
+		registryHandler: regHandler,
+		imagetags:       map[string][]string{},
+	})
+
 	close(done)
 }, 60)
-
-var _ = Describe("ImageRepository controller", func() {
-	It("expands the canonical image name", func() {
-		repo := imagev1alpha1.ImageRepository{
-			Spec: imagev1alpha1.ImageRepositorySpec{
-				Image: "alpine",
-			},
-		}
-		imageRepoName := types.NamespacedName{
-			Name:      "alpine-image",
-			Namespace: "default",
-		}
-
-		repo.Name = imageRepoName.Name
-		repo.Namespace = imageRepoName.Namespace
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		r := imageRepoReconciler
-		err := r.Create(ctx, &repo)
-		Expect(err).ToNot(HaveOccurred())
-
-		var repoAfter imagev1alpha1.ImageRepository
-		Eventually(func() bool {
-			err = r.Get(context.Background(), imageRepoName, &repoAfter)
-			return err == nil && repoAfter.Status.CanonicalImageName != ""
-		}, timeout, interval).Should(BeTrue())
-		Expect(repoAfter.Name).To(Equal("alpine-image"))
-		Expect(repoAfter.Namespace).To(Equal("default"))
-		Expect(repoAfter.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
-	})
-})
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
+	registryServer.Close()
 })
+
+// ---
+
+// the go-containerregistry test regsitry implementation does not
+// serve /myimage/tags/list. Until it does, I'm adding this handler.
+// NB:
+// - assumes repo name is a single element
+// - assumes no overwriting tags
+
+type tagListHandler struct {
+	registryHandler http.Handler
+	imagetags       map[string][]string
+}
+
+type tagListResult struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
+func (h *tagListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// a tag list request has a path like: /v2/<repo>/tags/list
+	if withoutTagsList := strings.TrimSuffix(r.URL.Path, "/tags/list"); r.Method == "GET" && withoutTagsList != r.URL.Path {
+		repo := strings.TrimPrefix(withoutTagsList, "/v2/")
+		if tags, ok := h.imagetags[repo]; ok {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			result := tagListResult{
+				Name: repo,
+				Tags: tags,
+			}
+			Expect(json.NewEncoder(w).Encode(result)).To(Succeed())
+			println("Requested tags", repo, strings.Join(tags, ", "))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// record the fact of a PUT to a tag; the path looks like: /v2/<repo>/manifests/<tag>
+	h.registryHandler.ServeHTTP(w, r)
+	if r.Method == "PUT" {
+		pathElements := strings.Split(r.URL.Path, "/")
+		if len(pathElements) == 5 && pathElements[1] == "v2" && pathElements[3] == "manifests" {
+			repo, tag := pathElements[2], pathElements[4]
+			println("Recording tag", repo, tag)
+			h.imagetags[repo] = append(h.imagetags[repo], tag)
+		}
+	}
+}
