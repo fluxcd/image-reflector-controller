@@ -17,14 +17,12 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
 	"path/filepath"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -105,39 +103,6 @@ var _ = BeforeSuite(func(done Done) {
 
 	close(done)
 }, 60)
-
-var _ = Describe("ImageRepository controller", func() {
-	It("expands the canonical image name", func() {
-		repo := imagev1alpha1.ImageRepository{
-			Spec: imagev1alpha1.ImageRepositorySpec{
-				Image: "alpine",
-			},
-		}
-		imageRepoName := types.NamespacedName{
-			Name:      "alpine-image",
-			Namespace: "default",
-		}
-
-		repo.Name = imageRepoName.Name
-		repo.Namespace = imageRepoName.Namespace
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		r := imageRepoReconciler
-		err := r.Create(ctx, &repo)
-		Expect(err).ToNot(HaveOccurred())
-
-		var repoAfter imagev1alpha1.ImageRepository
-		Eventually(func() bool {
-			err = r.Get(context.Background(), imageRepoName, &repoAfter)
-			return err == nil && repoAfter.Status.CanonicalImageName != ""
-		}, timeout, interval).Should(BeTrue())
-		Expect(repoAfter.Name).To(Equal("alpine-image"))
-		Expect(repoAfter.Namespace).To(Equal("default"))
-		Expect(repoAfter.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
-	})
-})
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
