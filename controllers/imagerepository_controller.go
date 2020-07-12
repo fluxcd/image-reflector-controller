@@ -68,10 +68,6 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	canonicalName := ref.Context().String()
 	if imageRepo.Status.CanonicalImageName != canonicalName {
 		imageRepo.Status.CanonicalImageName = canonicalName
-		imageRepo.Status.LastError = ""
-		if err := r.Status().Update(ctx, &imageRepo); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	now := time.Now()
