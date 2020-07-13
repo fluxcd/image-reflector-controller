@@ -66,18 +66,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	db := controllers.NewDatabase()
+
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ImageRepository"),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("ImageRepository"),
+		Scheme:   mgr.GetScheme(),
+		Database: db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ImageRepository")
 		os.Exit(1)
 	}
 	if err = (&controllers.ImagePolicyReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ImagePolicy"),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("ImagePolicy"),
+		Scheme:   mgr.GetScheme(),
+		Database: db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ImagePolicy")
 		os.Exit(1)

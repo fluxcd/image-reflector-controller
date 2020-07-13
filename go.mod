@@ -3,6 +3,7 @@ module github.com/squaremo/image-update
 go 1.13
 
 require (
+	github.com/Masterminds/semver/v3 v3.1.0
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-containerregistry v0.1.1
 	github.com/onsi/ginkgo v1.12.0

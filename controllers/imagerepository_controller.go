@@ -36,11 +36,16 @@ const (
 	defaultScanInterval = 10 * time.Minute
 )
 
+type DatabaseWriter interface {
+	SetTags(repo string, tags []string)
+}
+
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log      logr.Logger
+	Scheme   *runtime.Scheme
+	Database DatabaseWriter
 }
 
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
@@ -86,6 +91,8 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		imageRepo.Status.LastScanTime = &metav1.Time{Time: now}
 		imageRepo.Status.LastScanResult.TagCount = len(tags)
 		imageRepo.Status.LastError = ""
+		// share the information in the database
+		r.Database.SetTags(canonicalName, tags)
 		log.Info("successful scan", "tag count", len(tags))
 		if err = r.Status().Update(ctx, &imageRepo); err != nil {
 			return ctrl.Result{}, err
