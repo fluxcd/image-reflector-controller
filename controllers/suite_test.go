@@ -55,6 +55,7 @@ var cfg *rest.Config
 var k8sClient client.Client
 var k8sMgr ctrl.Manager
 var imageRepoReconciler *ImageRepositoryReconciler
+var imagePolicyReconciler *ImagePolicyReconciler
 var testEnv *envtest.Environment
 var registryServer *httptest.Server
 
@@ -82,6 +83,9 @@ var _ = BeforeSuite(func(done Done) {
 	err = imagev1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = imagev1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	k8sMgr, err = ctrl.NewManager(cfg, ctrl.Options{
@@ -89,13 +93,23 @@ var _ = BeforeSuite(func(done Done) {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
+	db := NewDatabase()
+
 	imageRepoReconciler = &ImageRepositoryReconciler{
-		Client: k8sMgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ImageRepository"),
-		Scheme: scheme.Scheme,
+		Client:   k8sMgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("ImageRepository"),
+		Scheme:   scheme.Scheme,
+		Database: db,
 	}
-	err = (imageRepoReconciler).SetupWithManager(k8sMgr)
-	Expect(err).ToNot(HaveOccurred())
+	Expect(imageRepoReconciler.SetupWithManager(k8sMgr)).To(Succeed())
+
+	imagePolicyReconciler = &ImagePolicyReconciler{
+		Client:   k8sMgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("ImagePolicy"),
+		Scheme:   scheme.Scheme,
+		Database: db,
+	}
+	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr)).To(Succeed())
 
 	// this must be started for the caches to be running, and thereby
 	// for the client to be usable.

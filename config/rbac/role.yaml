@@ -9,6 +9,26 @@ rules:
 - apiGroups:
   - image.fluxcd.io
   resources:
+  - imagepolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - image.fluxcd.io
+  resources:
+  - imagepolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - image.fluxcd.io
+  resources:
   - imagerepositories
   verbs:
   - create
