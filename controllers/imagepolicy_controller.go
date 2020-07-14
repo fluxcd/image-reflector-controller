@@ -25,9 +25,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	imagev1alpha1 "github.com/squaremo/image-update/api/v1alpha1"
 )
+
+// this is used as the key for the index of policy->repository; the
+// string is arbitrary and acts as a reminder where the value comes
+// from.
+const imageRepoKey = ".spec.imageRepository.name"
 
 type DatabaseReader interface {
 	Tags(repo string) []string
@@ -43,6 +51,7 @@ type ImagePolicyReconciler struct {
 
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagepolicies/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories,verbs=get;list;watch
 
 func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
@@ -92,8 +101,22 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 }
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// index the policies by which image repo they point at, so that
+	// it's easy to list those out when an image repo changes.
+	if err := mgr.GetFieldIndexer().IndexField(&imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj runtime.Object) []string {
+		pol := obj.(*imagev1alpha1.ImagePolicy)
+		return []string{pol.Spec.ImageRepository.Name}
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1alpha1.ImagePolicy{}).
+		Watches(
+			&source.Kind{Type: &imagev1alpha1.ImageRepository{}},
+			&handler.EnqueueRequestsFromMapFunc{
+				ToRequests: handler.ToRequestsFunc(r.imagePoliciesForRepository),
+			}).
 		Complete(r)
 }
 
@@ -118,4 +141,19 @@ func (r *ImagePolicyReconciler) calculateLatestImageSemver(pol *imagev1alpha1.Im
 		return latestVersion.Original(), nil
 	}
 	return "", nil
+}
+
+func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject) []reconcile.Request {
+	ctx := context.Background()
+	var policies imagev1alpha1.ImagePolicyList
+	if err := r.List(ctx, &policies, client.InNamespace(obj.Meta.GetNamespace()), client.MatchingFields{imageRepoKey: obj.Meta.GetName()}); err != nil {
+		r.Log.Error(err, "failed to list ImagePolicy for ImageRepository")
+		return nil
+	}
+	reqs := make([]reconcile.Request, len(policies.Items), len(policies.Items))
+	for i := range policies.Items {
+		reqs[i].NamespacedName.Name = policies.Items[i].GetName()
+		reqs[i].NamespacedName.Namespace = policies.Items[i].GetNamespace()
+	}
+	return reqs
 }

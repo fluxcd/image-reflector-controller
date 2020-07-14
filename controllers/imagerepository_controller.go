@@ -45,7 +45,10 @@ type ImageRepositoryReconciler struct {
 	client.Client
 	Log      logr.Logger
 	Scheme   *runtime.Scheme
-	Database DatabaseWriter
+	Database interface {
+		DatabaseWriter
+		DatabaseReader
+	}
 }
 
 // +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
@@ -71,12 +74,10 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	}
 
 	canonicalName := ref.Context().String()
-	if imageRepo.Status.CanonicalImageName != canonicalName {
-		imageRepo.Status.CanonicalImageName = canonicalName
-	}
+	imageRepo.Status.CanonicalImageName = canonicalName
 
 	now := time.Now()
-	ok, when := shouldScan(&imageRepo, now)
+	ok, when := r.shouldScan(&imageRepo, now)
 	if ok {
 		ctx, cancel := context.WithTimeout(ctx, scanTimeout)
 		defer cancel()
@@ -104,7 +105,7 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 // shouldScan takes an image repo and the time now, and says whether
 // the repository should be scanned now, and how long to wait for the
 // next scan.
-func shouldScan(repo *imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration) {
+func (r *ImageRepositoryReconciler) shouldScan(repo *imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration) {
 	scanInterval := defaultScanInterval
 	if repo.Spec.ScanInterval != nil {
 		scanInterval = repo.Spec.ScanInterval.Duration
@@ -113,6 +114,17 @@ func shouldScan(repo *imagev1alpha1.ImageRepository, now time.Time) (bool, time.
 	if repo.Status.LastScanTime == nil {
 		return true, scanInterval
 	}
+	// when recovering, it's possible that the resource has a last
+	// scan time, but there's no records because the database has been
+	// dropped and created again.
+
+	// FIXME If the repo exists, has been
+	// scanned, and doesn't have any tags, this will mean a scan every
+	// time the resource comes up for reconciliation.
+	if tags := r.Database.Tags(repo.Status.CanonicalImageName); len(tags) == 0 {
+		return true, scanInterval
+	}
+
 	when := scanInterval - now.Sub(repo.Status.LastScanTime.Time)
 	if when < time.Second {
 		return true, scanInterval
