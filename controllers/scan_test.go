@@ -72,15 +72,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	It("fetches the tags for an image", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		registry := strings.TrimPrefix(registryServer.URL, "http://")
-		imgRepo := registry + "/myimage"
-		for _, tag := range versions {
-			imgRef, err := name.NewTag(imgRepo + ":" + tag)
-			Expect(err).ToNot(HaveOccurred())
-			img, err := random.Image(512, 1)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(remote.Write(imgRef, img)).To(Succeed())
-		}
+		imgRepo := loadImages("test-fetch", versions)
 
 		repo := imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
@@ -110,3 +102,18 @@ var _ = Describe("ImageRepository controller", func() {
 		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
 	})
 })
+
+// loadImages uploads images to the local registry, and returns the
+// image repo.
+func loadImages(imageName string, versions []string) string {
+	registry := strings.TrimPrefix(registryServer.URL, "http://")
+	imgRepo := registry + "/" + imageName
+	for _, tag := range versions {
+		imgRef, err := name.NewTag(imgRepo + ":" + tag)
+		Expect(err).ToNot(HaveOccurred())
+		img, err := random.Image(512, 1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(remote.Write(imgRef, img)).To(Succeed())
+	}
+	return imgRepo
+}
