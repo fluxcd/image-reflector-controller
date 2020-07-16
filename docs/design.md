@@ -53,7 +53,7 @@ that information available to some other system within the cluster.
 ### Integration
 
 The automation controller creates these as indicated by information
-from its specificaiton and the repository it looks at; and it consults
+from its specification and the repository it looks at; and it consults
 these resources when constructing `UpdateJob` resources to run.
 
 ### Design notes
