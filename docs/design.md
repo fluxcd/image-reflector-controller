@@ -7,14 +7,18 @@ in sympathy with one another:
  - the image metadata reflector (types ImageRepository, ImagePolicy)
  - the automation controller (type ImageAutomation)
 
+These are all separate binaries/images/deployments. The automation
+controller depends on the reflector and the job runner, but the latter
+two do not depend on each other.
+
 Some tooling comes alongside these parts:
 
- - the `tk-image` command-line tool lets you create the resource
-   mentioned above, and can be used as an extension to the gitops
-   toolkit command-line tool.
  - the `image-update` image can be used with `kpt fn`, GitHub Actions,
    and `UpdateJob` to update images in resources within a working
    directory.
+ - `tk` could be given `image*` variants on its subcommands, e.g.,
+
+      tk create imagerepository fluxcd-flux ...
 
 ## Update job controller
 
@@ -37,10 +41,12 @@ This could be a more specific `UpdateImageJob`, but it would differ
 only in the update being done, so it is a small step from there to a
 general job.
 
-The motivation for making the jobs separate to the automation is that
-you can then do ad-hoc updates by creating an `UpdateJob` from
-command-line tooling. The downside is that it needs another moving
-part, albeit a generally-useful one.
+The motivation for making the jobs separate to the automation
+controller is that you can then do ad-hoc updates by creating an
+`UpdateJob` from command-line tooling. The downside is that it needs
+another moving part, albeit a generally-useful one. An alternative, or
+a stepping stone, would be to do updates inline in the automation
+controller.
 
 ## Image metadata reflector
 
@@ -171,7 +177,8 @@ In this design, it would be possible to adapt the Flux v1 scheme, more
 or less. For an `ImageRepository`, the controller could look through
 all the workloads to find one using the image, and use its image pull
 secrets. And, it could try to sense when it can use ambient
-authorisation.
+authorisation. But this only works if the controller is running in the
+same cluster that runs the workloads -- which is not a given.
 
 It might be better to at least start by being explicit, though, and
 specify image pull secrets or the use of ambient authorisation in the
