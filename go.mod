@@ -1,4 +1,4 @@
-module github.com/squaremo/image-update
+module github.com/squaremo/image-reflector-controller
 
 go 1.13
 

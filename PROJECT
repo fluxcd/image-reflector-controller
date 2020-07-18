@@ -1,5 +1,5 @@
 domain: fluxcd.io
-repo: github.com/squaremo/image-update
+repo: github.com/squaremo/image-reflector-controller
 resources:
 - group: image
   kind: ImageRepository
