@@ -1,4 +1,4 @@
-# Image (metadata) refector controller
+# Image (metadata) reflector controller
 
 This is an attempt to build controllers along the lines set out in
 https://squaremo.dev/posts/gitops-controllers/.
