@@ -19,7 +19,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: controller:latest
+        image: squaremo/image-reflector-controller
         name: manager
         resources:
           limits:
