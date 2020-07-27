@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
+  name: image-reflector-controller
   namespace: system
 spec:
   template:
