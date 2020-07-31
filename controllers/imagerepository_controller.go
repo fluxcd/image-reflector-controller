@@ -51,8 +51,8 @@ type ImageRepositoryReconciler struct {
 	}
 }
 
-// +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories/status,verbs=get;update;patch
 
 func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()

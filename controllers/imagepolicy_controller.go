@@ -49,9 +49,9 @@ type ImagePolicyReconciler struct {
 	Database DatabaseReader
 }
 
-// +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagepolicies/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=image.fluxcd.io,resources=imagerepositories,verbs=get;list;watch
+// +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch
 
 func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
