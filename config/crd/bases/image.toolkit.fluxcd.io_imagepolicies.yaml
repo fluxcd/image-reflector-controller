@@ -4,15 +4,15 @@ apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.5
+    controller-gen.kubebuilder.io/version: v0.3.0
   creationTimestamp: null
-  name: imagepolicies.image.fluxcd.io
+  name: imagepolicies.image.toolkit.fluxcd.io
 spec:
   additionalPrinterColumns:
   - JSONPath: .status.latestImage
     name: LatestImage
     type: string
-  group: image.fluxcd.io
+  group: image.toolkit.fluxcd.io
   names:
     kind: ImagePolicy
     listKind: ImagePolicyList

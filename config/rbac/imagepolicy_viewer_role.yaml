@@ -5,7 +5,7 @@ metadata:
   name: imagepolicy-viewer-role
 rules:
 - apiGroups:
-  - image.fluxcd.io
+  - image.toolkit.fluxcd.io
   resources:
   - imagepolicies
   verbs:
@@ -13,7 +13,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - image.fluxcd.io
+  - image.toolkit.fluxcd.io
   resources:
   - imagepolicies/status
   verbs:
