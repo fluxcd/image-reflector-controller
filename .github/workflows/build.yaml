@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-    - master
+    - main
 
 jobs:
   test:
@@ -24,7 +24,7 @@ jobs:
       with:
         go-version: 1.14.x
     - name: Set up kubebuilder
-      uses: fluxcd/pkg/actions/kubebuilder@master
+      uses: fluxcd/pkg/actions/kubebuilder@v0.0.4
     - name: Run tests
       run: make test
       env:
