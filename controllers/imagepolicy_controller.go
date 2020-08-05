@@ -103,7 +103,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// index the policies by which image repo they point at, so that
 	// it's easy to list those out when an image repo changes.
-	if err := mgr.GetFieldIndexer().IndexField(&imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj runtime.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj runtime.Object) []string {
 		pol := obj.(*imagev1alpha1.ImagePolicy)
 		return []string{pol.Spec.ImageRepository.Name}
 	}); err != nil {
