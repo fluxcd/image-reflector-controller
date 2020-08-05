@@ -69,7 +69,7 @@ var _ = Describe("ImagePolicy controller", func() {
 		}
 		pol := imagev1alpha1.ImagePolicy{
 			Spec: imagev1alpha1.ImagePolicySpec{
-				ImageRepository: corev1.LocalObjectReference{
+				ImageRepositoryRef: corev1.LocalObjectReference{
 					Name: imageObjectName.Name,
 				},
 				Policy: imagev1alpha1.ImagePolicyChoice{

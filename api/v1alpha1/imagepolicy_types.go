@@ -24,10 +24,10 @@ import (
 // ImagePolicySpec defines the parameters for calculating the
 // ImagePolicy
 type ImagePolicySpec struct {
-	// ImageRepository points at the object specifying the image being
-	// scanned
+	// ImageRepositoryRef points at the object specifying the image
+	// being scanned
 	// +required
-	ImageRepository corev1.LocalObjectReference `json:"imageRepository"`
+	ImageRepositoryRef corev1.LocalObjectReference `json:"imageRepositoryRef"`
 	// Policy gives the particulars of the policy to be followed in
 	// selecting the most recent image
 	// +required

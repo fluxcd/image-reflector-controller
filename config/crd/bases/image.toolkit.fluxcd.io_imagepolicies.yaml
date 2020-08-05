@@ -41,9 +41,9 @@ spec:
           description: ImagePolicySpec defines the parameters for calculating the
             ImagePolicy
           properties:
-            imageRepository:
-              description: ImageRepository points at the object specifying the image
-                being scanned
+            imageRepositoryRef:
+              description: ImageRepositoryRef points at the object specifying the
+                image being scanned
               properties:
                 name:
                   description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
@@ -68,7 +68,7 @@ spec:
                   type: object
               type: object
           required:
-          - imageRepository
+          - imageRepositoryRef
           - policy
           type: object
         status:
