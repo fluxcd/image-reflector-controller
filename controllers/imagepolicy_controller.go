@@ -65,7 +65,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: pol.Namespace,
-		Name:      pol.Spec.ImageRepository.Name,
+		Name:      pol.Spec.ImageRepositoryRef.Name,
 	}, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
 			log.Error(err, "referenced ImageRepository does not exist")
@@ -105,7 +105,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// it's easy to list those out when an image repo changes.
 	if err := mgr.GetFieldIndexer().IndexField(&imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj runtime.Object) []string {
 		pol := obj.(*imagev1alpha1.ImagePolicy)
-		return []string{pol.Spec.ImageRepository.Name}
+		return []string{pol.Spec.ImageRepositoryRef.Name}
 	}); err != nil {
 		return err
 	}
