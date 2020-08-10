@@ -1,5 +1,5 @@
 /*
-
+Copyright 2020 The Flux CD contributors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	imagev1alpha1 "github.com/squaremo/image-reflector-controller/api/v1alpha1"
-	"github.com/squaremo/image-reflector-controller/controllers"
+	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	"github.com/fluxcd/image-reflector-controller/controllers"
 	// +kubebuilder:scaffold:imports
 )
 
