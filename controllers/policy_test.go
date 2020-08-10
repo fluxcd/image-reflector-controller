@@ -25,7 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	imagev1alpha1 "github.com/squaremo/image-reflector-controller/api/v1alpha1"
+	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

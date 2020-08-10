@@ -1,6 +1,6 @@
 
 # Image URL to use all building/pushing image targets
-IMG ?= squaremo/image-reflector-controller
+IMG ?= fluxcd/image-reflector-controller
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 

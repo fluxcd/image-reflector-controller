@@ -28,7 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	imagev1alpha1 "github.com/squaremo/image-reflector-controller/api/v1alpha1"
+	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
 
 const (

@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	imagev1alpha1 "github.com/squaremo/image-reflector-controller/api/v1alpha1"
+	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
 
 // this is used as the key for the index of policy->repository; the

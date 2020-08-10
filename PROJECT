@@ -1,5 +1,5 @@
 domain: toolkit.fluxcd.io
-repo: github.com/squaremo/image-reflector-controller
+repo: github.com/fluxcd/image-reflector-controller
 resources:
 - group: image
   kind: ImageRepository

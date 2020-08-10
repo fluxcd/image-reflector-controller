@@ -1,4 +1,4 @@
-module github.com/squaremo/image-reflector-controller
+module github.com/fluxcd/image-reflector-controller
 
 go 1.14
 

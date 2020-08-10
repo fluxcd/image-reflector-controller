@@ -19,7 +19,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: squaremo/image-reflector-controller
+        image: fluxcd/image-reflector-controller
         name: manager
         resources:
           limits:
