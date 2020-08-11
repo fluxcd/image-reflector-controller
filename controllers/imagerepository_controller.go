@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -56,12 +57,13 @@ type ImageRepositoryReconciler struct {
 
 func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("imagerepository", req.NamespacedName)
 
 	var imageRepo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {

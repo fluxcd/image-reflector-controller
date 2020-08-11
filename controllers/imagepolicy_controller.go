@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
@@ -55,12 +56,13 @@ type ImagePolicyReconciler struct {
 
 func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("imagepolicy", req.NamespacedName)
 
 	var pol imagev1alpha1.ImagePolicy
 	if err := r.Get(ctx, req.NamespacedName, &pol); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImagePolicyKind), "request", req.NamespacedName)
 
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{
