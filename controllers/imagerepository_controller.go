@@ -18,13 +18,14 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	kuberecorder "k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -72,55 +73,85 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
-		imageRepo.Status.LastError = err.Error()
-		if err := r.Status().Update(ctx, &imageRepo); err != nil {
-			return ctrl.Result{}, err
+		status := imagev1alpha1.SetImageRepositoryReadiness(
+			imageRepo,
+			corev1.ConditionFalse,
+			imagev1alpha1.ReconciliationFailedReason,
+			err.Error(),
+		)
+		if err := r.Status().Update(ctx, &status); err != nil {
+			return ctrl.Result{Requeue: true}, err
 		}
 		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
-	canonicalName := ref.Context().String()
-	imageRepo.Status.CanonicalImageName = canonicalName
+	imageRepo.Status.CanonicalImageName = ref.Context().String()
 
 	now := time.Now()
-	ok, when := r.shouldScan(&imageRepo, now)
+	ok, when := r.shouldScan(imageRepo, now)
 	if ok {
 		ctx, cancel := context.WithTimeout(ctx, scanTimeout)
 		defer cancel()
-		tags, err := remote.ListWithContext(ctx, ref.Context()) // TODO: auth
-		if err != nil {
-			imageRepo.Status.LastError = err.Error()
-			if err = r.Status().Update(ctx, &imageRepo); err != nil {
-				return ctrl.Result{}, err
-			}
+
+		reconciledRepo, reconcileErr := r.scan(ctx, imageRepo, ref)
+		if err = r.Status().Update(ctx, &reconciledRepo); err != nil {
+			return ctrl.Result{Requeue: true}, err
 		}
 
-		imageRepo.Status.LastScanTime = &metav1.Time{Time: now}
-		imageRepo.Status.LastScanResult.TagCount = len(tags)
-		imageRepo.Status.LastError = ""
-		// share the information in the database
-		r.Database.SetTags(canonicalName, tags)
-		log.Info("successful scan", "tag count", len(tags))
-		if err = r.Status().Update(ctx, &imageRepo); err != nil {
-			return ctrl.Result{}, err
+		if reconcileErr != nil {
+			return ctrl.Result{RequeueAfter: when}, reconcileErr
+		} else {
+			log.Info(fmt.Sprintf("reconciliation finished in %s, next run in %s",
+				time.Now().Sub(now).String(),
+				when),
+			)
 		}
 	}
+
 	return ctrl.Result{RequeueAfter: when}, nil
+}
+
+func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1alpha1.ImageRepository, ref name.Reference) (imagev1alpha1.ImageRepository, error) {
+	canonicalName := ref.Context().String()
+
+	// TODO: implement auth
+	tags, err := remote.ListWithContext(ctx, ref.Context())
+	if err != nil {
+		return imagev1alpha1.SetImageRepositoryReadiness(
+			imageRepo,
+			corev1.ConditionFalse,
+			imagev1alpha1.ReconciliationFailedReason,
+			err.Error(),
+		), err
+	}
+
+	// TODO: add context and error handling to database ops
+	r.Database.SetTags(canonicalName, tags)
+
+	imageRepo.Status.LastScanResult.TagCount = len(tags)
+	return imagev1alpha1.SetImageRepositoryReadiness(
+		imageRepo,
+		corev1.ConditionTrue,
+		imagev1alpha1.ReconciliationSucceededReason,
+		fmt.Sprintf("successful scan, found %v tags", len(tags)),
+	), nil
 }
 
 // shouldScan takes an image repo and the time now, and says whether
 // the repository should be scanned now, and how long to wait for the
 // next scan.
-func (r *ImageRepositoryReconciler) shouldScan(repo *imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration) {
+func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration) {
 	scanInterval := defaultScanInterval
 	if repo.Spec.ScanInterval != nil {
 		scanInterval = repo.Spec.ScanInterval.Duration
 	}
 
-	if repo.Status.LastScanTime == nil {
+	lastTransitionTime := imagev1alpha1.GetLastTransitionTime(repo)
+	if lastTransitionTime == nil {
 		return true, scanInterval
 	}
+
 	// when recovering, it's possible that the resource has a last
 	// scan time, but there's no records because the database has been
 	// dropped and created again.
@@ -132,7 +163,7 @@ func (r *ImageRepositoryReconciler) shouldScan(repo *imagev1alpha1.ImageReposito
 		return true, scanInterval
 	}
 
-	when := scanInterval - now.Sub(repo.Status.LastScanTime.Time)
+	when := scanInterval - now.Sub(lastTransitionTime.Time)
 	if when < time.Second {
 		return true, scanInterval
 	}
