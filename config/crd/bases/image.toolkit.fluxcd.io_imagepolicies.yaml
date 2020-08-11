@@ -1,6 +1,6 @@
 
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
@@ -8,10 +8,6 @@ metadata:
   creationTimestamp: null
   name: imagepolicies.image.toolkit.fluxcd.io
 spec:
-  additionalPrinterColumns:
-  - JSONPath: .status.latestImage
-    name: LatestImage
-    type: string
   group: image.toolkit.fluxcd.io
   names:
     kind: ImagePolicy
@@ -19,73 +15,76 @@ spec:
     plural: imagepolicies
     singular: imagepolicy
   scope: Namespaced
-  subresources:
-    status: {}
-  validation:
-    openAPIV3Schema:
-      description: ImagePolicy is the Schema for the imagepolicies API
-      properties:
-        apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation
-            of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-          type: string
-        kind:
-          description: 'Kind is a string value representing the REST resource this
-            object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-          type: string
-        metadata:
-          type: object
-        spec:
-          description: ImagePolicySpec defines the parameters for calculating the
-            ImagePolicy
-          properties:
-            imageRepositoryRef:
-              description: ImageRepositoryRef points at the object specifying the
-                image being scanned
-              properties:
-                name:
-                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    TODO: Add other useful fields. apiVersion, kind, uid?'
-                  type: string
-              type: object
-            policy:
-              description: Policy gives the particulars of the policy to be followed
-                in selecting the most recent image
-              properties:
-                semver:
-                  description: SemVer gives a semantic version range to check against
-                    the tags available.
-                  properties:
-                    range:
-                      description: Range gives a semver range for the image tag; the
-                        highest version within the range that's a tag yields the latest
-                        image.
-                      type: string
-                  required:
-                  - range
-                  type: object
-              type: object
-          required:
-          - imageRepositoryRef
-          - policy
-          type: object
-        status:
-          description: ImagePolicyStatus defines the observed state of ImagePolicy
-          properties:
-            latestImage:
-              description: LatestImage gives the first in the list of images scanned
-                by the image repository, when filtered and ordered according to the
-                policy.
-              type: string
-          type: object
-      type: object
-  version: v1alpha1
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.latestImage
+      name: LatestImage
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ImagePolicy is the Schema for the imagepolicies API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ImagePolicySpec defines the parameters for calculating the
+              ImagePolicy
+            properties:
+              imageRepositoryRef:
+                description: ImageRepositoryRef points at the object specifying the
+                  image being scanned
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
+              policy:
+                description: Policy gives the particulars of the policy to be followed
+                  in selecting the most recent image
+                properties:
+                  semver:
+                    description: SemVer gives a semantic version range to check against
+                      the tags available.
+                    properties:
+                      range:
+                        description: Range gives a semver range for the image tag;
+                          the highest version within the range that's a tag yields
+                          the latest image.
+                        type: string
+                    required:
+                    - range
+                    type: object
+                type: object
+            required:
+            - imageRepositoryRef
+            - policy
+            type: object
+          status:
+            description: ImagePolicyStatus defines the observed state of ImagePolicy
+            properties:
+              latestImage:
+                description: LatestImage gives the first in the list of images scanned
+                  by the image repository, when filtered and ordered according to
+                  the policy.
+                type: string
+            type: object
+        type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""

@@ -1,8 +1,7 @@
-
 # Image URL to use all building/pushing image targets
 IMG ?= fluxcd/image-reflector-controller
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
+# Produce CRDs that work back to Kubernetes 1.16
+CRD_OPTIONS ?= crd:crdVersions=v1
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -35,12 +34,19 @@ uninstall: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	cd config/manager && kustomize edit set image controller=${IMG}
+	cd config/manager && kustomize edit set image fluxcd/image-reflector-controller=${IMG}
 	kustomize build config/default | kubectl apply -f -
+
+# Deploy controller dev image in the configured Kubernetes cluster in ~/.kube/config
+dev-deploy: manifests
+	mkdir -p config/dev && cp config/default/* config/dev
+	cd config/dev && kustomize edit set image fluxcd/image-reflector-controller=${IMG}
+	kustomize build config/dev | kubectl apply -f -
+	rm -rf config/dev
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:

@@ -18,16 +18,20 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kuberecorder "k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	"github.com/fluxcd/pkg/recorder"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
@@ -44,9 +48,11 @@ type DatabaseReader interface {
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Database DatabaseReader
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	Database              DatabaseReader
+	EventRecorder         kuberecorder.EventRecorder
+	ExternalEventRecorder *recorder.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
@@ -55,12 +61,13 @@ type ImagePolicyReconciler struct {
 
 func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("imagepolicy", req.NamespacedName)
 
 	var pol imagev1alpha1.ImagePolicy
 	if err := r.Get(ctx, req.NamespacedName, &pol); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImagePolicyKind), "request", req.NamespacedName)
 
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{

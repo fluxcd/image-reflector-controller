@@ -21,6 +21,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const ImagePolicyKind = "ImagePolicy"
+
 // ImagePolicySpec defines the parameters for calculating the
 // ImagePolicy
 type ImagePolicySpec struct {

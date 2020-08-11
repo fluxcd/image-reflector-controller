@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-reflector-controller
+  labels:
+    control-plane: controller
+spec:
+  selector:
+    matchLabels:
+      app: image-reflector-controller
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: image-reflector-controller
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: manager
+        image: fluxcd/image-reflector-controller
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        ports:
+          - containerPort: 8080
+            name: http-prom
+        livenessProbe:
+          httpGet:
+            port: http-prom
+            path: /metrics
+        args:
+          - --enable-leader-election
+          - --log-level=debug
+          - --log-json
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 64Mi
+        volumeMounts:
+          - name: temp
+            mountPath: /tmp
+      volumes:
+        - name: temp
+          emptyDir: {}

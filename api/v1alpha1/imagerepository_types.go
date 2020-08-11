@@ -20,6 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const ImageRepositoryKind = "ImageRepository"
+
 // ImageRepositorySpec defines the parameters for scanning an image
 // repository, e.g., `fluxcd/flux`.
 type ImageRepositorySpec struct {

@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -25,8 +26,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	kuberecorder "k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/fluxcd/pkg/recorder"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
@@ -49,6 +53,8 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+	EventRecorder         kuberecorder.EventRecorder
+	ExternalEventRecorder *recorder.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
@@ -56,12 +62,13 @@ type ImageRepositoryReconciler struct {
 
 func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
-	log := r.Log.WithValues("imagerepository", req.NamespacedName)
 
 	var imageRepo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
