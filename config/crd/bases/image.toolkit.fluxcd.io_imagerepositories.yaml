@@ -1,6 +1,6 @@
 
 ---
-apiVersion: apiextensions.k8s.io/v1beta1
+apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
@@ -8,13 +8,6 @@ metadata:
   creationTimestamp: null
   name: imagerepositories.image.toolkit.fluxcd.io
 spec:
-  additionalPrinterColumns:
-  - JSONPath: .status.lastScanTime
-    name: Last scan
-    type: string
-  - JSONPath: .status.lastScanResult.tagCount
-    name: Tags
-    type: string
   group: image.toolkit.fluxcd.io
   names:
     kind: ImageRepository
@@ -22,69 +15,75 @@ spec:
     plural: imagerepositories
     singular: imagerepository
   scope: Namespaced
-  subresources:
-    status: {}
-  validation:
-    openAPIV3Schema:
-      description: ImageRepository is the Schema for the imagerepositories API
-      properties:
-        apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation
-            of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-          type: string
-        kind:
-          description: 'Kind is a string value representing the REST resource this
-            object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-          type: string
-        metadata:
-          type: object
-        spec:
-          description: ImageRepositorySpec defines the parameters for scanning an
-            image repository, e.g., `fluxcd/flux`.
-          properties:
-            image:
-              description: Image is the name of the image repository
-              type: string
-            scanInterval:
-              description: ScanInterval is the (minimum) length of time to wait between
-                scans of the image repository.
-              type: string
-          type: object
-        status:
-          description: ImageRepositoryStatus defines the observed state of ImageRepository
-          properties:
-            canonicalImageName:
-              description: CannonicalName is the name of the image repository with
-                all the implied bits made explicit; e.g., `docker.io/library/alpine`
-                rather than `alpine`.
-              type: string
-            lastError:
-              description: LastError is the error from last reconciliation, or empty
-                if reconciliation was successful.
-              type: string
-            lastScanResult:
-              properties:
-                tagCount:
-                  type: integer
-              required:
-              - tagCount
-              type: object
-            lastScanTime:
-              description: LastScanTime records the last time the repository was successfully
-                scanned.
-              format: date-time
-              type: string
-          required:
-          - lastError
-          type: object
-      type: object
-  version: v1alpha1
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.lastScanTime
+      name: Last scan
+      type: string
+    - jsonPath: .status.lastScanResult.tagCount
+      name: Tags
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ImageRepository is the Schema for the imagerepositories API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ImageRepositorySpec defines the parameters for scanning an
+              image repository, e.g., `fluxcd/flux`.
+            properties:
+              image:
+                description: Image is the name of the image repository
+                type: string
+              scanInterval:
+                description: ScanInterval is the (minimum) length of time to wait
+                  between scans of the image repository.
+                type: string
+            type: object
+          status:
+            description: ImageRepositoryStatus defines the observed state of ImageRepository
+            properties:
+              canonicalImageName:
+                description: CannonicalName is the name of the image repository with
+                  all the implied bits made explicit; e.g., `docker.io/library/alpine`
+                  rather than `alpine`.
+                type: string
+              lastError:
+                description: LastError is the error from last reconciliation, or empty
+                  if reconciliation was successful.
+                type: string
+              lastScanResult:
+                properties:
+                  tagCount:
+                    type: integer
+                required:
+                - tagCount
+                type: object
+              lastScanTime:
+                description: LastScanTime records the last time the repository was
+                  successfully scanned.
+                format: date-time
+                type: string
+            required:
+            - lastError
+            type: object
+        type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 status:
   acceptedNames:
     kind: ""
