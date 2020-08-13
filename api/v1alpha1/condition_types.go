@@ -59,6 +59,9 @@ const (
 	// ReconciliationFailedReason represents the fact that the reconciliation of the resource has failed.
 	ReconciliationFailedReason string = "ReconciliationFailed"
 
+	// ImageURLInvalidReason represents the fact that a given repository has an invalid image URL.
+	ImageURLInvalidReason string = "ImageURLInvalid"
+
 	// ProgressingReason represents the fact that a reconciliation is underway.
 	ProgressingReason string = "Progressing"
 

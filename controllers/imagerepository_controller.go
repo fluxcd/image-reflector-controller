@@ -76,14 +76,14 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		status := imagev1alpha1.SetImageRepositoryReadiness(
 			imageRepo,
 			corev1.ConditionFalse,
-			imagev1alpha1.ReconciliationFailedReason,
+			imagev1alpha1.ImageURLInvalidReason,
 			err.Error(),
 		)
 		if err := r.Status().Update(ctx, &status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, nil
 	}
 
 	imageRepo.Status.CanonicalImageName = ref.Context().String()
@@ -100,7 +100,7 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		}
 
 		if reconcileErr != nil {
-			return ctrl.Result{RequeueAfter: when}, reconcileErr
+			return ctrl.Result{Requeue: true}, reconcileErr
 		} else {
 			log.Info(fmt.Sprintf("reconciliation finished in %s, next run in %s",
 				time.Now().Sub(now).String(),
