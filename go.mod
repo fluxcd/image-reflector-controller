@@ -2,8 +2,11 @@ module github.com/fluxcd/image-reflector-controller
 
 go 1.14
 
+replace github.com/fluxcd/image-reflector-controller/api => ./api
+
 require (
 	github.com/Masterminds/semver/v3 v3.1.0
+	github.com/fluxcd/image-reflector-controller/api v0.0.0-00010101000000-000000000000
 	github.com/fluxcd/pkg/recorder v0.0.5
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-containerregistry v0.1.1
