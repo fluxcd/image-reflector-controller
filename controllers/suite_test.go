@@ -17,10 +17,13 @@ limitations under the License.
 package controllers
 
 import (
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/badger"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -33,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	"github.com/fluxcd/image-reflector-controller/internal/database"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -53,6 +57,8 @@ var k8sMgr ctrl.Manager
 var imageRepoReconciler *ImageRepositoryReconciler
 var imagePolicyReconciler *ImagePolicyReconciler
 var testEnv *envtest.Environment
+var badgerDir string
+var badgerDB *badger.DB
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -85,13 +91,16 @@ var _ = BeforeSuite(func(done Done) {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	db := NewDatabase()
+	badgerDir, err = ioutil.TempDir(os.TempDir(), "badger")
+	Expect(err).ToNot(HaveOccurred())
+	badgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
+	Expect(err).ToNot(HaveOccurred())
 
 	imageRepoReconciler = &ImageRepositoryReconciler{
 		Client:   k8sMgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("ImageRepository"),
 		Scheme:   scheme.Scheme,
-		Database: db,
+		Database: database.NewBadgerDatabase(badgerDB),
 	}
 	Expect(imageRepoReconciler.SetupWithManager(k8sMgr)).To(Succeed())
 
@@ -99,7 +108,7 @@ var _ = BeforeSuite(func(done Done) {
 		Client:   k8sMgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("ImagePolicy"),
 		Scheme:   scheme.Scheme,
-		Database: db,
+		Database: database.NewBadgerDatabase(badgerDB),
 	}
 	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr)).To(Succeed())
 
@@ -120,4 +129,6 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
+	Expect(badgerDB.Close()).ToNot(HaveOccurred())
+	Expect(os.RemoveAll(badgerDir)).ToNot(HaveOccurred())
 })

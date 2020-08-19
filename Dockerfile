@@ -17,6 +17,7 @@ RUN go mod download
 # copy source code
 COPY main.go main.go
 COPY controllers/ controllers/
+COPY internal/ internal/
 
 # build without giving the arch, so that it gets it from the machine
 RUN CGO_ENABLED=0 go build -a -o image-reflector-controller main.go
