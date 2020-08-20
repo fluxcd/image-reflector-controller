@@ -64,8 +64,14 @@ type ImageRepositoryReconciler struct {
 func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 
+	// NB: In general, if an error is returned then controller-runtime
+	// will requeue the request with back-off. In the following this
+	// is usually made explicit by _also_ returning
+	// `ctrl.Result{Requeue: true}`.
+
 	var imageRepo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
+		// _Might_ get requeued
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -83,7 +89,7 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			return ctrl.Result{Requeue: true}, err
 		}
 		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: true}, err
 	}
 
 	imageRepo.Status.CanonicalImageName = ref.Context().String()
