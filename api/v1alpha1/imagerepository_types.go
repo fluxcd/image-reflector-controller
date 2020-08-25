@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -40,18 +41,47 @@ type ScanResult struct {
 
 // ImageRepositoryStatus defines the observed state of ImageRepository
 type ImageRepositoryStatus struct {
+	// +optional
+	Conditions []Condition `json:"conditions,omitempty"`
+
+	// ObservedGeneration is the last reconciled generation.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// CannonicalName is the name of the image repository with all the
 	// implied bits made explicit; e.g., `docker.io/library/alpine`
 	// rather than `alpine`.
-	CanonicalImageName string `json:"canonicalImageName,omitempty"`
-	// LastError is the error from last reconciliation, or empty if
-	// reconciliation was successful.
-	LastError string `json:"lastError"`
-	// LastScanTime records the last time the repository was
-	// successfully scanned.
 	// +optional
-	LastScanTime   *metav1.Time `json:"lastScanTime,omitempty"`
-	LastScanResult ScanResult   `json:"lastScanResult,omitempty"`
+	CanonicalImageName string `json:"canonicalImageName,omitempty"`
+
+	// LastScanResult contains the number of fetched tags.
+	// +optional
+	LastScanResult ScanResult `json:"lastScanResult,omitempty"`
+}
+
+// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
+func SetImageRepositoryReadiness(ir ImageRepository, status corev1.ConditionStatus, reason, message string) ImageRepository {
+	ir.Status.Conditions = []Condition{
+		{
+			Type:               ReadyCondition,
+			Status:             status,
+			LastTransitionTime: metav1.Now(),
+			Reason:             reason,
+			Message:            message,
+		},
+	}
+	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
+	return ir
+}
+
+func GetLastTransitionTime(ir ImageRepository) *metav1.Time {
+	for _, condition := range ir.Status.Conditions {
+		if condition.Type == ReadyCondition {
+			return &condition.LastTransitionTime
+		}
+	}
+
+	return nil
 }
 
 // +kubebuilder:object:root=true
