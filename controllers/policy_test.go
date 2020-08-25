@@ -74,7 +74,7 @@ var _ = Describe("ImagePolicy controller", func() {
 				},
 				Policy: imagev1alpha1.ImagePolicyChoice{
 					SemVer: &imagev1alpha1.SemVerPolicy{
-						Range: "1.0.x",
+						Range: "<1.1.0-0",
 					},
 				},
 			},

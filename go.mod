@@ -3,7 +3,7 @@ module github.com/fluxcd/image-reflector-controller
 go 1.14
 
 require (
-	github.com/Masterminds/semver/v3 v3.1.0
+	github.com/blang/semver/v4 v4.0.0
 	github.com/fluxcd/pkg/recorder v0.0.5
 	github.com/go-logr/logr v0.1.0
 	github.com/google/go-containerregistry v0.1.1

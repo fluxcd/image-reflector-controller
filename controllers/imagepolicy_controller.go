@@ -20,7 +20,7 @@ import (
 	"context"
 	"strings"
 
-	semver "github.com/Masterminds/semver/v3"
+	semver "github.com/blang/semver/v4"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -131,21 +131,22 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *ImagePolicyReconciler) calculateLatestImageSemver(pol *imagev1alpha1.ImagePolicyChoice, canonImage string) (string, error) {
 	tags := r.Database.Tags(canonImage)
-	constraint, err := semver.NewConstraint(pol.SemVer.Range)
+	constraint, err := semver.ParseRange(pol.SemVer.Range)
 	if err != nil {
 		// FIXME this'll get a stack trace in the log, but may not deserve it
 		return "", err
 	}
+
 	var latestVersion *semver.Version
 	for _, tag := range tags {
-		if v, err := semver.NewVersion(tag); err == nil {
-			if constraint.Check(v) && (latestVersion == nil || v.GreaterThan(latestVersion)) {
-				latestVersion = v
+		if v, err := semver.ParseTolerant(tag); err == nil {
+			if constraint(v) && (latestVersion == nil || v.GT(*latestVersion)) {
+				latestVersion = &v
 			}
 		}
 	}
 	if latestVersion != nil {
-		return latestVersion.Original(), nil
+		return latestVersion.String(), nil
 	}
 	return "", nil
 }
