@@ -33,6 +33,11 @@ type ImageRepositorySpec struct {
 	// scans of the image repository.
 	// +optional
 	ScanInterval *metav1.Duration `json:"scanInterval,omitempty"`
+
+	// This flag tells the controller to suspend subsequent image scans.
+	// It does not apply to already started scans. Defaults to false.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 type ScanResult struct {
