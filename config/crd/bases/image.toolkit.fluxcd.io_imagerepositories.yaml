@@ -52,9 +52,9 @@ spec:
                   between scans of the image repository.
                 type: string
               suspend:
-                description: This flag tells the controller to suspend
-                  scanning of the image repository.
-                  Defaults to false.
+                description: This flag tells the controller to suspend subsequent
+                  image scans. It does not apply to already started scans. Defaults
+                  to false.
                 type: boolean
             type: object
           status:
