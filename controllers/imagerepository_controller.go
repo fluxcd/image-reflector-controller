@@ -77,6 +77,22 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
 
+	if imageRepo.Spec.Suspend {
+		msg := "ImageRepository is suspended, skipping reconciliation"
+		status := imagev1alpha1.SetImageRepositoryReadiness(
+			imageRepo,
+			corev1.ConditionFalse,
+			imagev1alpha1.SuspendedReason,
+			msg,
+		)
+		if err := r.Status().Update(ctx, &status); err != nil {
+			log.Error(err, "unable to update status")
+			return ctrl.Result{Requeue: true}, err
+		}
+		log.Info(msg)
+		return ctrl.Result{}, nil
+	}
+
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
 		status := imagev1alpha1.SetImageRepositoryReadiness(

@@ -51,6 +51,11 @@ spec:
                 description: ScanInterval is the (minimum) length of time to wait
                   between scans of the image repository.
                 type: string
+              suspend:
+                description: This flag tells the controller to suspend
+                  scanning of the image repository.
+                  Defaults to false.
+                type: boolean
             type: object
           status:
             description: ImageRepositoryStatus defines the observed state of ImageRepository

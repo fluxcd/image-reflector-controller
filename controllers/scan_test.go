@@ -36,17 +36,24 @@ import (
 // has an example of loading a test registry with a random image.
 
 var _ = Describe("ImageRepository controller", func() {
+	const imageName = "alpine-image"
+	var repo imagev1alpha1.ImageRepository
+
+	AfterEach(func() {
+		Expect(k8sClient.Delete(context.Background(), &repo)).To(Succeed())
+	})
+
 	It("expands the canonical image name", func() {
 		// would be good to test this without needing to do the scanning, since
 		// 1. better to not rely on external services being available
 		// 2. probably going to want to have several test cases
-		repo := imagev1alpha1.ImageRepository{
+		repo = imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
 				Image: "alpine",
 			},
 		}
 		imageRepoName := types.NamespacedName{
-			Name:      "alpine-image",
+			Name:      imageName,
 			Namespace: "default",
 		}
 
@@ -65,7 +72,7 @@ var _ = Describe("ImageRepository controller", func() {
 			err := r.Get(context.Background(), imageRepoName, &repoAfter)
 			return err == nil && repoAfter.Status.CanonicalImageName != ""
 		}, timeout, interval).Should(BeTrue())
-		Expect(repoAfter.Name).To(Equal("alpine-image"))
+		Expect(repoAfter.Name).To(Equal(imageName))
 		Expect(repoAfter.Namespace).To(Equal("default"))
 		Expect(repoAfter.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
 	})
@@ -74,7 +81,7 @@ var _ = Describe("ImageRepository controller", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
 		imgRepo := loadImages("test-fetch", versions)
 
-		repo := imagev1alpha1.ImageRepository{
+		repo = imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
 				Image: imgRepo,
 			},
@@ -101,6 +108,45 @@ var _ = Describe("ImageRepository controller", func() {
 		Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
 		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
 	})
+
+	Context("when the ImageRepository is suspended", func() {
+		It("does not process the image", func() {
+			repo = imagev1alpha1.ImageRepository{
+				Spec: imagev1alpha1.ImageRepositorySpec{
+					Image:   "alpine",
+					Suspend: true,
+				},
+			}
+			imageRepoName := types.NamespacedName{
+				Name:      imageName,
+				Namespace: "default",
+			}
+
+			repo.Name = imageRepoName.Name
+			repo.Namespace = imageRepoName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			r := imageRepoReconciler
+
+			err := r.Create(ctx, &repo)
+			Expect(err).ToNot(HaveOccurred())
+
+			var repoAfter imagev1alpha1.ImageRepository
+			Eventually(func() bool {
+				err := r.Get(ctx, imageRepoName, &repoAfter)
+				return err == nil && len(repoAfter.Status.Conditions) > 0
+			}, timeout, interval).Should(BeTrue())
+			Expect(repoAfter.Status.CanonicalImageName).To(Equal(""))
+			cond := repoAfter.Status.Conditions[0]
+			Expect(cond.Message).To(
+				Equal("ImageRepository is suspended, skipping reconciliation"))
+			Expect(cond.Reason).To(
+				Equal(imagev1alpha1.SuspendedReason))
+		})
+	})
+
 })
 
 // loadImages uploads images to the local registry, and returns the
