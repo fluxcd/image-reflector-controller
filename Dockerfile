@@ -15,8 +15,8 @@ COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
 
-# build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o image-reflector-controller main.go
+# build without giving the arch, so that it gets it from the machine
+RUN CGO_ENABLED=0 GOOS=linux GO111MODULE=on go build -a -o image-reflector-controller main.go
 
 FROM alpine:3.12
 
