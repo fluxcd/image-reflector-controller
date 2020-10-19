@@ -200,7 +200,6 @@ github.com/evanphx/json-patch v4.9.0+incompatible h1:kLcOMZeuLAJvL2BPWLMIj5oaZQo
 github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL+zU=
-github.com/fluxcd/pkg v0.0.4 h1:fMA6GG3FTSBFDrlB026gQJhxj4xVuvcvwP3rhX/Yqrw=
 github.com/fluxcd/pkg/apis/meta v0.0.2 h1:kyA4Y0IzNjf1joBOnFqpWG7aNDHvtLExZcaHQM7qhRI=
 github.com/fluxcd/pkg/apis/meta v0.0.2/go.mod h1:nCNps5JJOcEQr3MNDmZqI4o0chjePSUYL6Q2ktDtotU=
 github.com/fluxcd/pkg/recorder v0.0.5 h1:D8qfupahIvh6ncCMn2yTHsrzG91S05sp4zdpsbKWeaU=

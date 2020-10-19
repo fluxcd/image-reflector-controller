@@ -62,6 +62,12 @@ type ImageRepositoryStatus struct {
 	// LastScanResult contains the number of fetched tags.
 	// +optional
 	LastScanResult ScanResult `json:"lastScanResult,omitempty"`
+
+	// LastHandledReconcileAt records the value of the annotation used
+	// to prompt a scan, so that a change in value can be
+	// detected. The name is in common with other GitOps Toolkit
+	// controllers.
+	LastHandledReconcileAt string `json:"lastHandledReconcileAt,omitempty"`
 }
 
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.

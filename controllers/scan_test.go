@@ -182,14 +182,17 @@ var _ = Describe("ImageRepository controller", func() {
 			lastScan := imagev1alpha1.GetLastTransitionTime(repoAfter)
 			Expect(lastScan).ToNot(BeNil())
 
+			requestToken := "this can be anything, so long as it's a change"
+
 			repoAfter.Annotations = map[string]string{
-				meta.ReconcileAtAnnotation: time.Now().Add(-time.Minute).Format(time.RFC3339Nano),
+				meta.ReconcileAtAnnotation: requestToken,
 			}
 			Expect(r.Update(ctx, &repoAfter)).To(Succeed())
 			Eventually(func() bool {
 				err := r.Get(context.Background(), objectName, &repoAfter)
 				return err == nil && imagev1alpha1.GetLastTransitionTime(repoAfter).After(lastScan.Time)
 			}, timeout, interval).Should(BeTrue())
+			Expect(repoAfter.Status.LastHandledReconcileAt).To(Equal(requestToken))
 		})
 	})
 })

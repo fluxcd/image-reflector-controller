@@ -95,6 +95,11 @@ spec:
                   - type
                   type: object
                 type: array
+              lastHandledReconcileAt:
+                description: LastHandledReconcileAt records the value of the annotation
+                  used to prompt a scan, so that a change in value can be detected.
+                  The name is in common with other GitOps Toolkit controllers.
+                type: string
               lastScanResult:
                 description: LastScanResult contains the number of fetched tags.
                 properties:
