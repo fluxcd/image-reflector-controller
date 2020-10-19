@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	"github.com/fluxcd/pkg/apis/meta"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -147,6 +148,50 @@ var _ = Describe("ImageRepository controller", func() {
 		})
 	})
 
+	Context("when the ImageRepository gets a 'reconcile at' annotation", func() {
+		It("scans right away", func() {
+			imgRepo := loadImages("test-fetch", []string{"1.0.0"})
+
+			repo = imagev1alpha1.ImageRepository{
+				Spec: imagev1alpha1.ImageRepositorySpec{
+					Image: imgRepo,
+				},
+			}
+			objectName := types.NamespacedName{
+				Name:      "random",
+				Namespace: "default",
+			}
+
+			repo.Name = objectName.Name
+			repo.Namespace = objectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			r := imageRepoReconciler
+			err := r.Create(ctx, &repo)
+			Expect(err).ToNot(HaveOccurred())
+
+			// It'll get scanned on creation
+			var repoAfter imagev1alpha1.ImageRepository
+			Eventually(func() bool {
+				err := r.Get(context.Background(), objectName, &repoAfter)
+				return err == nil && repoAfter.Status.CanonicalImageName != ""
+			}, timeout, interval).Should(BeTrue())
+
+			lastScan := imagev1alpha1.GetLastTransitionTime(repoAfter)
+			Expect(lastScan).ToNot(BeNil())
+
+			repoAfter.Annotations = map[string]string{
+				meta.ReconcileAtAnnotation: time.Now().Add(-time.Minute).Format(time.RFC3339Nano),
+			}
+			Expect(r.Update(ctx, &repoAfter)).To(Succeed())
+			Eventually(func() bool {
+				err := r.Get(context.Background(), objectName, &repoAfter)
+				return err == nil && imagev1alpha1.GetLastTransitionTime(repoAfter).After(lastScan.Time)
+			}, timeout, interval).Should(BeTrue())
+		})
+	})
 })
 
 // loadImages uploads images to the local registry, and returns the

@@ -31,7 +31,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/recorder"
+	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
@@ -169,9 +171,19 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 		scanInterval = repo.Spec.ScanInterval.Duration
 	}
 
+	// never scanned; do it now
 	lastTransitionTime := imagev1alpha1.GetLastTransitionTime(repo)
 	if lastTransitionTime == nil {
 		return true, scanInterval
+	}
+
+	// allow for the "reconcile at" annotation
+	if syncAt, ok := repo.GetAnnotations()[meta.ReconcileAtAnnotation]; ok {
+		if t, err := time.Parse(time.RFC3339Nano, syncAt); err == nil && t.Before(now) {
+			return true, scanInterval
+		} else if err == nil {
+			return false, t.Sub(now)
+		}
 	}
 
 	// when recovering, it's possible that the resource has a last
@@ -195,5 +207,6 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1alpha1.ImageRepository{}).
+		WithEventFilter(predicates.ChangePredicate{}).
 		Complete(r)
 }
