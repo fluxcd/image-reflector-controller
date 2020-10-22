@@ -19,6 +19,8 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/fluxcd/pkg/apis/meta"
 )
 
 const ImageRepositoryKind = "ImageRepository"
@@ -63,11 +65,7 @@ type ImageRepositoryStatus struct {
 	// +optional
 	LastScanResult ScanResult `json:"lastScanResult,omitempty"`
 
-	// LastHandledReconcileAt records the value of the annotation used
-	// to prompt a scan, so that a change in value can be
-	// detected. The name is in common with other GitOps Toolkit
-	// controllers.
-	LastHandledReconcileAt string `json:"lastHandledReconcileAt,omitempty"`
+	meta.ReconcileRequestStatus `json:",inline"`
 }
 
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.

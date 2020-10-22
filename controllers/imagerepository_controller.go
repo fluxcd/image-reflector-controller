@@ -158,8 +158,8 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 	// if the reconcile request annotation was set, consider it
 	// handled (NB it doesn't matter here if it was changed since last
 	// time)
-	if token, ok := imageRepo.GetAnnotations()[meta.ReconcileAtAnnotation]; ok {
-		imageRepo.Status.LastHandledReconcileAt = token
+	if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
+		imageRepo.Status.SetLastHandledReconcileRequest(token)
 	}
 
 	return imagev1alpha1.SetImageRepositoryReadiness(
@@ -188,8 +188,8 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 	// Is the controller seeing this because the reconcileAt
 	// annotation was tweaked? Despite the name of the annotation, all
 	// that matters is that it's different.
-	if syncAt, ok := repo.GetAnnotations()[meta.ReconcileAtAnnotation]; ok {
-		if syncAt != repo.Status.LastHandledReconcileAt {
+	if syncAt, ok := meta.ReconcileAnnotationValue(repo.GetAnnotations()); ok {
+		if syncAt != repo.Status.GetLastHandledReconcileRequest() {
 			return true, scanInterval
 		}
 	}
