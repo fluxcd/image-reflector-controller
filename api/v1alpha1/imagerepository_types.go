@@ -19,6 +19,8 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/fluxcd/pkg/apis/meta"
 )
 
 const ImageRepositoryKind = "ImageRepository"
@@ -62,6 +64,8 @@ type ImageRepositoryStatus struct {
 	// LastScanResult contains the number of fetched tags.
 	// +optional
 	LastScanResult ScanResult `json:"lastScanResult,omitempty"`
+
+	meta.ReconcileRequestStatus `json:",inline"`
 }
 
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.

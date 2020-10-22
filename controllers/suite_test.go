@@ -83,9 +83,6 @@ var _ = BeforeSuite(func(done Done) {
 	err = imagev1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = imagev1alpha1.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
-
 	// +kubebuilder:scaffold:scheme
 
 	k8sMgr, err = ctrl.NewManager(cfg, ctrl.Options{
@@ -140,7 +137,7 @@ var _ = AfterSuite(func() {
 
 // ---
 
-// the go-containerregistry test regsitry implementation does not
+// the go-containerregistry test registry implementation does not
 // serve /myimage/tags/list. Until it does, I'm adding this handler.
 // NB:
 // - assumes repo name is a single element

@@ -31,7 +31,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/recorder"
+	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
@@ -152,6 +154,14 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 	r.Database.SetTags(canonicalName, tags)
 
 	imageRepo.Status.LastScanResult.TagCount = len(tags)
+
+	// if the reconcile request annotation was set, consider it
+	// handled (NB it doesn't matter here if it was changed since last
+	// time)
+	if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
+		imageRepo.Status.SetLastHandledReconcileRequest(token)
+	}
+
 	return imagev1alpha1.SetImageRepositoryReadiness(
 		imageRepo,
 		corev1.ConditionTrue,
@@ -169,9 +179,19 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 		scanInterval = repo.Spec.ScanInterval.Duration
 	}
 
+	// never scanned; do it now
 	lastTransitionTime := imagev1alpha1.GetLastTransitionTime(repo)
 	if lastTransitionTime == nil {
 		return true, scanInterval
+	}
+
+	// Is the controller seeing this because the reconcileAt
+	// annotation was tweaked? Despite the name of the annotation, all
+	// that matters is that it's different.
+	if syncAt, ok := meta.ReconcileAnnotationValue(repo.GetAnnotations()); ok {
+		if syncAt != repo.Status.GetLastHandledReconcileRequest() {
+			return true, scanInterval
+		}
 	}
 
 	// when recovering, it's possible that the resource has a last
@@ -195,5 +215,6 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1alpha1.ImageRepository{}).
+		WithEventFilter(predicates.ChangePredicate{}).
 		Complete(r)
 }
