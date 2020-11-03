@@ -55,7 +55,7 @@ type ScanResult struct {
 // ImageRepositoryStatus defines the observed state of ImageRepository
 type ImageRepositoryStatus struct {
 	// +optional
-	Conditions []Condition `json:"conditions,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// ObservedGeneration is the last reconciled generation.
 	// +optional
@@ -75,10 +75,10 @@ type ImageRepositoryStatus struct {
 }
 
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImageRepositoryReadiness(ir ImageRepository, status corev1.ConditionStatus, reason, message string) ImageRepository {
-	ir.Status.Conditions = []Condition{
+func SetImageRepositoryReadiness(ir ImageRepository, status metav1.ConditionStatus, reason, message string) ImageRepository {
+	ir.Status.Conditions = []metav1.Condition{
 		{
-			Type:               ReadyCondition,
+			Type:               meta.ReadyCondition,
 			Status:             status,
 			LastTransitionTime: metav1.Now(),
 			Reason:             reason,
@@ -91,7 +91,7 @@ func SetImageRepositoryReadiness(ir ImageRepository, status corev1.ConditionStat
 
 func GetLastTransitionTime(ir ImageRepository) *metav1.Time {
 	for _, condition := range ir.Status.Conditions {
-		if condition.Type == ReadyCondition {
+		if condition.Type == meta.ReadyCondition {
 			return &condition.LastTransitionTime
 		}
 	}
