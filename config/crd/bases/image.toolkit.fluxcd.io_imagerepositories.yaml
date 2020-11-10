@@ -51,6 +51,16 @@ spec:
                 description: ScanInterval is the (minimum) length of time to wait
                   between scans of the image repository.
                 type: string
+              secretRef:
+                description: SecretRef can be given the name of a secret containing
+                  credentials to use for the image registry. The secret should be
+                  created with `kubectl create secret docker-registry`, or the equivalent.
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
               suspend:
                 description: This flag tells the controller to suspend subsequent
                   image scans. It does not apply to already started scans. Defaults

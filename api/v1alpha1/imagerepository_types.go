@@ -36,6 +36,12 @@ type ImageRepositorySpec struct {
 	// +optional
 	ScanInterval *metav1.Duration `json:"scanInterval,omitempty"`
 
+	// SecretRef can be given the name of a secret containing
+	// credentials to use for the image registry. The secret should be
+	// created with `kubectl create secret docker-registry`, or the
+	// equivalent.
+	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+
 	// This flag tells the controller to suspend subsequent image scans.
 	// It does not apply to already started scans. Defaults to false.
 	// +optional
