@@ -18,12 +18,9 @@ package controllers
 
 import (
 	"context"
-	"strings"
+	"net/http/httptest"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/random"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,7 +37,14 @@ var _ = Describe("ImageRepository controller", func() {
 	const imageName = "alpine-image"
 	var repo imagev1alpha1.ImageRepository
 
+	var registryServer *httptest.Server
+
+	BeforeEach(func() {
+		registryServer = newRegistryServer()
+	})
+
 	AfterEach(func() {
+		registryServer.Close()
 		Expect(k8sClient.Delete(context.Background(), &repo)).To(Succeed())
 	})
 
@@ -80,7 +84,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	It("fetches the tags for an image", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := loadImages("test-fetch", versions)
+		imgRepo := loadImages(registryServer, "test-fetch", versions)
 
 		repo = imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
@@ -150,7 +154,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("when the ImageRepository gets a 'reconcile at' annotation", func() {
 		It("scans right away", func() {
-			imgRepo := loadImages("test-fetch", []string{"1.0.0"})
+			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
 
 			repo = imagev1alpha1.ImageRepository{
 				Spec: imagev1alpha1.ImageRepositorySpec{
@@ -196,18 +200,3 @@ var _ = Describe("ImageRepository controller", func() {
 		})
 	})
 })
-
-// loadImages uploads images to the local registry, and returns the
-// image repo.
-func loadImages(imageName string, versions []string) string {
-	registry := strings.TrimPrefix(registryServer.URL, "http://")
-	imgRepo := registry + "/" + imageName
-	for _, tag := range versions {
-		imgRef, err := name.NewTag(imgRepo + ":" + tag)
-		Expect(err).ToNot(HaveOccurred())
-		img, err := random.Image(512, 1)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(remote.Write(imgRef, img)).To(Succeed())
-	}
-	return imgRepo
-}
