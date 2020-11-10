@@ -17,16 +17,20 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -139,8 +143,33 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1alpha1.ImageRepository, ref name.Reference) (imagev1alpha1.ImageRepository, error) {
 	canonicalName := ref.Context().String()
 
-	// TODO: implement auth
-	tags, err := remote.ListWithContext(ctx, ref.Context())
+	var options []remote.Option
+	if imageRepo.Spec.SecretRef != nil {
+		var secret corev1.Secret
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: imageRepo.GetNamespace(),
+			Name:      imageRepo.Spec.SecretRef.Name,
+		}, &secret); err != nil {
+			return imagev1alpha1.SetImageRepositoryReadiness(
+				imageRepo,
+				corev1.ConditionFalse,
+				imagev1alpha1.ReconciliationFailedReason,
+				err.Error(),
+			), err
+		}
+		auth, err := authFromSecret(secret, ref.Context().RegistryStr())
+		if err != nil {
+			return imagev1alpha1.SetImageRepositoryReadiness(
+				imageRepo,
+				corev1.ConditionFalse,
+				imagev1alpha1.ReconciliationFailedReason,
+				err.Error(),
+			), err
+		}
+		options = append(options, remote.WithAuth(auth))
+	}
+
+	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
 	if err != nil {
 		return imagev1alpha1.SetImageRepositoryReadiness(
 			imageRepo,
@@ -217,4 +246,29 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&imagev1alpha1.ImageRepository{}).
 		WithEventFilter(predicates.ChangePredicate{}).
 		Complete(r)
+}
+
+// ---
+
+// authFromSecret creates an Authenticator that can be given to the
+// `remote` funcs, from a Kubernetes secret. If the secret doesn't
+// have the right format or data, it returns an error.
+func authFromSecret(secret corev1.Secret, registry string) (authn.Authenticator, error) {
+	switch secret.Type {
+	case "kubernetes.io/dockerconfigjson":
+		var dockerconfig struct {
+			Auths map[string]authn.AuthConfig
+		}
+		configData := secret.Data[".dockerconfigjson"]
+		if err := json.NewDecoder(bytes.NewBuffer(configData)).Decode(&dockerconfig); err != nil {
+			return nil, err
+		}
+		auth, ok := dockerconfig.Auths[registry]
+		if !ok {
+			return nil, fmt.Errorf("auth for %q not found in secret %v", registry, types.NamespacedName{Name: secret.GetName(), Namespace: secret.GetNamespace()})
+		}
+		return authn.FromConfig(auth), nil
+	default:
+		return nil, fmt.Errorf("unknown secret type %q", secret.Type)
+	}
 }
