@@ -83,17 +83,23 @@ func newAuthenticatedRegistryServer(username, pass string) *httptest.Server {
 	return srv
 }
 
+// Get the registry part of an image from the registry server
+func registryName(srv *httptest.Server) string {
+	return strings.TrimPrefix(srv.URL, "http://")
+}
+
 // loadImages uploads images to the local registry, and returns the
-// image repo name.
-func loadImages(srv *httptest.Server, imageName string, versions []string) string {
-	registry := strings.TrimPrefix(srv.URL, "http://")
-	imgRepo := registry + "/" + imageName
+// image repo
+// name. https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
+// has an example of loading a test registry with a random image.
+func loadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) string {
+	imgRepo := registryName(srv) + "/" + imageName
 	for _, tag := range versions {
 		imgRef, err := name.NewTag(imgRepo + ":" + tag)
 		Expect(err).ToNot(HaveOccurred())
 		img, err := random.Image(512, 1)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(remote.Write(imgRef, img)).To(Succeed())
+		Expect(remote.Write(imgRef, img, options...)).To(Succeed())
 	}
 	return imgRepo
 }
@@ -207,14 +213,14 @@ var _ = Context("Authentication handler", func() {
 	})
 
 	It("rejects requests without authentication", func() {
-		repo, err := name.NewRepository(strings.TrimPrefix(registryServer.URL, "http://") + "/convenient")
+		repo, err := name.NewRepository(registryName(registryServer) + "/convenient")
 		Expect(err).ToNot(HaveOccurred())
 		_, err = remote.List(repo)
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("accepts requests with correct authentication", func() {
-		repo, err := name.NewRepository(strings.TrimPrefix(registryServer.URL, "http://") + "/convenient")
+		repo, err := name.NewRepository(registryName(registryServer) + "/convenient")
 		Expect(err).ToNot(HaveOccurred())
 		auth := &authn.Basic{
 			Username: username,
