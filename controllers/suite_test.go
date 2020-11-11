@@ -17,15 +17,10 @@ limitations under the License.
 package controllers
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/registry"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -57,7 +52,6 @@ var k8sMgr ctrl.Manager
 var imageRepoReconciler *ImageRepositoryReconciler
 var imagePolicyReconciler *ImagePolicyReconciler
 var testEnv *envtest.Environment
-var registryServer *httptest.Server
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -118,13 +112,6 @@ var _ = BeforeSuite(func(done Done) {
 	k8sClient = k8sMgr.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
 
-	// set up a local registry for testing scanning
-	regHandler := registry.New()
-	registryServer = httptest.NewServer(&tagListHandler{
-		registryHandler: regHandler,
-		imagetags:       map[string][]string{},
-	})
-
 	close(done)
 }, 60)
 
@@ -132,54 +119,4 @@ var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
-	registryServer.Close()
 })
-
-// ---
-
-// the go-containerregistry test registry implementation does not
-// serve /myimage/tags/list. Until it does, I'm adding this handler.
-// NB:
-// - assumes repo name is a single element
-// - assumes no overwriting tags
-
-type tagListHandler struct {
-	registryHandler http.Handler
-	imagetags       map[string][]string
-}
-
-type tagListResult struct {
-	Name string   `json:"name"`
-	Tags []string `json:"tags"`
-}
-
-func (h *tagListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// a tag list request has a path like: /v2/<repo>/tags/list
-	if withoutTagsList := strings.TrimSuffix(r.URL.Path, "/tags/list"); r.Method == "GET" && withoutTagsList != r.URL.Path {
-		repo := strings.TrimPrefix(withoutTagsList, "/v2/")
-		if tags, ok := h.imagetags[repo]; ok {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			result := tagListResult{
-				Name: repo,
-				Tags: tags,
-			}
-			Expect(json.NewEncoder(w).Encode(result)).To(Succeed())
-			println("Requested tags", repo, strings.Join(tags, ", "))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	// record the fact of a PUT to a tag; the path looks like: /v2/<repo>/manifests/<tag>
-	h.registryHandler.ServeHTTP(w, r)
-	if r.Method == "PUT" {
-		pathElements := strings.Split(r.URL.Path, "/")
-		if len(pathElements) == 5 && pathElements[1] == "v2" && pathElements[3] == "manifests" {
-			repo, tag := pathElements[2], pathElements[4]
-			println("Recording tag", repo, tag)
-			h.imagetags[repo] = append(h.imagetags[repo], tag)
-		}
-	}
-}

@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"net/http/httptest"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -33,9 +34,20 @@ import (
 // has an example of loading a test registry with a random image.
 
 var _ = Describe("ImagePolicy controller", func() {
+
+	var registryServer *httptest.Server
+
+	BeforeEach(func() {
+		registryServer = newRegistryServer()
+	})
+
+	AfterEach(func() {
+		registryServer.Close()
+	})
+
 	It("calculates an image from a repository's tags", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := loadImages("test-semver-policy", versions)
+		imgRepo := loadImages(registryServer, "test-semver-policy", versions)
 
 		repo := imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{

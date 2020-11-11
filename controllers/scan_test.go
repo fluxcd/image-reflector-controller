@@ -18,14 +18,15 @@ package controllers
 
 import (
 	"context"
-	"strings"
+	"fmt"
+	"net/http/httptest"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -33,14 +34,18 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
-// https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
-// has an example of loading a test registry with a random image.
-
 var _ = Describe("ImageRepository controller", func() {
 	const imageName = "alpine-image"
 	var repo imagev1alpha1.ImageRepository
 
+	var registryServer *httptest.Server
+
+	BeforeEach(func() {
+		registryServer = newRegistryServer()
+	})
+
 	AfterEach(func() {
+		registryServer.Close()
 		Expect(k8sClient.Delete(context.Background(), &repo)).To(Succeed())
 	})
 
@@ -80,7 +85,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	It("fetches the tags for an image", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := loadImages("test-fetch", versions)
+		imgRepo := loadImages(registryServer, "test-fetch", versions)
 
 		repo = imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
@@ -150,7 +155,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("when the ImageRepository gets a 'reconcile at' annotation", func() {
 		It("scans right away", func() {
-			imgRepo := loadImages("test-fetch", []string{"1.0.0"})
+			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
 
 			repo = imagev1alpha1.ImageRepository{
 				Spec: imagev1alpha1.ImageRepositorySpec{
@@ -195,19 +200,83 @@ var _ = Describe("ImageRepository controller", func() {
 			Expect(repoAfter.Status.LastHandledReconcileAt).To(Equal(requestToken))
 		})
 	})
-})
 
-// loadImages uploads images to the local registry, and returns the
-// image repo.
-func loadImages(imageName string, versions []string) string {
-	registry := strings.TrimPrefix(registryServer.URL, "http://")
-	imgRepo := registry + "/" + imageName
-	for _, tag := range versions {
-		imgRef, err := name.NewTag(imgRepo + ":" + tag)
-		Expect(err).ToNot(HaveOccurred())
-		img, err := random.Image(512, 1)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(remote.Write(imgRef, img)).To(Succeed())
-	}
-	return imgRepo
+	Context("using an authenticated registry", func() {
+
+		var (
+			secret             *corev1.Secret
+			username, password string
+		)
+
+		BeforeEach(func() {
+			username, password = "authuser", "authpass"
+			// a little clumsy -- replace the registry server
+			registryServer.Close()
+			registryServer = newAuthenticatedRegistryServer(username, password)
+			// this mimics what you get if you use
+			//     docker create secret docker-registry ...
+			secret = &corev1.Secret{
+				Type: "kubernetes.io/dockerconfigjson",
+				StringData: map[string]string{
+					".dockerconfigjson": fmt.Sprintf(`
+{
+  "auths": {
+    %q: {
+      "username": %q,
+      "password": %q
+    }
+  }
 }
+`, registryName(registryServer), username, password),
+				},
+			}
+			secret.Namespace = "default"
+			secret.Name = "docker"
+			Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(k8sClient.Delete(context.Background(), secret)).To(Succeed())
+		})
+
+		It("can scan the registry", func() {
+			versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
+			// this, as a side-effect, verifies that the username and password work with the registry
+			imgRepo := loadImages(registryServer, "test-auth", versions, remote.WithAuth(&authn.Basic{
+				Username: username,
+				Password: password,
+			}))
+
+			repo = imagev1alpha1.ImageRepository{
+				Spec: imagev1alpha1.ImageRepositorySpec{
+					Image: imgRepo,
+					SecretRef: &corev1.LocalObjectReference{
+						Name: "docker",
+					},
+				},
+			}
+			objectName := types.NamespacedName{
+				Name:      "random",
+				Namespace: "default",
+			}
+
+			repo.Name = objectName.Name
+			repo.Namespace = objectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			r := imageRepoReconciler
+			Expect(r.Create(ctx, &repo)).To(Succeed())
+
+			var repoAfter imagev1alpha1.ImageRepository
+			Eventually(func() bool {
+				err := r.Get(context.Background(), objectName, &repoAfter)
+				return err == nil && repoAfter.Status.CanonicalImageName != ""
+			}, timeout, interval).Should(BeTrue())
+			Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
+			Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+		})
+
+	})
+})

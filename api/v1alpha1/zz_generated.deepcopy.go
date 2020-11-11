@@ -21,6 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -217,6 +218,11 @@ func (in *ImageRepositorySpec) DeepCopyInto(out *ImageRepositorySpec) {
 	if in.ScanInterval != nil {
 		in, out := &in.ScanInterval, &out.ScanInterval
 		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.SecretRef != nil {
+		in, out := &in.SecretRef, &out.SecretRef
+		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
 }
