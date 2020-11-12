@@ -149,7 +149,7 @@ var _ = Describe("ImageRepository controller", func() {
 			Expect(cond.Message).To(
 				Equal("ImageRepository is suspended, skipping reconciliation"))
 			Expect(cond.Reason).To(
-				Equal(imagev1alpha1.SuspendedReason))
+				Equal(meta.SuspendedReason))
 		})
 	})
 

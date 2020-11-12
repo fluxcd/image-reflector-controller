@@ -29,6 +29,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
@@ -87,8 +88,8 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		msg := "ImageRepository is suspended, skipping reconciliation"
 		status := imagev1alpha1.SetImageRepositoryReadiness(
 			imageRepo,
-			corev1.ConditionFalse,
-			imagev1alpha1.SuspendedReason,
+			metav1.ConditionFalse,
+			meta.SuspendedReason,
 			msg,
 		)
 		if err := r.Status().Update(ctx, &status); err != nil {
@@ -103,7 +104,7 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	if err != nil {
 		status := imagev1alpha1.SetImageRepositoryReadiness(
 			imageRepo,
-			corev1.ConditionFalse,
+			metav1.ConditionFalse,
 			imagev1alpha1.ImageURLInvalidReason,
 			err.Error(),
 		)
@@ -152,8 +153,8 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 		}, &secret); err != nil {
 			return imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
-				corev1.ConditionFalse,
-				imagev1alpha1.ReconciliationFailedReason,
+				metav1.ConditionFalse,
+				meta.ReconciliationFailedReason,
 				err.Error(),
 			), err
 		}
@@ -161,8 +162,8 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 		if err != nil {
 			return imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
-				corev1.ConditionFalse,
-				imagev1alpha1.ReconciliationFailedReason,
+				metav1.ConditionFalse,
+				meta.ReconciliationFailedReason,
 				err.Error(),
 			), err
 		}
@@ -173,8 +174,8 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 	if err != nil {
 		return imagev1alpha1.SetImageRepositoryReadiness(
 			imageRepo,
-			corev1.ConditionFalse,
-			imagev1alpha1.ReconciliationFailedReason,
+			metav1.ConditionFalse,
+			meta.ReconciliationFailedReason,
 			err.Error(),
 		), err
 	}
@@ -193,8 +194,8 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 
 	return imagev1alpha1.SetImageRepositoryReadiness(
 		imageRepo,
-		corev1.ConditionTrue,
-		imagev1alpha1.ReconciliationSucceededReason,
+		metav1.ConditionTrue,
+		meta.ReconciliationSucceededReason,
 		fmt.Sprintf("successful scan, found %v tags", len(tags)),
 	), nil
 }

@@ -201,12 +201,12 @@ github.com/evanphx/json-patch v4.9.0+incompatible h1:kLcOMZeuLAJvL2BPWLMIj5oaZQo
 github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL+zU=
-github.com/fluxcd/pkg/apis/meta v0.2.0 h1:bxoFQtZM6OLLj0+n3h6ga7IEWUtGEDJPc65OWiXSMvY=
-github.com/fluxcd/pkg/apis/meta v0.2.0/go.mod h1:50RLLSfqM4LlQrh/+5LiJVf7Hjdthee8WDdXBvpjBdA=
+github.com/fluxcd/pkg/apis/meta v0.3.0 h1:o2YkfGgf0j8sKeZs8cBmmmMKLA7kEoS1qYViOial1Ds=
+github.com/fluxcd/pkg/apis/meta v0.3.0/go.mod h1:wOzQQx8CdtUQCGaLzqGu4QgnNxYkI6/wvdvlovxWhF0=
 github.com/fluxcd/pkg/recorder v0.0.5 h1:D8qfupahIvh6ncCMn2yTHsrzG91S05sp4zdpsbKWeaU=
 github.com/fluxcd/pkg/recorder v0.0.5/go.mod h1:2UG6EroZ6ZbqmqoL8k/cQMe09e6A36WyH4t4UDUGyuU=
-github.com/fluxcd/pkg/runtime v0.2.0 h1:aZmSLuyA9pF/KANf4wi7pZIICE19BKTYFSPRbl6WHtY=
-github.com/fluxcd/pkg/runtime v0.2.0/go.mod h1:P1/S8TOSuJgVPU0SRahWzbNxLWYoUwvBcPCNGc+dWWg=
+github.com/fluxcd/pkg/runtime v0.3.0 h1:WpeTmDT2meIe4NsU081I8zmUGgTYs3bIMRgs9F3Lj90=
+github.com/fluxcd/pkg/runtime v0.3.0/go.mod h1:gPe6JgfPB4EDh5gaVkuI0SPuATk3PmclbFa1kPcZrKE=
 github.com/fortytw2/leaktest v1.2.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
 github.com/fortytw2/leaktest v1.3.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
