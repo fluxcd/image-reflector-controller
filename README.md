@@ -1,12 +1,18 @@
 # Image (metadata) reflector controller
 
-This is an attempt to build controllers along the lines set out in
-https://squaremo.dev/posts/gitops-controllers/.
+This is a controller that reflects container image metadata into a
+Kubernetes cluster. It pairs with the [image update automation][auto]
+controller to drive automated config updates.
 
-This repository implements the image metadata reflector controller,
-which scans container image repositories and reflects the metadata, in
-Kubernetes resources. The sibling repository
-[image-automation-controller](https://github.com/fluxcd/image-automation-controller)
-implements the automation controller, which acts on the reflected data
-(e.g., a new image version) by updating the image references used in
-files in git.
+## Installing
+
+Instructions for setting both controllers up are in the
+[fluxcd/image-automation-controller][auto] README.
+
+If you just want to run this controller, do
+
+```bash
+kustomize build github.com/fluxcd/image-reflector-controller//config/default/?ref=main | kubectl apply -f-
+```
+
+[auto]: https://github.com/fluxcd/image-automation-controller
