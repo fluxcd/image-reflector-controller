@@ -24,7 +24,7 @@ jobs:
       with:
         go-version: 1.14.x
     - name: Set up kubebuilder
-      uses: fluxcd/pkg/actions/kubebuilder@v0.0.4
+      uses: fluxcd/pkg/actions/kubebuilder@main
     - name: Run tests
       run: make test
       env:
