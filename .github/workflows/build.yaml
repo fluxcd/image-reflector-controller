@@ -20,11 +20,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-
     - name: Set up Go
-      uses: actions/setup-go@v2-beta
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.14.x
+        go-version: 1.15.x
     - name: Set up kubebuilder
-      uses: fluxcd/pkg/actions/kubebuilder@v0.0.4
+      uses: fluxcd/pkg/actions/kubebuilder@main
     - name: Run tests
       run: make test
       env:
