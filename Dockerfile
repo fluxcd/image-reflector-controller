@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.15 as builder
+FROM golang:1.15-alpine as builder
 
 WORKDIR /workspace
 
@@ -7,12 +7,15 @@ WORKDIR /workspace
 COPY go.mod go.mod
 COPY go.sum go.sum
 
+# Copy this, which should not change often; and, needs to be in place
+# before `go mod download`.
+COPY api/ api/
+
 # cache modules
 RUN go mod download
 
 # copy source code
 COPY main.go main.go
-COPY api/ api/
 COPY controllers/ controllers/
 
 # build without giving the arch, so that it gets it from the machine
