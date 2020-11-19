@@ -5,7 +5,7 @@ on:
       - 'v*'
 
 env:
-  CONTROLLER: image-reflector-controller
+  CONTROLLER: ${{ github.event.repository.name }}
 
 jobs:
   build-push:
