@@ -4,6 +4,9 @@ on:
     tags:
       - 'v*'
 
+env:
+  CONTROLLER: image-reflector-controller
+
 jobs:
   build-push:
     runs-on: ubuntu-latest
@@ -49,8 +52,8 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           tags: |
-            ghcr.io/fluxcd/image-reflector-controller:${{ steps.prep.outputs.VERSION }}
-            docker.io/fluxcd/image-reflector-controller:${{ steps.prep.outputs.VERSION }}
+            ghcr.io/fluxcd/${{ env.CONTROLLER }}:${{ steps.prep.outputs.VERSION }}
+            docker.io/fluxcd/${{ env.CONTROLLER }}:${{ steps.prep.outputs.VERSION }}
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }}
             org.opencontainers.image.description=${{ github.event.repository.description }}
@@ -67,7 +70,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/arm/v7,linux/arm64
           tags: |
-            ghcr.io/fluxcd/image-reflector-controller-arm64:${{ steps.prep.outputs.VERSION }}
+            ghcr.io/fluxcd/${{ env.CONTROLLER }}-arm64:${{ steps.prep.outputs.VERSION }}
           labels: |
             org.opencontainers.image.title=${{ github.event.repository.name }}
             org.opencontainers.image.description=${{ github.event.repository.description }}
@@ -77,19 +80,19 @@ jobs:
             org.opencontainers.image.created=${{ steps.prep.outputs.BUILD_DATE }}
       - name: Check images
         run: |
-          docker buildx imagetools inspect docker.io/fluxcd/image-reflector-controller:${{ steps.prep.outputs.VERSION }}
-          docker buildx imagetools inspect ghcr.io/fluxcd/image-reflector-controller:${{ steps.prep.outputs.VERSION }}
-          docker buildx imagetools inspect ghcr.io/fluxcd/image-reflector-controller-arm64:${{ steps.prep.outputs.VERSION }}
-          docker pull docker.io/fluxcd/image-reflector-controller:${{ steps.prep.outputs.VERSION }}
-          docker pull ghcr.io/fluxcd/image-reflector-controller:${{ steps.prep.outputs.VERSION }}
+          docker buildx imagetools inspect docker.io/fluxcd/${CONTROLLER}:${{ steps.prep.outputs.VERSION }}
+          docker buildx imagetools inspect ghcr.io/fluxcd/${CONTROLLER}:${{ steps.prep.outputs.VERSION }}
+          docker buildx imagetools inspect ghcr.io/fluxcd/${CONTROLLER}-arm64:${{ steps.prep.outputs.VERSION }}
+          docker pull docker.io/fluxcd/${CONTROLLER}:${{ steps.prep.outputs.VERSION }}
+          docker pull ghcr.io/fluxcd/${CONTROLLER}:${{ steps.prep.outputs.VERSION }}
       - name: Generate release asset
         if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
         run: |
           mkdir -p config/release
           cp config/default/* config/release
           cd config/release
-          kustomize edit set image fluxcd/image-reflector-controller=fluxcd/image-reflector-controller:${{ steps.get_version.outputs.VERSION }}
-          kustomize build . > image-reflector-controller.yaml
+          kustomize edit set image fluxcd/${CONTROLLER}=fluxcd/${CONTROLLER}:${{ steps.get_version.outputs.VERSION }}
+          kustomize build . > ${CONTROLLER}.yaml
       - name: Create release
         if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
         id: create_release
@@ -102,7 +105,7 @@ jobs:
           draft: false
           prerelease: true
           body: |
-            [CHANGELOG](https://github.com/fluxcd/image-reflector-controller/blob/main/CHANGELOG.md)
+            [CHANGELOG](https://github.com/fluxcd/${{ env.CONTROLLER }}/blob/main/CHANGELOG.md)
       - name: Upload artifacts
         if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
         id: upload-release-asset
@@ -111,6 +114,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./config/release/image-reflector-controller.yaml
-          asset_name: image-reflector-controller.yaml
+          asset_path: ./config/release/${{ env.CONTROLLER }}.yaml
+          asset_name: ${{ env.CONTROLLER }}.yaml
           asset_content_type: text/plain
