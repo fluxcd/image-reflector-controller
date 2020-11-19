@@ -36,6 +36,8 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+const controllerName = "image-reflector-controller"
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
@@ -55,7 +57,7 @@ func main() {
 		enableLeaderElection bool
 		logLevel             string
 		logJSON              bool
-		controllerName       = "image-reflector-controller"
+		watchAllNamespaces   bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -65,18 +67,15 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&logLevel, "log-level", "info", "Set logging level. Can be debug, info or error.")
 	flag.BoolVar(&logJSON, "log-json", false, "Set logging to JSON format.")
+	flag.BoolVar(&watchAllNamespaces, "watch-all-namespaces", true,
+		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
 	flag.Parse()
 
 	ctrl.SetLogger(newLogger(logLevel, logJSON))
 
-	var eventRecorder *recorder.EventRecorder
-	if eventsAddr != "" {
-		if er, err := recorder.NewEventRecorder(eventsAddr, controllerName); err != nil {
-			setupLog.Error(err, "unable to create event recorder")
-			os.Exit(1)
-		} else {
-			eventRecorder = er
-		}
+	watchNamespace := ""
+	if !watchAllNamespaces {
+		watchNamespace = os.Getenv("RUNTIME_NAMESPACE")
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -85,7 +84,7 @@ func main() {
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
 		LeaderElectionID:   "e189b2df.fluxcd.io",
-		Namespace:          os.Getenv("RUNTIME_NAMESPACE"),
+		Namespace:          watchNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -93,6 +92,7 @@ func main() {
 	}
 
 	db := controllers.NewDatabase()
+	er := eventRecorder(eventsAddr)
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
@@ -100,7 +100,7 @@ func main() {
 		Scheme:                mgr.GetScheme(),
 		Database:              db,
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
+		ExternalEventRecorder: er,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImageRepositoryKind)
 		os.Exit(1)
@@ -111,7 +111,7 @@ func main() {
 		Scheme:                mgr.GetScheme(),
 		Database:              db,
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
+		ExternalEventRecorder: er,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImagePolicyKind)
 		os.Exit(1)
@@ -149,4 +149,16 @@ func newLogger(level string, production bool) logr.Logger {
 	}
 
 	return zap.New(encoder, logLevel, stacktraceLevel)
+}
+
+func eventRecorder(addr string) *recorder.EventRecorder {
+	if addr == "" {
+		return nil
+	}
+	er, err := recorder.NewEventRecorder(addr, controllerName)
+	if err != nil {
+		setupLog.Error(err, "unable to create event recorder")
+		os.Exit(1)
+	}
+	return er
 }
