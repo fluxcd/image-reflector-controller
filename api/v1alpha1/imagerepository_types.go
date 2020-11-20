@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -76,27 +77,23 @@ type ImageRepositoryStatus struct {
 
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
 func SetImageRepositoryReadiness(ir ImageRepository, status metav1.ConditionStatus, reason, message string) ImageRepository {
-	ir.Status.Conditions = []metav1.Condition{
-		{
-			Type:               meta.ReadyCondition,
-			Status:             status,
-			LastTransitionTime: metav1.Now(),
-			Reason:             reason,
-			Message:            message,
-		},
-	}
 	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
+	meta.SetResourceCondition(&ir, meta.ReadyCondition, status, reason, message)
 	return ir
 }
 
+// GetLastTransitionTime returns the LastTransitionTime attribute of the ready conditon
 func GetLastTransitionTime(ir ImageRepository) *metav1.Time {
-	for _, condition := range ir.Status.Conditions {
-		if condition.Type == meta.ReadyCondition {
-			return &condition.LastTransitionTime
-		}
+	if rc := apimeta.FindStatusCondition(ir.Status.Conditions, meta.ReadyCondition); rc != nil {
+		return &rc.LastTransitionTime
 	}
 
 	return nil
+}
+
+// GetStatusConditions returns a pointer to the Status.Conditions slice
+func (in *ImageRepository) GetStatusConditions() *[]metav1.Condition {
+	return &in.Status.Conditions
 }
 
 // +kubebuilder:object:root=true
