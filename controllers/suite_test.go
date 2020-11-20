@@ -38,9 +38,10 @@ import (
 
 // for Eventually
 const (
-	timeout  = time.Second * 30
-	interval = time.Second * 1
-	// indexInterval = time.Second * 1
+	timeout                = time.Second * 30
+	contextTimeout         = time.Second * 5
+	interval               = time.Second * 1
+	reconciliationInterval = time.Second * 5
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to

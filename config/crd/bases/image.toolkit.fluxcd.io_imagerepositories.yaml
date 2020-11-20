@@ -47,9 +47,9 @@ spec:
               image:
                 description: Image is the name of the image repository
                 type: string
-              scanInterval:
-                description: ScanInterval is the (minimum) length of time to wait
-                  between scans of the image repository.
+              interval:
+                description: Interval is the length of time to wait between scans
+                  of the image repository.
                 type: string
               secretRef:
                 description: SecretRef can be given the name of a secret containing
@@ -66,6 +66,9 @@ spec:
                   image scans. It does not apply to already started scans. Defaults
                   to false.
                 type: boolean
+              timeout:
+                description: Timeout for image scanning. Defaults to 'Interval' duration.
+                type: string
             type: object
           status:
             description: ImageRepositoryStatus defines the observed state of ImageRepository
@@ -151,6 +154,9 @@ spec:
               lastScanResult:
                 description: LastScanResult contains the number of fetched tags.
                 properties:
+                  scanTime:
+                    format: date-time
+                    type: string
                   tagCount:
                     type: integer
                 required:

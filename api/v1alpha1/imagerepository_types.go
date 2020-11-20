@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"time"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -31,10 +33,15 @@ type ImageRepositorySpec struct {
 	// Image is the name of the image repository
 	// +required
 	Image string `json:"image,omitempty"`
-	// ScanInterval is the (minimum) length of time to wait between
+	// Interval is the length of time to wait between
 	// scans of the image repository.
+	// +required
+	Interval metav1.Duration `json:"interval,omitempty"`
+
+	// Timeout for image scanning.
+	// Defaults to 'Interval' duration.
 	// +optional
-	ScanInterval *metav1.Duration `json:"scanInterval,omitempty"`
+	Timeout *metav1.Duration `json:"timeout,omitempty"`
 
 	// SecretRef can be given the name of a secret containing
 	// credentials to use for the image registry. The secret should be
@@ -49,7 +56,8 @@ type ImageRepositorySpec struct {
 }
 
 type ScanResult struct {
-	TagCount int `json:"tagCount"`
+	TagCount int          `json:"tagCount"`
+	ScanTime *metav1.Time `json:"scanTime,omitempty"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository
@@ -75,28 +83,26 @@ type ImageRepositoryStatus struct {
 }
 
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImageRepositoryReadiness(ir ImageRepository, status metav1.ConditionStatus, reason, message string) ImageRepository {
-	ir.Status.Conditions = []metav1.Condition{
-		{
-			Type:               meta.ReadyCondition,
-			Status:             status,
-			LastTransitionTime: metav1.Now(),
-			Reason:             reason,
-			Message:            message,
-		},
-	}
+func SetImageRepositoryReadiness(ir *ImageRepository, status metav1.ConditionStatus, reason, message string) {
 	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
-	return ir
+	meta.SetResourceCondition(ir, meta.ReadyCondition, status, reason, message)
 }
 
-func GetLastTransitionTime(ir ImageRepository) *metav1.Time {
-	for _, condition := range ir.Status.Conditions {
-		if condition.Type == meta.ReadyCondition {
-			return &condition.LastTransitionTime
-		}
-	}
+// GetStatusConditions returns a pointer to the Status.Conditions slice
+func (in *ImageRepository) GetStatusConditions() *[]metav1.Condition {
+	return &in.Status.Conditions
+}
 
-	return nil
+// GetTimeout returns the timeout with default.
+func (in ImageRepository) GetTimeout() time.Duration {
+	duration := in.Spec.Interval.Duration
+	if in.Spec.Timeout != nil {
+		duration = in.Spec.Timeout.Duration
+	}
+	if duration < time.Second {
+		return time.Second
+	}
+	return duration
 }
 
 // +kubebuilder:object:root=true

@@ -19,11 +19,11 @@ package controllers
 import (
 	"context"
 	"net/http/httptest"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -51,7 +51,8 @@ var _ = Describe("ImagePolicy controller", func() {
 
 		repo := imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
-				Image: imgRepo,
+				Interval: metav1.Duration{Duration: reconciliationInterval},
+				Image:    imgRepo,
 			},
 		}
 		imageObjectName := types.NamespacedName{
@@ -61,7 +62,7 @@ var _ = Describe("ImagePolicy controller", func() {
 		repo.Name = imageObjectName.Name
 		repo.Namespace = imageObjectName.Namespace
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 		defer cancel()
 
 		r := imageRepoReconciler
@@ -69,8 +70,8 @@ var _ = Describe("ImagePolicy controller", func() {
 
 		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
-			err := r.Get(context.Background(), imageObjectName, &repoAfter)
-			return err == nil && repoAfter.Status.CanonicalImageName != ""
+			err := r.Get(ctx, imageObjectName, &repoAfter)
+			return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
 		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
@@ -94,14 +95,14 @@ var _ = Describe("ImagePolicy controller", func() {
 		pol.Namespace = polName.Namespace
 		pol.Name = polName.Name
 
-		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
 		defer cancel()
 
 		Expect(r.Create(ctx, &pol)).To(Succeed())
 
 		var polAfter imagev1alpha1.ImagePolicy
 		Eventually(func() bool {
-			err := r.Get(context.Background(), polName, &polAfter)
+			err := r.Get(ctx, polName, &polAfter)
 			return err == nil && polAfter.Status.LatestImage != ""
 		}, timeout, interval).Should(BeTrue())
 		Expect(polAfter.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))

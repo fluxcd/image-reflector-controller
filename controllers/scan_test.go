@@ -20,13 +20,13 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
-	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -55,7 +55,8 @@ var _ = Describe("ImageRepository controller", func() {
 		// 2. probably going to want to have several test cases
 		repo = imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
-				Image: "alpine",
+				Interval: metav1.Duration{Duration: reconciliationInterval},
+				Image:    "alpine",
 			},
 		}
 		imageRepoName := types.NamespacedName{
@@ -66,7 +67,7 @@ var _ = Describe("ImageRepository controller", func() {
 		repo.Name = imageRepoName.Name
 		repo.Namespace = imageRepoName.Namespace
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 		defer cancel()
 
 		r := imageRepoReconciler
@@ -76,7 +77,7 @@ var _ = Describe("ImageRepository controller", func() {
 		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
 			err := r.Get(context.Background(), imageRepoName, &repoAfter)
-			return err == nil && repoAfter.Status.CanonicalImageName != ""
+			return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(repoAfter.Name).To(Equal(imageName))
 		Expect(repoAfter.Namespace).To(Equal("default"))
@@ -89,7 +90,8 @@ var _ = Describe("ImageRepository controller", func() {
 
 		repo = imagev1alpha1.ImageRepository{
 			Spec: imagev1alpha1.ImageRepositorySpec{
-				Image: imgRepo,
+				Interval: metav1.Duration{Duration: reconciliationInterval},
+				Image:    imgRepo,
 			},
 		}
 		objectName := types.NamespacedName{
@@ -100,7 +102,7 @@ var _ = Describe("ImageRepository controller", func() {
 		repo.Name = objectName.Name
 		repo.Namespace = objectName.Namespace
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 		defer cancel()
 
 		r := imageRepoReconciler
@@ -109,7 +111,7 @@ var _ = Describe("ImageRepository controller", func() {
 		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
 			err := r.Get(context.Background(), objectName, &repoAfter)
-			return err == nil && repoAfter.Status.CanonicalImageName != ""
+			return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
 		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
@@ -119,8 +121,9 @@ var _ = Describe("ImageRepository controller", func() {
 		It("does not process the image", func() {
 			repo = imagev1alpha1.ImageRepository{
 				Spec: imagev1alpha1.ImageRepositorySpec{
-					Image:   "alpine",
-					Suspend: true,
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    "alpine",
+					Suspend:  true,
 				},
 			}
 			imageRepoName := types.NamespacedName{
@@ -131,7 +134,7 @@ var _ = Describe("ImageRepository controller", func() {
 			repo.Name = imageRepoName.Name
 			repo.Namespace = imageRepoName.Namespace
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
 
 			r := imageRepoReconciler
@@ -159,7 +162,8 @@ var _ = Describe("ImageRepository controller", func() {
 
 			repo = imagev1alpha1.ImageRepository{
 				Spec: imagev1alpha1.ImageRepositorySpec{
-					Image: imgRepo,
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
 				},
 			}
 			objectName := types.NamespacedName{
@@ -170,7 +174,7 @@ var _ = Describe("ImageRepository controller", func() {
 			repo.Name = objectName.Name
 			repo.Namespace = objectName.Namespace
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
 
 			r := imageRepoReconciler
@@ -180,22 +184,20 @@ var _ = Describe("ImageRepository controller", func() {
 			// It'll get scanned on creation
 			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
-				err := r.Get(context.Background(), objectName, &repoAfter)
-				return err == nil && repoAfter.Status.CanonicalImageName != ""
+				err := r.Get(ctx, objectName, &repoAfter)
+				return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
 			}, timeout, interval).Should(BeTrue())
 
-			lastScan := imagev1alpha1.GetLastTransitionTime(repoAfter)
-			Expect(lastScan).ToNot(BeNil())
-
 			requestToken := "this can be anything, so long as it's a change"
+			lastScanTime := repoAfter.Status.LastScanResult.ScanTime
 
 			repoAfter.Annotations = map[string]string{
 				meta.ReconcileAtAnnotation: requestToken,
 			}
 			Expect(r.Update(ctx, &repoAfter)).To(Succeed())
 			Eventually(func() bool {
-				err := r.Get(context.Background(), objectName, &repoAfter)
-				return err == nil && imagev1alpha1.GetLastTransitionTime(repoAfter).After(lastScan.Time)
+				err := r.Get(ctx, objectName, &repoAfter)
+				return err == nil && repoAfter.Status.LastScanResult.ScanTime.After(lastScanTime.Time)
 			}, timeout, interval).Should(BeTrue())
 			Expect(repoAfter.Status.LastHandledReconcileAt).To(Equal(requestToken))
 		})
@@ -249,7 +251,8 @@ var _ = Describe("ImageRepository controller", func() {
 
 			repo = imagev1alpha1.ImageRepository{
 				Spec: imagev1alpha1.ImageRepositorySpec{
-					Image: imgRepo,
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
 					SecretRef: &corev1.LocalObjectReference{
 						Name: "docker",
 					},
@@ -263,7 +266,7 @@ var _ = Describe("ImageRepository controller", func() {
 			repo.Name = objectName.Name
 			repo.Namespace = objectName.Namespace
 
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
 
 			r := imageRepoReconciler
@@ -272,7 +275,7 @@ var _ = Describe("ImageRepository controller", func() {
 			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
 				err := r.Get(context.Background(), objectName, &repoAfter)
-				return err == nil && repoAfter.Status.CanonicalImageName != ""
+				return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
 			}, timeout, interval).Should(BeTrue())
 			Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
 			Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
