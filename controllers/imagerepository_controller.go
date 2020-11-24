@@ -40,6 +40,7 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
+	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -56,6 +57,7 @@ type ImageRepositoryReconciler struct {
 	Scheme                *runtime.Scheme
 	EventRecorder         kuberecorder.EventRecorder
 	ExternalEventRecorder *events.Recorder
+	MetricsRecorder       *metrics.Recorder
 	Database              interface {
 		DatabaseWriter
 		DatabaseReader
@@ -81,6 +83,9 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
 
+	// record rediness metric
+	defer r.recordReadinessMetric(&imageRepo)
+
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
 		imagev1alpha1.SetImageRepositoryReadiness(
@@ -95,6 +100,15 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		}
 		log.Info(msg)
 		return ctrl.Result{}, nil
+	}
+
+	// record reconciliation duration
+	if r.MetricsRecorder != nil {
+		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
@@ -307,5 +321,28 @@ func (r *ImageRepositoryReconciler) event(repo imagev1alpha1.ImageRepository, se
 			).Error(err, "unable to send event")
 			return
 		}
+	}
+}
+
+func (r *ImageRepositoryReconciler) recordReadinessMetric(repo *imagev1alpha1.ImageRepository) {
+	if r.MetricsRecorder == nil {
+		return
+	}
+
+	objRef, err := reference.GetReference(r.Scheme, repo)
+	if err != nil {
+		r.Log.WithValues(
+			strings.ToLower(repo.Kind),
+			fmt.Sprintf("%s/%s", repo.GetNamespace(), repo.GetName()),
+		).Error(err, "unable to record readiness metric")
+		return
+	}
+	if rc := apimeta.FindStatusCondition(repo.Status.Conditions, meta.ReadyCondition); rc != nil {
+		r.MetricsRecorder.RecordCondition(*objRef, *rc, !repo.DeletionTimestamp.IsZero())
+	} else {
+		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
+			Type:   meta.ReadyCondition,
+			Status: metav1.ConditionUnknown,
+		}, !repo.DeletionTimestamp.IsZero())
 	}
 }
