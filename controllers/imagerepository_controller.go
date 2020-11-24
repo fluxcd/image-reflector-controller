@@ -29,15 +29,17 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/recorder"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -50,14 +52,14 @@ type DatabaseWriter interface {
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Database interface {
+	Log                   logr.Logger
+	Scheme                *runtime.Scheme
+	EventRecorder         kuberecorder.EventRecorder
+	ExternalEventRecorder *events.Recorder
+	Database              interface {
 		DatabaseWriter
 		DatabaseReader
 	}
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *recorder.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
@@ -122,11 +124,16 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	ok, when := r.shouldScan(imageRepo, reconcileStart)
 	if ok {
 		reconcileErr := r.scan(ctx, &imageRepo, ref)
-		if err = r.Status().Update(ctx, &imageRepo); err != nil {
+		if err := r.Status().Update(ctx, &imageRepo); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 		if reconcileErr != nil {
+			r.event(imageRepo, events.EventSeverityError, reconcileErr.Error())
 			return ctrl.Result{Requeue: true}, reconcileErr
+		}
+		// emit successful scan event
+		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.ReconciliationSucceededReason); rc != nil {
+			r.event(imageRepo, events.EventSeverityInfo, rc.Message)
 		}
 	}
 
@@ -275,5 +282,30 @@ func authFromSecret(secret corev1.Secret, registry string) (authn.Authenticator,
 		return authn.FromConfig(auth), nil
 	default:
 		return nil, fmt.Errorf("unknown secret type %q", secret.Type)
+	}
+}
+
+// event emits a Kubernetes event and forwards the event to notification controller if configured
+func (r *ImageRepositoryReconciler) event(repo imagev1alpha1.ImageRepository, severity, msg string) {
+	if r.EventRecorder != nil {
+		r.EventRecorder.Eventf(&repo, "Normal", severity, msg)
+	}
+	if r.ExternalEventRecorder != nil {
+		objRef, err := reference.GetReference(r.Scheme, &repo)
+		if err != nil {
+			r.Log.WithValues(
+				"request",
+				fmt.Sprintf("%s/%s", repo.GetNamespace(), repo.GetName()),
+			).Error(err, "unable to send event")
+			return
+		}
+
+		if err := r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg); err != nil {
+			r.Log.WithValues(
+				"request",
+				fmt.Sprintf("%s/%s", repo.GetNamespace(), repo.GetName()),
+			).Error(err, "unable to send event")
+			return
+		}
 	}
 }

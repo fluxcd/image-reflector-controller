@@ -26,10 +26,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	"github.com/fluxcd/pkg/recorder"
-
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 	"github.com/fluxcd/image-reflector-controller/controllers"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/logger"
 	// +kubebuilder:scaffold:imports
 )
@@ -73,6 +72,16 @@ func main() {
 
 	ctrl.SetLogger(logger.NewLogger(logLevel, logJSON))
 
+	var eventRecorder *events.Recorder
+	if eventsAddr != "" {
+		if er, err := events.NewRecorder(eventsAddr, controllerName); err != nil {
+			setupLog.Error(err, "unable to create event recorder")
+			os.Exit(1)
+		} else {
+			eventRecorder = er
+		}
+	}
+
 	watchNamespace := ""
 	if !watchAllNamespaces {
 		watchNamespace = os.Getenv("RUNTIME_NAMESPACE")
@@ -95,15 +104,14 @@ func main() {
 	setupChecks(mgr)
 
 	db := controllers.NewDatabase()
-	er := eventRecorder(eventsAddr)
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImageRepositoryKind),
 		Scheme:                mgr.GetScheme(),
-		Database:              db,
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: er,
+		ExternalEventRecorder: eventRecorder,
+		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImageRepositoryKind)
 		os.Exit(1)
@@ -112,9 +120,9 @@ func main() {
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImagePolicyKind),
 		Scheme:                mgr.GetScheme(),
-		Database:              db,
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: er,
+		ExternalEventRecorder: eventRecorder,
+		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImagePolicyKind)
 		os.Exit(1)
@@ -138,16 +146,4 @@ func setupChecks(mgr ctrl.Manager) {
 		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
-}
-
-func eventRecorder(addr string) *recorder.EventRecorder {
-	if addr == "" {
-		return nil
-	}
-	er, err := recorder.NewEventRecorder(addr, controllerName)
-	if err != nil {
-		setupLog.Error(err, "unable to create event recorder")
-		os.Exit(1)
-	}
-	return er
 }
