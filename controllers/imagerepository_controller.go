@@ -43,11 +43,6 @@ import (
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
 
-const (
-	scanTimeout         = 10 * time.Second
-	defaultScanInterval = 10 * time.Minute
-)
-
 type DatabaseWriter interface {
 	SetTags(repo string, tags []string)
 }
@@ -70,6 +65,7 @@ type ImageRepositoryReconciler struct {
 
 func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
+	reconcileStart := time.Now()
 
 	// NB: In general, if an error is returned then controller-runtime
 	// will requeue the request with back-off. In the following this
@@ -78,7 +74,6 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	var imageRepo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
-		// _Might_ get requeued
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -86,13 +81,13 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
-		status := imagev1alpha1.SetImageRepositoryReadiness(
-			imageRepo,
+		imagev1alpha1.SetImageRepositoryReadiness(
+			&imageRepo,
 			metav1.ConditionFalse,
 			meta.SuspendedReason,
 			msg,
 		)
-		if err := r.Status().Update(ctx, &status); err != nil {
+		if err := r.Status().Update(ctx, &imageRepo); err != nil {
 			log.Error(err, "unable to update status")
 			return ctrl.Result{Requeue: true}, err
 		}
@@ -102,47 +97,51 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
-		status := imagev1alpha1.SetImageRepositoryReadiness(
-			imageRepo,
+		imagev1alpha1.SetImageRepositoryReadiness(
+			&imageRepo,
 			metav1.ConditionFalse,
 			imagev1alpha1.ImageURLInvalidReason,
 			err.Error(),
 		)
-		if err := r.Status().Update(ctx, &status); err != nil {
+		if err := r.Status().Update(ctx, &imageRepo); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
 		return ctrl.Result{Requeue: true}, err
 	}
 
-	imageRepo.Status.CanonicalImageName = ref.Context().String()
-
-	now := time.Now()
-	ok, when := r.shouldScan(imageRepo, now)
-	if ok {
-		ctx, cancel := context.WithTimeout(ctx, scanTimeout)
-		defer cancel()
-
-		reconciledRepo, reconcileErr := r.scan(ctx, imageRepo, ref)
-		if err = r.Status().Update(ctx, &reconciledRepo); err != nil {
+	// Set CanonicalImageName based on the parsed reference
+	if c := ref.Context().String(); imageRepo.Status.CanonicalImageName != c {
+		imageRepo.Status.CanonicalImageName = c
+		if err = r.Status().Update(ctx, &imageRepo); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
+	}
 
+	// Throttle scans based on spec Interval
+	ok, when := r.shouldScan(imageRepo, reconcileStart)
+	if ok {
+		reconcileErr := r.scan(ctx, &imageRepo, ref)
+		if err = r.Status().Update(ctx, &imageRepo); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
 		if reconcileErr != nil {
 			return ctrl.Result{Requeue: true}, reconcileErr
-		} else {
-			log.Info(fmt.Sprintf("reconciliation finished in %s, next run in %s",
-				time.Now().Sub(now).String(),
-				when),
-			)
 		}
 	}
+
+	log.Info(fmt.Sprintf("reconciliation finished in %s, next run in %s",
+		time.Now().Sub(reconcileStart).String(),
+		when.String(),
+	))
 
 	return ctrl.Result{RequeueAfter: when}, nil
 }
 
-func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1alpha1.ImageRepository, ref name.Reference) (imagev1alpha1.ImageRepository, error) {
-	canonicalName := ref.Context().String()
+func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1alpha1.ImageRepository, ref name.Reference) error {
+	timeout := imageRepo.GetTimeout()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
 	var options []remote.Option
 	if imageRepo.Spec.SecretRef != nil {
@@ -151,39 +150,45 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 			Namespace: imageRepo.GetNamespace(),
 			Name:      imageRepo.Spec.SecretRef.Name,
 		}, &secret); err != nil {
-			return imagev1alpha1.SetImageRepositoryReadiness(
+			imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
 				meta.ReconciliationFailedReason,
 				err.Error(),
-			), err
+			)
+			return err
 		}
 		auth, err := authFromSecret(secret, ref.Context().RegistryStr())
 		if err != nil {
-			return imagev1alpha1.SetImageRepositoryReadiness(
+			imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
 				meta.ReconciliationFailedReason,
 				err.Error(),
-			), err
+			)
+			return err
 		}
 		options = append(options, remote.WithAuth(auth))
 	}
 
 	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
 	if err != nil {
-		return imagev1alpha1.SetImageRepositoryReadiness(
+		imagev1alpha1.SetImageRepositoryReadiness(
 			imageRepo,
 			metav1.ConditionFalse,
 			meta.ReconciliationFailedReason,
 			err.Error(),
-		), err
+		)
+		return err
 	}
 
+	canonicalName := ref.Context().String()
 	// TODO: add context and error handling to database ops
 	r.Database.SetTags(canonicalName, tags)
 
+	scanTime := metav1.Now()
 	imageRepo.Status.LastScanResult.TagCount = len(tags)
+	imageRepo.Status.LastScanResult.ScanTime = &scanTime
 
 	// if the reconcile request annotation was set, consider it
 	// handled (NB it doesn't matter here if it was changed since last
@@ -192,26 +197,25 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo imagev1a
 		imageRepo.Status.SetLastHandledReconcileRequest(token)
 	}
 
-	return imagev1alpha1.SetImageRepositoryReadiness(
+	imagev1alpha1.SetImageRepositoryReadiness(
 		imageRepo,
 		metav1.ConditionTrue,
 		meta.ReconciliationSucceededReason,
 		fmt.Sprintf("successful scan, found %v tags", len(tags)),
-	), nil
+	)
+
+	return nil
 }
 
 // shouldScan takes an image repo and the time now, and says whether
 // the repository should be scanned now, and how long to wait for the
 // next scan.
 func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration) {
-	scanInterval := defaultScanInterval
-	if repo.Spec.ScanInterval != nil {
-		scanInterval = repo.Spec.ScanInterval.Duration
-	}
+	scanInterval := repo.Spec.Interval.Duration
 
 	// never scanned; do it now
-	lastTransitionTime := imagev1alpha1.GetLastTransitionTime(repo)
-	if lastTransitionTime == nil {
+	lastScanTime := repo.Status.LastScanResult.ScanTime
+	if lastScanTime == nil {
 		return true, scanInterval
 	}
 
@@ -235,7 +239,7 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 		return true, scanInterval
 	}
 
-	when := scanInterval - now.Sub(lastTransitionTime.Time)
+	when := scanInterval - now.Sub(lastScanTime.Time)
 	if when < time.Second {
 		return true, scanInterval
 	}
