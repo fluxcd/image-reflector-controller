@@ -36,6 +36,7 @@ import (
 
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/version"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
@@ -157,7 +158,7 @@ func (r *ImagePolicyReconciler) calculateLatestImageSemver(pol *imagev1alpha1.Im
 	}
 	var latestVersion *semver.Version
 	for _, tag := range tags {
-		if v, err := semver.NewVersion(tag); err == nil {
+		if v, err := version.ParseVersion(tag); err == nil {
 			if constraint.Check(v) && (latestVersion == nil || v.GreaterThan(latestVersion)) {
 				latestVersion = v
 			}
