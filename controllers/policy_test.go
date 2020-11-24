@@ -35,76 +35,140 @@ import (
 
 var _ = Describe("ImagePolicy controller", func() {
 
-	var registryServer *httptest.Server
+	Context("calculates an image from a repository's tags", func() {
+		var registryServer *httptest.Server
 
-	BeforeEach(func() {
-		registryServer = newRegistryServer()
-	})
+		BeforeEach(func() {
+			registryServer = newRegistryServer()
+		})
 
-	AfterEach(func() {
-		registryServer.Close()
-	})
+		AfterEach(func() {
+			registryServer.Close()
+		})
 
-	It("calculates an image from a repository's tags", func() {
-		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := loadImages(registryServer, "test-semver-policy", versions)
+		When("Using SemVerPolicy", func() {
+			It("calculates an image from a repository's tags", func() {
+				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
+				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
 
-		repo := imagev1alpha1.ImageRepository{
-			Spec: imagev1alpha1.ImageRepositorySpec{
-				Interval: metav1.Duration{Duration: reconciliationInterval},
-				Image:    imgRepo,
-			},
-		}
-		imageObjectName := types.NamespacedName{
-			Name:      "polimage",
-			Namespace: "default",
-		}
-		repo.Name = imageObjectName.Name
-		repo.Namespace = imageObjectName.Namespace
-
-		ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-		defer cancel()
-
-		r := imageRepoReconciler
-		Expect(r.Create(ctx, &repo)).To(Succeed())
-
-		var repoAfter imagev1alpha1.ImageRepository
-		Eventually(func() bool {
-			err := r.Get(ctx, imageObjectName, &repoAfter)
-			return err == nil && repoAfter.Status.LastScanResult != nil
-		}, timeout, interval).Should(BeTrue())
-		Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
-		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-		polName := types.NamespacedName{
-			Name:      "random-pol",
-			Namespace: imageObjectName.Namespace,
-		}
-		pol := imagev1alpha1.ImagePolicy{
-			Spec: imagev1alpha1.ImagePolicySpec{
-				ImageRepositoryRef: corev1.LocalObjectReference{
-					Name: imageObjectName.Name,
-				},
-				Policy: imagev1alpha1.ImagePolicyChoice{
-					SemVer: &imagev1alpha1.SemVerPolicy{
-						Range: "1.0.x",
+				repo := imagev1alpha1.ImageRepository{
+					Spec: imagev1alpha1.ImageRepositorySpec{
+						Interval: metav1.Duration{Duration: reconciliationInterval},
+						Image:    imgRepo,
 					},
-				},
-			},
-		}
-		pol.Namespace = polName.Namespace
-		pol.Name = polName.Name
+				}
+				imageObjectName := types.NamespacedName{
+					Name:      "polimage-" + randStringRunes(5),
+					Namespace: "default",
+				}
+				repo.Name = imageObjectName.Name
+				repo.Namespace = imageObjectName.Namespace
 
-		ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-		defer cancel()
+				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
 
-		Expect(r.Create(ctx, &pol)).To(Succeed())
+				r := imageRepoReconciler
+				Expect(r.Create(ctx, &repo)).To(Succeed())
 
-		var polAfter imagev1alpha1.ImagePolicy
-		Eventually(func() bool {
-			err := r.Get(ctx, polName, &polAfter)
-			return err == nil && polAfter.Status.LatestImage != ""
-		}, timeout, interval).Should(BeTrue())
-		Expect(polAfter.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
+				Eventually(func() bool {
+					err := r.Get(ctx, imageObjectName, &repo)
+					return err == nil && repo.Status.LastScanResult != nil
+				}, timeout, interval).Should(BeTrue())
+				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+				polName := types.NamespacedName{
+					Name:      "random-pol-" + randStringRunes(5),
+					Namespace: imageObjectName.Namespace,
+				}
+				pol := imagev1alpha1.ImagePolicy{
+					Spec: imagev1alpha1.ImagePolicySpec{
+						ImageRepositoryRef: corev1.LocalObjectReference{
+							Name: imageObjectName.Name,
+						},
+						Policy: imagev1alpha1.ImagePolicyChoice{
+							SemVer: &imagev1alpha1.SemVerPolicy{
+								Range: "1.0.x",
+							},
+						},
+					},
+				}
+				pol.Namespace = polName.Namespace
+				pol.Name = polName.Name
+
+				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
+
+				Expect(r.Create(ctx, &pol)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, polName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
+				}, timeout, interval).Should(BeTrue())
+				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
+
+				Expect(r.Delete(ctx, &pol)).To(Succeed())
+			})
+		})
+
+		When("Usign AlphabeticalPolicy", func() {
+			It("calculates an image from a repository's tags", func() {
+				versions := []string{"xenial", "yakkety", "zesty", "artful", "bionic"}
+				imgRepo := loadImages(registryServer, "test-alphabetical-policy-"+randStringRunes(5), versions)
+
+				repo := imagev1alpha1.ImageRepository{
+					Spec: imagev1alpha1.ImageRepositorySpec{
+						Interval: metav1.Duration{Duration: reconciliationInterval},
+						Image:    imgRepo,
+					},
+				}
+				imageObjectName := types.NamespacedName{
+					Name:      "polimage-" + randStringRunes(5),
+					Namespace: "default",
+				}
+				repo.Name = imageObjectName.Name
+				repo.Namespace = imageObjectName.Namespace
+
+				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
+
+				r := imageRepoReconciler
+				Expect(r.Create(ctx, &repo)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, imageObjectName, &repo)
+					return err == nil && repo.Status.LastScanResult != nil
+				}, timeout, interval).Should(BeTrue())
+				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+				polName := types.NamespacedName{
+					Name:      "random-pol-" + randStringRunes(5),
+					Namespace: imageObjectName.Namespace,
+				}
+				pol := imagev1alpha1.ImagePolicy{
+					Spec: imagev1alpha1.ImagePolicySpec{
+						ImageRepositoryRef: corev1.LocalObjectReference{
+							Name: imageObjectName.Name,
+						},
+						Policy: imagev1alpha1.ImagePolicyChoice{
+							Alphabetical: &imagev1alpha1.AlphabeticalPolicy{},
+						},
+					},
+				}
+				pol.Namespace = polName.Namespace
+				pol.Name = polName.Name
+
+				Expect(r.Create(ctx, &pol)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, polName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
+				}, timeout, interval).Should(BeTrue())
+				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":zesty"))
+
+				Expect(r.Delete(ctx, &pol)).To(Succeed())
+			})
+		})
 	})
 })

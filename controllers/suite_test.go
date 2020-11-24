@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,9 +44,9 @@ import (
 // for Eventually
 const (
 	timeout                = time.Second * 30
-	contextTimeout         = time.Second * 5
+	contextTimeout         = time.Second * 10
 	interval               = time.Second * 1
-	reconciliationInterval = time.Second * 5
+	reconciliationInterval = time.Second * 2
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -132,3 +133,13 @@ var _ = AfterSuite(func() {
 	Expect(badgerDB.Close()).ToNot(HaveOccurred())
 	Expect(os.RemoveAll(badgerDir)).ToNot(HaveOccurred())
 })
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyz1234567890")
+
+func randStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}

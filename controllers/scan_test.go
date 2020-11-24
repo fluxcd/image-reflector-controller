@@ -74,14 +74,13 @@ var _ = Describe("ImageRepository controller", func() {
 		err := r.Create(ctx, &repo)
 		Expect(err).ToNot(HaveOccurred())
 
-		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
-			err := r.Get(context.Background(), imageRepoName, &repoAfter)
-			return err == nil && repoAfter.Status.LastScanResult != nil
+			err := r.Get(context.Background(), imageRepoName, &repo)
+			return err == nil && repo.Status.LastScanResult != nil
 		}, timeout, interval).Should(BeTrue())
-		Expect(repoAfter.Name).To(Equal(imageName))
-		Expect(repoAfter.Namespace).To(Equal("default"))
-		Expect(repoAfter.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
+		Expect(repo.Name).To(Equal(imageName))
+		Expect(repo.Namespace).To(Equal("default"))
+		Expect(repo.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
 	})
 
 	It("fetches the tags for an image", func() {
@@ -108,13 +107,12 @@ var _ = Describe("ImageRepository controller", func() {
 		r := imageRepoReconciler
 		Expect(r.Create(ctx, &repo)).To(Succeed())
 
-		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
-			err := r.Get(context.Background(), objectName, &repoAfter)
-			return err == nil && repoAfter.Status.LastScanResult != nil
+			err := r.Get(context.Background(), objectName, &repo)
+			return err == nil && repo.Status.LastScanResult != nil
 		}, timeout, interval).Should(BeTrue())
-		Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
-		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+		Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+		Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
 	})
 
 	Context("when the ImageRepository is suspended", func() {
@@ -142,13 +140,12 @@ var _ = Describe("ImageRepository controller", func() {
 			err := r.Create(ctx, &repo)
 			Expect(err).ToNot(HaveOccurred())
 
-			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
-				err := r.Get(ctx, imageRepoName, &repoAfter)
-				return err == nil && len(repoAfter.Status.Conditions) > 0
+				err := r.Get(ctx, imageRepoName, &repo)
+				return err == nil && len(repo.Status.Conditions) > 0
 			}, timeout, interval).Should(BeTrue())
-			Expect(repoAfter.Status.CanonicalImageName).To(Equal(""))
-			cond := repoAfter.Status.Conditions[0]
+			Expect(repo.Status.CanonicalImageName).To(Equal(""))
+			cond := repo.Status.Conditions[0]
 			Expect(cond.Message).To(
 				Equal("ImageRepository is suspended, skipping reconciliation"))
 			Expect(cond.Reason).To(
@@ -182,24 +179,23 @@ var _ = Describe("ImageRepository controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// It'll get scanned on creation
-			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
-				err := r.Get(ctx, objectName, &repoAfter)
-				return err == nil && repoAfter.Status.LastScanResult != nil
+				err := r.Get(ctx, objectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
 			}, timeout, interval).Should(BeTrue())
 
 			requestToken := "this can be anything, so long as it's a change"
-			lastScanTime := repoAfter.Status.LastScanResult.ScanTime
+			lastScanTime := repo.Status.LastScanResult.ScanTime
 
-			repoAfter.Annotations = map[string]string{
+			repo.Annotations = map[string]string{
 				meta.ReconcileAtAnnotation: requestToken,
 			}
-			Expect(r.Update(ctx, &repoAfter)).To(Succeed())
+			Expect(r.Update(ctx, &repo)).To(Succeed())
 			Eventually(func() bool {
-				err := r.Get(ctx, objectName, &repoAfter)
-				return err == nil && repoAfter.Status.LastScanResult.ScanTime.After(lastScanTime.Time)
+				err := r.Get(ctx, objectName, &repo)
+				return err == nil && repo.Status.LastScanResult.ScanTime.After(lastScanTime.Time)
 			}, timeout, interval).Should(BeTrue())
-			Expect(repoAfter.Status.LastHandledReconcileAt).To(Equal(requestToken))
+			Expect(repo.Status.LastHandledReconcileAt).To(Equal(requestToken))
 		})
 	})
 
@@ -272,13 +268,12 @@ var _ = Describe("ImageRepository controller", func() {
 			r := imageRepoReconciler
 			Expect(r.Create(ctx, &repo)).To(Succeed())
 
-			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
-				err := r.Get(context.Background(), objectName, &repoAfter)
-				return err == nil && repoAfter.Status.LastScanResult != nil
+				err := r.Get(context.Background(), objectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
 			}, timeout, interval).Should(BeTrue())
-			Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
-			Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+			Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+			Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
 		})
 
 	})

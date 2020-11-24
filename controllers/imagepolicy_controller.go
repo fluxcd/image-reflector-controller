@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,9 +38,9 @@ import (
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
-	"github.com/fluxcd/pkg/version"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
 
 // this is used as the key for the index of policy->repository; the
@@ -122,12 +121,14 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, nil
 	}
 
-	policy := pol.Spec.Policy
+	policer, err := policy.PolicerFromSpec(pol.Spec.Policy)
+
 	var latest string
-	var err error
-	switch {
-	case policy.SemVer != nil:
-		latest, err = r.calculateLatestImageSemver(&policy, repo.Status.CanonicalImageName)
+	if policer != nil {
+		tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
+		if err == nil {
+			latest, err = policer.Latest(tags)
+		}
 	}
 	if err != nil {
 		imagev1alpha1.SetImagePolicyReadiness(
@@ -174,7 +175,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 	r.event(pol, events.EventSeverityInfo, msg)
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, err
 }
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -198,30 +199,6 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // ---
-
-func (r *ImagePolicyReconciler) calculateLatestImageSemver(pol *imagev1alpha1.ImagePolicyChoice, canonImage string) (string, error) {
-	tags, err := r.Database.Tags(canonImage)
-	if err != nil {
-		return "", fmt.Errorf("failed to read images for %q: %w", canonImage, err)
-	}
-	constraint, err := semver.NewConstraint(pol.SemVer.Range)
-	if err != nil {
-		// FIXME this'll get a stack trace in the log, but may not deserve it
-		return "", err
-	}
-	var latestVersion *semver.Version
-	for _, tag := range tags {
-		if v, err := version.ParseVersion(tag); err == nil {
-			if constraint.Check(v) && (latestVersion == nil || v.GreaterThan(latestVersion)) {
-				latestVersion = v
-			}
-		}
-	}
-	if latestVersion != nil {
-		return latestVersion.Original(), nil
-	}
-	return "", nil
-}
 
 func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject) []reconcile.Request {
 	ctx := context.Background()
