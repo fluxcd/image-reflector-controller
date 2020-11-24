@@ -25,14 +25,21 @@ spec:
         ports:
           - containerPort: 8080
             name: http-prom
-        livenessProbe:
-          httpGet:
-            port: http-prom
-            path: /metrics
+          - containerPort: 9440
+            name: healthz
+            protocol: TCP
         args:
           - --enable-leader-election
           - --log-level=debug
           - --log-json
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: healthz
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: healthz
         resources:
           limits:
             cpu: 1000m
