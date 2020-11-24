@@ -29,9 +29,9 @@ spec:
             name: healthz
             protocol: TCP
         args:
-          - --enable-leader-election
-          - --log-level=debug
+          - --log-level=info
           - --log-json
+          - --enable-leader-election
         readinessProbe:
           httpGet:
             path: /readyz
