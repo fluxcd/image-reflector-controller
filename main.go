@@ -20,19 +20,18 @@ import (
 	"flag"
 	"os"
 
-	"github.com/go-logr/logr"
-	uzap "go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"github.com/fluxcd/pkg/recorder"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 	"github.com/fluxcd/image-reflector-controller/controllers"
+	"github.com/fluxcd/pkg/runtime/events"
+	"github.com/fluxcd/pkg/runtime/logger"
+	"github.com/fluxcd/pkg/runtime/metrics"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -54,6 +53,7 @@ func main() {
 	var (
 		metricsAddr          string
 		eventsAddr           string
+		healthAddr           string
 		enableLeaderElection bool
 		logLevel             string
 		logJSON              bool
@@ -62,6 +62,7 @@ func main() {
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&eventsAddr, "events-addr", "", "The address of the events receiver.")
+	flag.StringVar(&healthAddr, "health-addr", ":9440", "The address the health endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -71,7 +72,20 @@ func main() {
 		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
 	flag.Parse()
 
-	ctrl.SetLogger(newLogger(logLevel, logJSON))
+	ctrl.SetLogger(logger.NewLogger(logLevel, logJSON))
+
+	var eventRecorder *events.Recorder
+	if eventsAddr != "" {
+		if er, err := events.NewRecorder(eventsAddr, controllerName); err != nil {
+			setupLog.Error(err, "unable to create event recorder")
+			os.Exit(1)
+		} else {
+			eventRecorder = er
+		}
+	}
+
+	metricsRecorder := metrics.NewRecorder()
+	crtlmetrics.Registry.MustRegister(metricsRecorder.Collectors()...)
 
 	watchNamespace := ""
 	if !watchAllNamespaces {
@@ -79,28 +93,31 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "e189b2df.fluxcd.io",
-		Namespace:          watchNamespace,
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		HealthProbeBindAddress: healthAddr,
+		Port:                   9443,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "e189b2df.fluxcd.io",
+		Namespace:              watchNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
+	setupChecks(mgr)
+
 	db := controllers.NewDatabase()
-	er := eventRecorder(eventsAddr)
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImageRepositoryKind),
 		Scheme:                mgr.GetScheme(),
-		Database:              db,
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: er,
+		ExternalEventRecorder: eventRecorder,
+		MetricsRecorder:       metricsRecorder,
+		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImageRepositoryKind)
 		os.Exit(1)
@@ -109,9 +126,10 @@ func main() {
 		Client:                mgr.GetClient(),
 		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImagePolicyKind),
 		Scheme:                mgr.GetScheme(),
-		Database:              db,
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: er,
+		ExternalEventRecorder: eventRecorder,
+		MetricsRecorder:       metricsRecorder,
+		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImagePolicyKind)
 		os.Exit(1)
@@ -125,40 +143,14 @@ func main() {
 	}
 }
 
-// newLogger returns a logger configured for dev or production use.
-// For production the log format is JSON, the timestamps format is ISO8601
-// and stack traces are logged when the level is set to debug.
-func newLogger(level string, production bool) logr.Logger {
-	if !production {
-		return zap.New(zap.UseDevMode(true))
-	}
-
-	encCfg := uzap.NewProductionEncoderConfig()
-	encCfg.EncodeTime = zapcore.ISO8601TimeEncoder
-	encoder := zap.Encoder(zapcore.NewJSONEncoder(encCfg))
-
-	logLevel := zap.Level(zapcore.InfoLevel)
-	stacktraceLevel := zap.StacktraceLevel(zapcore.PanicLevel)
-
-	switch level {
-	case "debug":
-		logLevel = zap.Level(zapcore.DebugLevel)
-		stacktraceLevel = zap.StacktraceLevel(zapcore.ErrorLevel)
-	case "error":
-		logLevel = zap.Level(zapcore.ErrorLevel)
-	}
-
-	return zap.New(encoder, logLevel, stacktraceLevel)
-}
-
-func eventRecorder(addr string) *recorder.EventRecorder {
-	if addr == "" {
-		return nil
-	}
-	er, err := recorder.NewEventRecorder(addr, controllerName)
-	if err != nil {
-		setupLog.Error(err, "unable to create event recorder")
+func setupChecks(mgr ctrl.Manager) {
+	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create ready check")
 		os.Exit(1)
 	}
-	return er
+
+	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to create health check")
+		os.Exit(1)
+	}
 }

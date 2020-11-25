@@ -18,20 +18,25 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/fluxcd/pkg/recorder"
+	"github.com/fluxcd/pkg/runtime/events"
+	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/version"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
@@ -50,9 +55,10 @@ type ImagePolicyReconciler struct {
 	client.Client
 	Log                   logr.Logger
 	Scheme                *runtime.Scheme
-	Database              DatabaseReader
 	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *recorder.EventRecorder
+	ExternalEventRecorder *events.Recorder
+	MetricsRecorder       *metrics.Recorder
+	Database              DatabaseReader
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
@@ -61,6 +67,7 @@ type ImagePolicyReconciler struct {
 
 func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
+	reconcileStart := time.Now()
 
 	var pol imagev1alpha1.ImagePolicy
 	if err := r.Get(ctx, req.NamespacedName, &pol); err != nil {
@@ -68,6 +75,15 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImagePolicyKind), "request", req.NamespacedName)
+
+	// record reconciliation duration
+	if r.MetricsRecorder != nil {
+		objRef, err := reference.GetReference(r.Scheme, &pol)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
+	}
 
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{
@@ -88,20 +104,24 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	}
 
 	policy := pol.Spec.Policy
-
+	var latest string
+	var err error
 	switch {
 	case policy.SemVer != nil:
-		latest, err := r.calculateLatestImageSemver(&policy, repo.Status.CanonicalImageName)
-		if err != nil {
+		latest, err = r.calculateLatestImageSemver(&policy, repo.Status.CanonicalImageName)
+	}
+	if err != nil {
+		r.event(pol, events.EventSeverityError, err.Error())
+		return ctrl.Result{}, err
+	}
+
+	if latest != "" {
+		pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+		if err := r.Status().Update(ctx, &pol); err != nil {
+			r.event(pol, events.EventSeverityError, err.Error())
 			return ctrl.Result{}, err
 		}
-		if latest != "" {
-			pol.Status.LatestImage = repo.Spec.Image + ":" + latest
-			err = r.Status().Update(ctx, &pol)
-		}
-		return ctrl.Result{}, err
-	default:
-		// no recognised policy, do nothing
+		r.event(pol, events.EventSeverityInfo, fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest))
 	}
 
 	return ctrl.Result{}, nil
@@ -138,7 +158,7 @@ func (r *ImagePolicyReconciler) calculateLatestImageSemver(pol *imagev1alpha1.Im
 	}
 	var latestVersion *semver.Version
 	for _, tag := range tags {
-		if v, err := semver.NewVersion(tag); err == nil {
+		if v, err := version.ParseVersion(tag); err == nil {
 			if constraint.Check(v) && (latestVersion == nil || v.GreaterThan(latestVersion)) {
 				latestVersion = v
 			}
@@ -163,4 +183,24 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject
 		reqs[i].NamespacedName.Namespace = policies.Items[i].GetNamespace()
 	}
 	return reqs
+}
+
+// event emits a Kubernetes event and forwards the event to notification controller if configured
+func (r *ImagePolicyReconciler) event(policy imagev1alpha1.ImagePolicy, severity, msg string) {
+	if r.EventRecorder != nil {
+		r.EventRecorder.Event(&policy, "Normal", severity, msg)
+	}
+	if r.ExternalEventRecorder != nil {
+		objRef, err := reference.GetReference(r.Scheme, &policy)
+		if err == nil {
+			err = r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg)
+		}
+		if err != nil {
+			r.Log.WithValues(
+				"request",
+				fmt.Sprintf("%s/%s", policy.GetNamespace(), policy.GetName()),
+			).Error(err, "unable to send event")
+			return
+		}
+	}
 }

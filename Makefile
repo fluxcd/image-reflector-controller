@@ -71,6 +71,10 @@ docker-build: test
 docker-push:
 	docker push ${IMG}
 
+# Set the docker image in-cluster
+docker-deploy:
+	kubectl -n flux-system set image deployment/image-reflector-controller manager=${IMG}
+
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
