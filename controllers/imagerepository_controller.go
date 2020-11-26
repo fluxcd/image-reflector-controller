@@ -39,8 +39,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
-	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -57,8 +57,8 @@ type ImageRepositoryReconciler struct {
 	Scheme                *runtime.Scheme
 	EventRecorder         kuberecorder.EventRecorder
 	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              interface {
+	controller.Metrics
+	Database interface {
 		DatabaseWriter
 		DatabaseReader
 	}
@@ -83,8 +83,13 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
 
-	// record rediness metric
-	defer r.recordReadinessMetric(&imageRepo)
+	objRef, err := reference.GetReference(r.Scheme, &imageRepo)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// this always gets recorded
+	defer r.RecordReadinessMetric(objRef, &imageRepo)
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
@@ -102,14 +107,8 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		return ctrl.Result{}, nil
 	}
 
-	// record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
-	}
+	// this gets recorded if it's not suspended
+	defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {

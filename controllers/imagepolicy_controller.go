@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
-	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/version"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -57,8 +57,8 @@ type ImagePolicyReconciler struct {
 	Scheme                *runtime.Scheme
 	EventRecorder         kuberecorder.EventRecorder
 	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              DatabaseReader
+	controller.Metrics
+	Database DatabaseReader
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
@@ -76,14 +76,12 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImagePolicyKind), "request", req.NamespacedName)
 
-	// record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &pol)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
+	objRef, refErr := reference.GetReference(r.Scheme, &pol)
+	if refErr != nil {
+		return ctrl.Result{}, refErr
 	}
+	// the duration is recorded, but there's no readiness condition at present
+	defer r.RecordDuration(objRef, reconcileStart)
 
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{

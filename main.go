@@ -25,13 +25,12 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 	"github.com/fluxcd/image-reflector-controller/controllers"
+	"github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/logger"
-	"github.com/fluxcd/pkg/runtime/metrics"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -84,9 +83,6 @@ func main() {
 		}
 	}
 
-	metricsRecorder := metrics.NewRecorder()
-	crtlmetrics.Registry.MustRegister(metricsRecorder.Collectors()...)
-
 	watchNamespace := ""
 	if !watchAllNamespaces {
 		watchNamespace = os.Getenv("RUNTIME_NAMESPACE")
@@ -109,6 +105,7 @@ func main() {
 	setupChecks(mgr)
 
 	db := controllers.NewDatabase()
+	metrics := controller.MustMakeMetrics()
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
@@ -116,7 +113,7 @@ func main() {
 		Scheme:                mgr.GetScheme(),
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
 		ExternalEventRecorder: eventRecorder,
-		MetricsRecorder:       metricsRecorder,
+		Metrics:               metrics,
 		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImageRepositoryKind)
@@ -128,7 +125,7 @@ func main() {
 		Scheme:                mgr.GetScheme(),
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
 		ExternalEventRecorder: eventRecorder,
-		MetricsRecorder:       metricsRecorder,
+		Metrics:               metrics,
 		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImagePolicyKind)
