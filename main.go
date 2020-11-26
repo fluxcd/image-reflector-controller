@@ -107,26 +107,26 @@ func main() {
 	db := controllers.NewDatabase()
 	metrics := controller.MustMakeMetrics()
 
+	log1 := ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImageRepositoryKind)
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImageRepositoryKind),
-		Scheme:                mgr.GetScheme(),
-		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
-		Metrics:               metrics,
-		Database:              db,
+		Client:   mgr.GetClient(),
+		Log:      log1,
+		Scheme:   mgr.GetScheme(),
+		Events:   controller.MakeEvents(mgr, controllerName, eventRecorder, log1),
+		Metrics:  metrics,
+		Database: db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImageRepositoryKind)
 		os.Exit(1)
 	}
+	log2 := ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImagePolicyKind)
 	if err = (&controllers.ImagePolicyReconciler{
-		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImagePolicyKind),
-		Scheme:                mgr.GetScheme(),
-		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
-		Metrics:               metrics,
-		Database:              db,
+		Client:   mgr.GetClient(),
+		Log:      log2,
+		Scheme:   mgr.GetScheme(),
+		Events:   controller.MakeEvents(mgr, controllerName, eventRecorder, log2),
+		Metrics:  metrics,
+		Database: db,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImagePolicyKind)
 		os.Exit(1)

@@ -26,7 +26,6 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,10 +52,9 @@ type DatabaseReader interface {
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	Log                   logr.Logger
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
+	Log    logr.Logger
+	Scheme *runtime.Scheme
+	controller.Events
 	controller.Metrics
 	Database DatabaseReader
 }
@@ -109,17 +107,17 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		latest, err = r.calculateLatestImageSemver(&policy, repo.Status.CanonicalImageName)
 	}
 	if err != nil {
-		r.event(pol, events.EventSeverityError, err.Error())
+		r.Event(objRef, &pol, events.EventSeverityError, err.Error())
 		return ctrl.Result{}, err
 	}
 
 	if latest != "" {
 		pol.Status.LatestImage = repo.Spec.Image + ":" + latest
 		if err := r.Status().Update(ctx, &pol); err != nil {
-			r.event(pol, events.EventSeverityError, err.Error())
+			r.Event(objRef, &pol, events.EventSeverityError, err.Error())
 			return ctrl.Result{}, err
 		}
-		r.event(pol, events.EventSeverityInfo, fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest))
+		r.Event(objRef, &pol, events.EventSeverityInfo, fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest))
 	}
 
 	return ctrl.Result{}, nil
@@ -181,24 +179,4 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject
 		reqs[i].NamespacedName.Namespace = policies.Items[i].GetNamespace()
 	}
 	return reqs
-}
-
-// event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImagePolicyReconciler) event(policy imagev1alpha1.ImagePolicy, severity, msg string) {
-	if r.EventRecorder != nil {
-		r.EventRecorder.Event(&policy, "Normal", severity, msg)
-	}
-	if r.ExternalEventRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &policy)
-		if err == nil {
-			err = r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg)
-		}
-		if err != nil {
-			r.Log.WithValues(
-				"request",
-				fmt.Sprintf("%s/%s", policy.GetNamespace(), policy.GetName()),
-			).Error(err, "unable to send event")
-			return
-		}
-	}
 }
