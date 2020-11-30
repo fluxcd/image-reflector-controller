@@ -1,5 +1,5 @@
 {{ define "packages" }}
-    <h1>Kustomize API reference</h1>
+    <h1>Image reflector API reference</h1>
 
     {{ with .packages}}
         <p>Packages:</p>

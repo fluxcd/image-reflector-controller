@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1alpha contains API types for the image v1alpha1 API
+// Package v1alpha1 contains API types for the image v1alpha1 API
 // group. These types are concerned with reflecting metadata from OCI
 // image repositories into a cluster, so they can be consulted for
 // e.g., automation.
