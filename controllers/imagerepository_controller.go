@@ -208,8 +208,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	r.Database.SetTags(canonicalName, tags)
 
 	scanTime := metav1.Now()
-	imageRepo.Status.LastScanResult.TagCount = len(tags)
-	imageRepo.Status.LastScanResult.ScanTime = &scanTime
+	imageRepo.Status.LastScanResult = &imagev1alpha1.ScanResult{
+		TagCount: len(tags),
+		ScanTime: scanTime,
+	}
 
 	// if the reconcile request annotation was set, consider it
 	// handled (NB it doesn't matter here if it was changed since last
@@ -235,10 +237,11 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 	scanInterval := repo.Spec.Interval.Duration
 
 	// never scanned; do it now
-	lastScanTime := repo.Status.LastScanResult.ScanTime
-	if lastScanTime == nil {
+	lastScanResult := repo.Status.LastScanResult
+	if lastScanResult == nil {
 		return true, scanInterval
 	}
+	lastScanTime := lastScanResult.ScanTime
 
 	// Is the controller seeing this because the reconcileAt
 	// annotation was tweaked? Despite the name of the annotation, all

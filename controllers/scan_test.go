@@ -77,7 +77,7 @@ var _ = Describe("ImageRepository controller", func() {
 		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
 			err := r.Get(context.Background(), imageRepoName, &repoAfter)
-			return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
+			return err == nil && repoAfter.Status.LastScanResult != nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(repoAfter.Name).To(Equal(imageName))
 		Expect(repoAfter.Namespace).To(Equal("default"))
@@ -111,7 +111,7 @@ var _ = Describe("ImageRepository controller", func() {
 		var repoAfter imagev1alpha1.ImageRepository
 		Eventually(func() bool {
 			err := r.Get(context.Background(), objectName, &repoAfter)
-			return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
+			return err == nil && repoAfter.Status.LastScanResult != nil
 		}, timeout, interval).Should(BeTrue())
 		Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
 		Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
@@ -185,7 +185,7 @@ var _ = Describe("ImageRepository controller", func() {
 			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
 				err := r.Get(ctx, objectName, &repoAfter)
-				return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
+				return err == nil && repoAfter.Status.LastScanResult != nil
 			}, timeout, interval).Should(BeTrue())
 
 			requestToken := "this can be anything, so long as it's a change"
@@ -275,7 +275,7 @@ var _ = Describe("ImageRepository controller", func() {
 			var repoAfter imagev1alpha1.ImageRepository
 			Eventually(func() bool {
 				err := r.Get(context.Background(), objectName, &repoAfter)
-				return err == nil && repoAfter.Status.LastScanResult.ScanTime != nil
+				return err == nil && repoAfter.Status.LastScanResult != nil
 			}, timeout, interval).Should(BeTrue())
 			Expect(repoAfter.Status.CanonicalImageName).To(Equal(imgRepo))
 			Expect(repoAfter.Status.LastScanResult.TagCount).To(Equal(len(versions)))
