@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2020, 2021 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -124,7 +124,21 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if policer != nil {
 		tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
 		if err == nil {
-			latest, err = policer.Latest(tags)
+			var filter *policy.RegexFilter
+			if pol.Spec.FilterTags != nil {
+				filter, err = policy.NewRegexFilter(pol.Spec.FilterTags.Pattern, pol.Spec.FilterTags.Extract)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				filter.Apply(tags)
+				tags = filter.Items()
+				latest, err = policer.Latest(tags)
+				if err == nil {
+					latest = filter.GetOriginalTag(latest)
+				}
+			} else {
+				latest, err = policer.Latest(tags)
+			}
 		}
 	}
 	if err != nil {

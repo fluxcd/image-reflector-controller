@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2020, 2021 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,12 +55,11 @@ func (p *Alphabetical) Latest(versions []string) (string, error) {
 		return "", fmt.Errorf("version list argument cannot be empty")
 	}
 
-	sorted := sort.StringSlice(versions)
+	var sorted sort.StringSlice = versions
 	if p.Order == AlphabeticalOrderDesc {
 		sort.Sort(sorted)
 	} else {
 		sort.Sort(sort.Reverse(sorted))
 	}
-
 	return sorted[0], nil
 }

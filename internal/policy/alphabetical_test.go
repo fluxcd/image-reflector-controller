@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2020, 2021 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -67,43 +67,53 @@ func TestAlphabetical_Latest(t *testing.T) {
 		expectErr       bool
 	}{
 		{
-			label:           "Ubuntu CalVer",
+			label:           "With Ubuntu CalVer",
 			versions:        []string{"16.04", "16.04.1", "16.10", "20.04", "20.10"},
 			expectedVersion: "20.10",
 		},
-
 		{
-			label:           "Ubuntu CalVer descending",
+			label:           "With Ubuntu CalVer descending",
 			versions:        []string{"16.04", "16.04.1", "16.10", "20.04", "20.10"},
 			order:           AlphabeticalOrderDesc,
 			expectedVersion: "16.04",
 		},
 		{
-			label:           "Ubuntu code names",
+			label:           "With Ubuntu code names",
 			versions:        []string{"xenial", "yakkety", "zesty", "artful", "bionic"},
 			expectedVersion: "zesty",
 		},
 		{
-			label:           "Ubuntu code names descending",
+			label:           "With Ubuntu code names descending",
 			versions:        []string{"xenial", "yakkety", "zesty", "artful", "bionic"},
 			order:           AlphabeticalOrderDesc,
 			expectedVersion: "artful",
 		},
 		{
-			label:           "Timestamps",
+			label:           "With Timestamps",
 			versions:        []string{"1606234201", "1606364286", "1606334092", "1606334284", "1606334201"},
 			expectedVersion: "1606364286",
 		},
 		{
-			label:           "Timestamps desc",
+			label:           "With Unix Timestamps desc",
 			versions:        []string{"1606234201", "1606364286", "1606334092", "1606334284", "1606334201"},
 			order:           AlphabeticalOrderDesc,
 			expectedVersion: "1606234201",
 		},
 		{
-			label:           "Timestamps with prefix",
+			label:           "With Unix Timestamps prefix",
 			versions:        []string{"rel-1606234201", "rel-1606364286", "rel-1606334092", "rel-1606334284", "rel-1606334201"},
 			expectedVersion: "rel-1606364286",
+		},
+		{
+			label:           "With RFC3339",
+			versions:        []string{"2021-01-08T21-18-21Z", "2020-05-08T21-18-21Z", "2021-01-08T19-20-00Z", "1990-01-08T00-20-00Z", "2023-05-08T00-20-00Z"},
+			expectedVersion: "2023-05-08T00-20-00Z",
+		},
+		{
+			label:           "With RFC3339 desc",
+			versions:        []string{"2021-01-08T21-18-21Z", "2020-05-08T21-18-21Z", "2021-01-08T19-20-00Z", "1990-01-08T00-20-00Z", "2023-05-08T00-20-00Z"},
+			order:           AlphabeticalOrderDesc,
+			expectedVersion: "1990-01-08T00-20-00Z",
 		},
 		{
 			label:     "Empty version list",
@@ -118,7 +128,6 @@ func TestAlphabetical_Latest(t *testing.T) {
 			if err != nil {
 				t.Fatalf("returned unexpected error: %s", err)
 			}
-
 			latest, err := policy.Latest(tt.versions)
 			if tt.expectErr && err == nil {
 				t.Fatalf("expecting error, got nil")
