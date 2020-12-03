@@ -19,6 +19,8 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/fluxcd/pkg/apis/meta"
 )
 
 const ImagePolicyKind = "ImagePolicy"
@@ -59,6 +61,20 @@ type ImagePolicyStatus struct {
 	// the image repository, when filtered and ordered according to
 	// the policy.
 	LatestImage string `json:"latestImage,omitempty"`
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
+	return &p.Status.Conditions
+}
+
+// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
+func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reason, message string) {
+	p.Status.ObservedGeneration = p.ObjectMeta.Generation
+	meta.SetResourceCondition(p, meta.ReadyCondition, status, reason, message)
 }
 
 // +kubebuilder:object:root=true
