@@ -201,12 +201,15 @@ github.com/evanphx/json-patch v4.9.0+incompatible h1:kLcOMZeuLAJvL2BPWLMIj5oaZQo
 github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL+zU=
+github.com/fluxcd/pkg v0.0.4 h1:fMA6GG3FTSBFDrlB026gQJhxj4xVuvcvwP3rhX/Yqrw=
 github.com/fluxcd/pkg/apis/meta v0.3.0 h1:o2YkfGgf0j8sKeZs8cBmmmMKLA7kEoS1qYViOial1Ds=
 github.com/fluxcd/pkg/apis/meta v0.3.0/go.mod h1:wOzQQx8CdtUQCGaLzqGu4QgnNxYkI6/wvdvlovxWhF0=
 github.com/fluxcd/pkg/apis/meta v0.4.0 h1:JChqB9GGgorW9HWKxirTVV0rzrcLyzBaVjinmqZ0iHA=
 github.com/fluxcd/pkg/apis/meta v0.4.0/go.mod h1:wOzQQx8CdtUQCGaLzqGu4QgnNxYkI6/wvdvlovxWhF0=
 github.com/fluxcd/pkg/runtime v0.3.0 h1:WpeTmDT2meIe4NsU081I8zmUGgTYs3bIMRgs9F3Lj90=
 github.com/fluxcd/pkg/runtime v0.3.0/go.mod h1:gPe6JgfPB4EDh5gaVkuI0SPuATk3PmclbFa1kPcZrKE=
+github.com/fluxcd/pkg/runtime v0.3.1 h1:UI+FQd1OgipZ6N8YxXHtKYMAu1NRFWaR/Gp1M3T6RZA=
+github.com/fluxcd/pkg/runtime v0.3.1/go.mod h1:wg33L6k5FkGEYoZta7hbUlBIscM5VZd/PfCbaEi+wK4=
 github.com/fluxcd/pkg/version v0.0.1 h1:/8asQoDXSThz3csiwi4Qo8Zb6blAxLXbtxNgeMJ9bCg=
 github.com/fluxcd/pkg/version v0.0.1/go.mod h1:WAF4FEEA9xyhngF8TDxg3UPu5fA1qhEYV8Pmi2Il01Q=
 github.com/fortytw2/leaktest v1.2.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=

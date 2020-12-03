@@ -83,9 +83,6 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
 
-	// record rediness metric
-	defer r.recordReadinessMetric(&imageRepo)
-
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
 		imagev1alpha1.SetImageRepositoryReadiness(
@@ -102,7 +99,9 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		return ctrl.Result{}, nil
 	}
 
-	// record reconciliation duration
+	// Record readiness metric
+	defer r.recordReadinessMetric(&imageRepo)
+	// Record reconciliation duration
 	if r.MetricsRecorder != nil {
 		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
 		if err != nil {
