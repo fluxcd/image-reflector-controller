@@ -24,6 +24,8 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/go-logr/logr"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
@@ -34,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/version"
@@ -84,6 +87,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		}
 		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
+	defer r.recordReadinessMetric(&pol)
 
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{
@@ -91,6 +95,15 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		Name:      pol.Spec.ImageRepositoryRef.Name,
 	}, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
+			imagev1alpha1.SetImagePolicyReadiness(
+				&pol,
+				metav1.ConditionFalse,
+				meta.DependencyNotReadyReason,
+				err.Error(),
+			)
+			if err := r.Status().Update(ctx, &pol); err != nil {
+				return ctrl.Result{Requeue: true}, err
+			}
 			log.Error(err, "referenced ImageRepository does not exist")
 			return ctrl.Result{}, nil
 		}
@@ -99,7 +112,17 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 
 	// if the image repo hasn't been scanned, don't bother
 	if repo.Status.CanonicalImageName == "" {
-		log.Info("referenced ImageRepository has not been scanned yet")
+		msg := "referenced ImageRepository has not been scanned yet"
+		imagev1alpha1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			meta.DependencyNotReadyReason,
+			msg,
+		)
+		if err := r.Status().Update(ctx, &pol); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		log.Info(msg)
 		return ctrl.Result{}, nil
 	}
 
@@ -111,18 +134,49 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		latest, err = r.calculateLatestImageSemver(&policy, repo.Status.CanonicalImageName)
 	}
 	if err != nil {
+		imagev1alpha1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			meta.ReconciliationFailedReason,
+			err.Error(),
+		)
+		if err := r.Status().Update(ctx, &pol); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
 		r.event(pol, events.EventSeverityError, err.Error())
 		return ctrl.Result{}, err
 	}
 
-	if latest != "" {
-		pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+	if latest == "" {
+		msg := "no image found for policy"
+		pol.Status.LatestImage = ""
+		imagev1alpha1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			meta.ReconciliationFailedReason,
+			msg,
+		)
+
 		if err := r.Status().Update(ctx, &pol); err != nil {
-			r.event(pol, events.EventSeverityError, err.Error())
 			return ctrl.Result{}, err
 		}
-		r.event(pol, events.EventSeverityInfo, fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest))
+		r.event(pol, events.EventSeverityError, msg)
+		return ctrl.Result{}, nil
 	}
+
+	msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
+	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+	imagev1alpha1.SetImagePolicyReadiness(
+		&pol,
+		metav1.ConditionTrue,
+		meta.ReconciliationSucceededReason,
+		msg,
+	)
+
+	if err := r.Status().Update(ctx, &pol); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.event(pol, events.EventSeverityInfo, msg)
 
 	return ctrl.Result{}, nil
 }
@@ -202,5 +256,28 @@ func (r *ImagePolicyReconciler) event(policy imagev1alpha1.ImagePolicy, severity
 			).Error(err, "unable to send event")
 			return
 		}
+	}
+}
+
+func (r *ImagePolicyReconciler) recordReadinessMetric(policy *imagev1alpha1.ImagePolicy) {
+	if r.MetricsRecorder == nil {
+		return
+	}
+
+	objRef, err := reference.GetReference(r.Scheme, policy)
+	if err != nil {
+		r.Log.WithValues(
+			strings.ToLower(policy.Kind),
+			fmt.Sprintf("%s/%s", policy.GetNamespace(), policy.GetName()),
+		).Error(err, "unable to record readiness metric")
+		return
+	}
+	if rc := apimeta.FindStatusCondition(policy.Status.Conditions, meta.ReadyCondition); rc != nil {
+		r.MetricsRecorder.RecordCondition(*objRef, *rc, !policy.DeletionTimestamp.IsZero())
+	} else {
+		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
+			Type:   meta.ReadyCondition,
+			Status: metav1.ConditionUnknown,
+		}, !policy.DeletionTimestamp.IsZero())
 	}
 }
