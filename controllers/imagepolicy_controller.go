@@ -147,21 +147,36 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, err
 	}
 
-	if latest != "" {
-		msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
-		pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+	if latest == "" {
+		msg := "no image found for policy"
+		pol.Status.LatestImage = ""
 		imagev1alpha1.SetImagePolicyReadiness(
 			&pol,
-			metav1.ConditionTrue,
-			meta.ReconciliationSucceededReason,
+			metav1.ConditionFalse,
+			meta.ReconciliationFailedReason,
 			msg,
 		)
 
 		if err := r.Status().Update(ctx, &pol); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.event(pol, events.EventSeverityInfo, msg)
+		r.event(pol, events.EventSeverityError, msg)
+		return ctrl.Result{}, nil
 	}
+
+	msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
+	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+	imagev1alpha1.SetImagePolicyReadiness(
+		&pol,
+		metav1.ConditionTrue,
+		meta.ReconciliationSucceededReason,
+		msg,
+	)
+
+	if err := r.Status().Update(ctx, &pol); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.event(pol, events.EventSeverityInfo, msg)
 
 	return ctrl.Result{}, nil
 }
