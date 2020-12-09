@@ -16,30 +16,16 @@ limitations under the License.
 
 package controllers
 
-import (
-	"sync"
-)
-
-type database struct {
-	mu       sync.RWMutex
-	repoTags map[string][]string
+// DatabaseWriter implementations record the tags for an image repository.
+type DatabaseWriter interface {
+	SetTags(repo string, tags []string) error
 }
 
-func NewDatabase() *database {
-	return &database{
-		repoTags: map[string][]string{},
-	}
-}
-
-func (db *database) Tags(repo string) []string {
-	db.mu.RLock()
-	tags := db.repoTags[repo]
-	db.mu.RUnlock()
-	return tags
-}
-
-func (db *database) SetTags(repo string, tags []string) {
-	db.mu.Lock()
-	db.repoTags[repo] = tags
-	db.mu.Unlock()
+// DatabaseReader implementations get the stored set of tags for an image
+// repository.
+//
+// If no tags are availble for the repo, then implementations should return an
+// empty set of tags.
+type DatabaseReader interface {
+	Tags(repo string) ([]string, error)
 }

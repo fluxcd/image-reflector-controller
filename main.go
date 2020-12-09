@@ -20,6 +20,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/dgraph-io/badger"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -28,6 +29,7 @@ import (
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 	"github.com/fluxcd/image-reflector-controller/controllers"
+	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/logger"
 	"github.com/fluxcd/pkg/runtime/metrics"
@@ -58,6 +60,7 @@ func main() {
 		logLevel             string
 		logJSON              bool
 		watchAllNamespaces   bool
+		storagePath          string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -70,6 +73,7 @@ func main() {
 	flag.BoolVar(&logJSON, "log-json", false, "Set logging to JSON format.")
 	flag.BoolVar(&watchAllNamespaces, "watch-all-namespaces", true,
 		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
+	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Parse()
 
 	ctrl.SetLogger(logger.NewLogger(logLevel, logJSON))
@@ -108,7 +112,13 @@ func main() {
 
 	probes.SetupChecks(mgr, setupLog)
 
-	db := controllers.NewDatabase()
+	badgerDB, err := badger.Open(badger.DefaultOptions(storagePath))
+	if err != nil {
+		setupLog.Error(err, "unable to open the Badger database")
+		os.Exit(1)
+	}
+	defer badgerDB.Close()
+	db := database.NewBadgerDatabase(badgerDB)
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),

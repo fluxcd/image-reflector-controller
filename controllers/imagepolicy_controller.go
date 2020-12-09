@@ -49,10 +49,6 @@ import (
 // from.
 const imageRepoKey = ".spec.imageRepository.name"
 
-type DatabaseReader interface {
-	Tags(repo string) []string
-}
-
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
@@ -204,7 +200,10 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // ---
 
 func (r *ImagePolicyReconciler) calculateLatestImageSemver(pol *imagev1alpha1.ImagePolicyChoice, canonImage string) (string, error) {
-	tags := r.Database.Tags(canonImage)
+	tags, err := r.Database.Tags(canonImage)
+	if err != nil {
+		return "", fmt.Errorf("failed to read images for %q: %w", canonImage, err)
+	}
 	constraint, err := semver.NewConstraint(pol.SemVer.Range)
 	if err != nil {
 		// FIXME this'll get a stack trace in the log, but may not deserve it
@@ -231,7 +230,7 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject
 		r.Log.Error(err, "failed to list ImagePolicy for ImageRepository")
 		return nil
 	}
-	reqs := make([]reconcile.Request, len(policies.Items), len(policies.Items))
+	reqs := make([]reconcile.Request, len(policies.Items))
 	for i := range policies.Items {
 		reqs[i].NamespacedName.Name = policies.Items[i].GetName()
 		reqs[i].NamespacedName.Namespace = policies.Items[i].GetNamespace()

@@ -59,6 +59,10 @@ spec:
         volumeMounts:
           - name: temp
             mountPath: /tmp
+          - name: data
+            mountPath: /data
       volumes:
         - name: temp
+          emptyDir: {}
+        - name: data
           emptyDir: {}

@@ -46,10 +46,6 @@ import (
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 )
 
-type DatabaseWriter interface {
-	SetTags(repo string, tags []string)
-}
-
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
@@ -134,7 +130,10 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	}
 
 	// Throttle scans based on spec Interval
-	ok, when := r.shouldScan(imageRepo, reconcileStart)
+	ok, when, err := r.shouldScan(imageRepo, reconcileStart)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, err
+	}
 	if ok {
 		reconcileErr := r.scan(ctx, &imageRepo, ref)
 		if err := r.Status().Update(ctx, &imageRepo); err != nil {
@@ -203,8 +202,9 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	}
 
 	canonicalName := ref.Context().String()
-	// TODO: add context and error handling to database ops
-	r.Database.SetTags(canonicalName, tags)
+	if err := r.Database.SetTags(canonicalName, tags); err != nil {
+		return fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
+	}
 
 	scanTime := metav1.Now()
 	imageRepo.Status.LastScanResult = &imagev1alpha1.ScanResult{
@@ -232,13 +232,13 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 // shouldScan takes an image repo and the time now, and says whether
 // the repository should be scanned now, and how long to wait for the
 // next scan.
-func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration) {
+func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration, error) {
 	scanInterval := repo.Spec.Interval.Duration
 
 	// never scanned; do it now
 	lastScanResult := repo.Status.LastScanResult
 	if lastScanResult == nil {
-		return true, scanInterval
+		return true, scanInterval, nil
 	}
 	lastScanTime := lastScanResult.ScanTime
 
@@ -247,7 +247,7 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 	// that matters is that it's different.
 	if syncAt, ok := meta.ReconcileAnnotationValue(repo.GetAnnotations()); ok {
 		if syncAt != repo.Status.GetLastHandledReconcileRequest() {
-			return true, scanInterval
+			return true, scanInterval, nil
 		}
 	}
 
@@ -258,15 +258,19 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 	// FIXME If the repo exists, has been
 	// scanned, and doesn't have any tags, this will mean a scan every
 	// time the resource comes up for reconciliation.
-	if tags := r.Database.Tags(repo.Status.CanonicalImageName); len(tags) == 0 {
-		return true, scanInterval
+	tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
+	if err != nil {
+		return false, scanInterval, err
+	}
+	if len(tags) == 0 {
+		return true, scanInterval, nil
 	}
 
 	when := scanInterval - now.Sub(lastScanTime.Time)
 	if when < time.Second {
-		return true, scanInterval
+		return true, scanInterval, nil
 	}
-	return false, when
+	return false, when, nil
 }
 
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -275,8 +279,6 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithEventFilter(predicates.ChangePredicate{}).
 		Complete(r)
 }
-
-// ---
 
 // authFromSecret creates an Authenticator that can be given to the
 // `remote` funcs, from a Kubernetes secret. If the secret doesn't
