@@ -6,10 +6,10 @@ controller to drive automated config updates.
 
 ## Installing
 
-Instructions for setting both controllers up are in the
-[fluxcd/image-automation-controller][auto] README.
+Please see the [installation and use
+guide](https://toolkit.fluxcd.io/guides/image-update/).
 
-If you just want to run this controller, do
+If you just want to run this controller for development purposes, do
 
 ```bash
 kustomize build github.com/fluxcd/image-reflector-controller//config/default/?ref=main | kubectl apply -f-
