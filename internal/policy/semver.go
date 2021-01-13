@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2020, 2021 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,13 +50,14 @@ func (p *SemVer) Latest(versions []string) (string, error) {
 	}
 
 	var latestVersion *semver.Version
-	for _, ver := range versions {
-		if v, err := version.ParseVersion(ver); err == nil {
+	for _, tag := range versions {
+		if v, err := version.ParseVersion(tag); err == nil {
 			if p.constraint.Check(v) && (latestVersion == nil || v.GreaterThan(latestVersion)) {
 				latestVersion = v
 			}
 		}
 	}
+
 	if latestVersion != nil {
 		return latestVersion.Original(), nil
 	}

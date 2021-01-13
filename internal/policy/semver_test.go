@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2020, 2021 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -61,19 +61,19 @@ func TestSemVer_Latest(t *testing.T) {
 		expectErr       bool
 	}{
 		{
-			label:           "Regular",
+			label:           "With valid format",
 			versions:        []string{"1.0.0", "1.0.0.1", "1.0.0p", "1.0.1", "1.2.0", "0.1.0"},
 			semverRange:     "1.0.x",
 			expectedVersion: "1.0.1",
 		},
 		{
-			label:           "Regular with prefix",
+			label:           "With valid format prefix",
 			versions:        []string{"v1.2.3", "v1.0.0", "v0.1.0"},
 			semverRange:     "1.0.x",
 			expectedVersion: "v1.0.0",
 		},
 		{
-			label:       "With invalid prefix",
+			label:       "With invalid format prefix",
 			versions:    []string{"b1.2.3", "b1.0.0", "b0.1.0"},
 			semverRange: "1.0.x",
 			expectErr:   true,

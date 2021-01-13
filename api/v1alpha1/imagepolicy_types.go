@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2020, 2021 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,6 +36,11 @@ type ImagePolicySpec struct {
 	// selecting the most recent image
 	// +required
 	Policy ImagePolicyChoice `json:"policy"`
+	// FilterTags enables filtering for only a subset of tags based on a set of
+	// rules. If no rules are provided, all the tags from the repository will be
+	// ordered and compared.
+	// +optional
+	FilterTags *TagFilter `json:"filterTags,omitempty"`
 }
 
 // ImagePolicyChoice is a union of all the types of policy that can be
@@ -67,6 +72,18 @@ type AlphabeticalPolicy struct {
 	// +kubebuilder:validation:Enum=asc;desc
 	// +optional
 	Order string `json:"order,omitempty"`
+}
+
+// TagFilter enables filtering tags based on a set of defined rules
+type TagFilter struct {
+	// Pattern specifies a regular expression pattern used to filter for image
+	// tags.
+	// +optional
+	Pattern string `json:"pattern"`
+	// Extract allows a capture group to be extracted from the specified regular
+	// expression pattern, useful before tag evaluation.
+	// +optional
+	Extract string `json:"extract"`
 }
 
 // ImagePolicyStatus defines the observed state of ImagePolicy

@@ -41,6 +41,21 @@ spec:
             description: ImagePolicySpec defines the parameters for calculating the
               ImagePolicy
             properties:
+              filterTags:
+                description: FilterTags enables filtering for only a subset of tags
+                  based on a set of rules. If no rules are provided, all the tags
+                  from the repository will be ordered and compared.
+                properties:
+                  extract:
+                    description: Extract allows a capture group to be extracted from
+                      the specified regular expression pattern, useful before tag
+                      evaluation.
+                    type: string
+                  pattern:
+                    description: Pattern specifies a regular expression pattern used
+                      to filter for image tags.
+                    type: string
+                type: object
               imageRepositoryRef:
                 description: ImageRepositoryRef points at the object specifying the
                   image being scanned
