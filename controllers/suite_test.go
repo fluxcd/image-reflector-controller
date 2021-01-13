@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -54,6 +55,7 @@ const (
 var cfg *rest.Config
 var k8sClient client.Client
 var k8sMgr ctrl.Manager
+var stopManager func()
 var imageRepoReconciler *ImageRepositoryReconciler
 var imagePolicyReconciler *ImagePolicyReconciler
 var testEnv *envtest.Environment
@@ -114,10 +116,12 @@ var _ = BeforeSuite(func(done Done) {
 
 	// this must be started for the caches to be running, and thereby
 	// for the client to be usable.
+	mgrContext, cancel := context.WithCancel(ctrl.SetupSignalHandler())
 	go func() {
-		err = k8sMgr.Start(ctrl.SetupSignalHandler())
+		err = k8sMgr.Start(mgrContext)
 		Expect(err).ToNot(HaveOccurred())
 	}()
+	stopManager = cancel
 
 	k8sClient = k8sMgr.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
@@ -127,6 +131,7 @@ var _ = BeforeSuite(func(done Done) {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
+	stopManager()
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 	Expect(badgerDB.Close()).ToNot(HaveOccurred())
