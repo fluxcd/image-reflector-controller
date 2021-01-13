@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -51,7 +50,6 @@ const imageRepoKey = ".spec.imageRepository.name"
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EventRecorder         kuberecorder.EventRecorder
 	ExternalEventRecorder *events.Recorder
@@ -63,8 +61,7 @@ type ImagePolicyReconciler struct {
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch
 
-func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileStart := time.Now()
 
 	var pol imagev1alpha1.ImagePolicy
@@ -72,7 +69,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImagePolicyKind), "request", req.NamespacedName)
+	log := logr.FromContext(ctx)
 
 	// record reconciliation duration
 	if r.MetricsRecorder != nil {
@@ -82,7 +79,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		}
 		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
-	defer r.recordReadinessMetric(&pol)
+	defer r.recordReadinessMetric(ctx, &pol)
 
 	var repo imagev1alpha1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{
@@ -140,7 +137,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		if err := r.Status().Update(ctx, &pol); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
-		r.event(pol, events.EventSeverityError, err.Error())
+		r.event(ctx, pol, events.EventSeverityError, err.Error())
 		return ctrl.Result{}, err
 	}
 
@@ -157,7 +154,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 		if err := r.Status().Update(ctx, &pol); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.event(pol, events.EventSeverityError, msg)
+		r.event(ctx, pol, events.EventSeverityError, msg)
 		return ctrl.Result{}, nil
 	}
 
@@ -173,7 +170,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 	if err := r.Status().Update(ctx, &pol); err != nil {
 		return ctrl.Result{}, err
 	}
-	r.event(pol, events.EventSeverityInfo, msg)
+	r.event(ctx, pol, events.EventSeverityInfo, msg)
 
 	return ctrl.Result{}, err
 }
@@ -181,7 +178,7 @@ func (r *ImagePolicyReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error)
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// index the policies by which image repo they point at, so that
 	// it's easy to list those out when an image repo changes.
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj runtime.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
 		pol := obj.(*imagev1alpha1.ImagePolicy)
 		return []string{pol.Spec.ImageRepositoryRef.Name}
 	}); err != nil {
@@ -192,19 +189,18 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&imagev1alpha1.ImagePolicy{}).
 		Watches(
 			&source.Kind{Type: &imagev1alpha1.ImageRepository{}},
-			&handler.EnqueueRequestsFromMapFunc{
-				ToRequests: handler.ToRequestsFunc(r.imagePoliciesForRepository),
-			}).
+			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
+		).
 		Complete(r)
 }
 
 // ---
 
-func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject) []reconcile.Request {
+func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []reconcile.Request {
 	ctx := context.Background()
 	var policies imagev1alpha1.ImagePolicyList
-	if err := r.List(ctx, &policies, client.InNamespace(obj.Meta.GetNamespace()), client.MatchingFields{imageRepoKey: obj.Meta.GetName()}); err != nil {
-		r.Log.Error(err, "failed to list ImagePolicy for ImageRepository")
+	if err := r.List(ctx, &policies, client.InNamespace(obj.GetNamespace()),
+		client.MatchingFields{imageRepoKey: obj.GetName()}); err != nil {
 		return nil
 	}
 	reqs := make([]reconcile.Request, len(policies.Items))
@@ -216,7 +212,7 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj handler.MapObject
 }
 
 // event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImagePolicyReconciler) event(policy imagev1alpha1.ImagePolicy, severity, msg string) {
+func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1alpha1.ImagePolicy, severity, msg string) {
 	if r.EventRecorder != nil {
 		r.EventRecorder.Event(&policy, "Normal", severity, msg)
 	}
@@ -226,26 +222,20 @@ func (r *ImagePolicyReconciler) event(policy imagev1alpha1.ImagePolicy, severity
 			err = r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg)
 		}
 		if err != nil {
-			r.Log.WithValues(
-				"request",
-				fmt.Sprintf("%s/%s", policy.GetNamespace(), policy.GetName()),
-			).Error(err, "unable to send event")
+			logr.FromContext(ctx).Error(err, "unable to send event")
 			return
 		}
 	}
 }
 
-func (r *ImagePolicyReconciler) recordReadinessMetric(policy *imagev1alpha1.ImagePolicy) {
+func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, policy *imagev1alpha1.ImagePolicy) {
 	if r.MetricsRecorder == nil {
 		return
 	}
 
 	objRef, err := reference.GetReference(r.Scheme, policy)
 	if err != nil {
-		r.Log.WithValues(
-			strings.ToLower(policy.Kind),
-			fmt.Sprintf("%s/%s", policy.GetNamespace(), policy.GetName()),
-		).Error(err, "unable to record readiness metric")
+		logr.FromContext(ctx).Error(err, "unable to record readiness metric")
 		return
 	}
 	if rc := apimeta.FindStatusCondition(policy.Status.Conditions, meta.ReadyCondition); rc != nil {

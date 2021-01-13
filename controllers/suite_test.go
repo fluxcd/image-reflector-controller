@@ -33,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -70,7 +69,9 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func(done Done) {
-	logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+	ctrl.SetLogger(
+		zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)),
+	)
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -99,7 +100,6 @@ var _ = BeforeSuite(func(done Done) {
 
 	imageRepoReconciler = &ImageRepositoryReconciler{
 		Client:   k8sMgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("ImageRepository"),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
@@ -107,7 +107,6 @@ var _ = BeforeSuite(func(done Done) {
 
 	imagePolicyReconciler = &ImagePolicyReconciler{
 		Client:   k8sMgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("ImagePolicy"),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
