@@ -218,8 +218,8 @@ github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5Kwzbycv
 github.com/fatih/color v1.9.0/go.mod h1:eQcE1qtQxscV5RaZvpXrrb8Drkc3/DdQ+uUYCNjL+zU=
 github.com/fluxcd/pkg/apis/meta v0.5.0 h1:FaU++mQY0g4sVVl+hG+vk0CXBLbb4EVfRuzs3IjLXvo=
 github.com/fluxcd/pkg/apis/meta v0.5.0/go.mod h1:aEUuZIawboAAFLlYz/juVJ7KNmlWbBtJFYkOWWmGUR4=
-github.com/fluxcd/pkg/runtime v0.6.0 h1:m76ohcnLEcpMMqf+YyADWVYG9pvuKeCUoi3CTx+gIXw=
-github.com/fluxcd/pkg/runtime v0.6.0/go.mod h1:RuqYOYCvBJwo4rg83d28WOt2vfSaemuZCVpUagAjWQc=
+github.com/fluxcd/pkg/runtime v0.6.2 h1:sWnSv6AhMY30fexRQ37lv2Q9Rvdu05zbiqMSldw+MjQ=
+github.com/fluxcd/pkg/runtime v0.6.2/go.mod h1:RuqYOYCvBJwo4rg83d28WOt2vfSaemuZCVpUagAjWQc=
 github.com/fluxcd/pkg/version v0.0.1 h1:/8asQoDXSThz3csiwi4Qo8Zb6blAxLXbtxNgeMJ9bCg=
 github.com/fluxcd/pkg/version v0.0.1/go.mod h1:WAF4FEEA9xyhngF8TDxg3UPu5fA1qhEYV8Pmi2Il01Q=
 github.com/fortytw2/leaktest v1.2.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
