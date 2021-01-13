@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.0
+
+**Release date:** 2021-01-13
+
+This is the second MINOR prerelease, adding support for [selecting
+images using regular expressions][regex].
+
+Other notable changes:
+
+- `controller-runtime` dependency has been upgraded to `v0.7.0`.
+- The container image for ARMv7 and ARM64 that used to be published
+  separately as `image-reflector-controller:*-arm64` has been merged
+  with the AMD64 image.
+
+[regex]: https://github.com/fluxcd/image-reflector-controller/pull/75
+
 ## 0.1.0
 
 **Release date:** 2020-12-10
