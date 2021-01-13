@@ -17,23 +17,25 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	goflag "flag"
 	"os"
 
 	"github.com/dgraph-io/badger"
+	flag "github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
-	"github.com/fluxcd/image-reflector-controller/controllers"
-	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/logger"
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/probes"
+
+	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	"github.com/fluxcd/image-reflector-controller/controllers"
+	"github.com/fluxcd/image-reflector-controller/internal/database"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -57,8 +59,7 @@ func main() {
 		eventsAddr           string
 		healthAddr           string
 		enableLeaderElection bool
-		logLevel             string
-		logJSON              bool
+		logOptions           logger.Options
 		watchAllNamespaces   bool
 		storagePath          string
 	)
@@ -69,14 +70,20 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&logLevel, "log-level", "info", "Set logging level. Can be debug, info or error.")
-	flag.BoolVar(&logJSON, "log-json", false, "Set logging to JSON format.")
 	flag.BoolVar(&watchAllNamespaces, "watch-all-namespaces", true,
 		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
+	flag.Bool("log-json", false, "Set logging to JSON format.")
+	flag.CommandLine.MarkDeprecated("log-json", "Please use --log-encoding=json instead.")
+	{
+		var fs goflag.FlagSet
+		logOptions.BindFlags(&fs)
+		flag.CommandLine.AddGoFlagSet(&fs)
+	}
 	flag.Parse()
 
-	ctrl.SetLogger(logger.NewLogger(logLevel, logJSON))
+	log := logger.NewLogger(logOptions)
+	ctrl.SetLogger(log)
 
 	var eventRecorder *events.Recorder
 	if eventsAddr != "" {
@@ -122,7 +129,6 @@ func main() {
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImageRepositoryKind),
 		Scheme:                mgr.GetScheme(),
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
 		ExternalEventRecorder: eventRecorder,
@@ -134,7 +140,6 @@ func main() {
 	}
 	if err = (&controllers.ImagePolicyReconciler{
 		Client:                mgr.GetClient(),
-		Log:                   ctrl.Log.WithName("controllers").WithName(imagev1alpha1.ImagePolicyKind),
 		Scheme:                mgr.GetScheme(),
 		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
 		ExternalEventRecorder: eventRecorder,

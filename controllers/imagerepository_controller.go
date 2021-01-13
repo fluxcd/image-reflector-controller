@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -37,6 +36,7 @@ import (
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
@@ -49,7 +49,6 @@ import (
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Log                   logr.Logger
 	Scheme                *runtime.Scheme
 	EventRecorder         kuberecorder.EventRecorder
 	ExternalEventRecorder *events.Recorder
@@ -63,8 +62,7 @@ type ImageRepositoryReconciler struct {
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories/status,verbs=get;update;patch
 
-func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	ctx := context.Background()
+func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileStart := time.Now()
 
 	// NB: In general, if an error is returned then controller-runtime
@@ -77,7 +75,7 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log := r.Log.WithValues("controller", strings.ToLower(imagev1alpha1.ImageRepositoryKind), "request", req.NamespacedName)
+	log := logr.FromContext(ctx)
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
@@ -96,7 +94,7 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	}
 
 	// Record readiness metric
-	defer r.recordReadinessMetric(&imageRepo)
+	defer r.recordReadinessMetric(ctx, &imageRepo)
 	// Record reconciliation duration
 	if r.MetricsRecorder != nil {
 		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
@@ -140,12 +138,12 @@ func (r *ImageRepositoryReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			return ctrl.Result{Requeue: true}, err
 		}
 		if reconcileErr != nil {
-			r.event(imageRepo, events.EventSeverityError, reconcileErr.Error())
+			r.event(ctx, imageRepo, events.EventSeverityError, reconcileErr.Error())
 			return ctrl.Result{Requeue: true}, reconcileErr
 		}
 		// emit successful scan event
 		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.ReconciliationSucceededReason); rc != nil {
-			r.event(imageRepo, events.EventSeverityInfo, rc.Message)
+			r.event(ctx, imageRepo, events.EventSeverityInfo, rc.Message)
 		}
 	}
 
@@ -276,7 +274,7 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1alpha1.ImageRepository{}).
-		WithEventFilter(predicates.ChangePredicate{}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcilateAtChangedPredicate{})).
 		Complete(r)
 }
 
@@ -304,41 +302,32 @@ func authFromSecret(secret corev1.Secret, registry string) (authn.Authenticator,
 }
 
 // event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImageRepositoryReconciler) event(repo imagev1alpha1.ImageRepository, severity, msg string) {
+func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1alpha1.ImageRepository, severity, msg string) {
 	if r.EventRecorder != nil {
 		r.EventRecorder.Eventf(&repo, "Normal", severity, msg)
 	}
 	if r.ExternalEventRecorder != nil {
 		objRef, err := reference.GetReference(r.Scheme, &repo)
 		if err != nil {
-			r.Log.WithValues(
-				"request",
-				fmt.Sprintf("%s/%s", repo.GetNamespace(), repo.GetName()),
-			).Error(err, "unable to send event")
+			logr.FromContext(ctx).Error(err, "unable to send event")
 			return
 		}
 
 		if err := r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg); err != nil {
-			r.Log.WithValues(
-				"request",
-				fmt.Sprintf("%s/%s", repo.GetNamespace(), repo.GetName()),
-			).Error(err, "unable to send event")
+			logr.FromContext(ctx).Error(err, "unable to send event")
 			return
 		}
 	}
 }
 
-func (r *ImageRepositoryReconciler) recordReadinessMetric(repo *imagev1alpha1.ImageRepository) {
+func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1alpha1.ImageRepository) {
 	if r.MetricsRecorder == nil {
 		return
 	}
 
 	objRef, err := reference.GetReference(r.Scheme, repo)
 	if err != nil {
-		r.Log.WithValues(
-			strings.ToLower(repo.Kind),
-			fmt.Sprintf("%s/%s", repo.GetNamespace(), repo.GetName()),
-		).Error(err, "unable to record readiness metric")
+		logr.FromContext(ctx).Error(err, "unable to record readiness metric")
 		return
 	}
 	if rc := apimeta.FindStatusCondition(repo.Status.Conditions, meta.ReadyCondition); rc != nil {
