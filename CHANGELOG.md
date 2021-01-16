@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+**Release date:** 2021-01-16
+
+This prerelease comes with updates to Kubernetes and Badger dependencies.
+The Kubernetes packages were updated to v1.20.2 and Badger to v3.2011.0.
+
 ## 0.2.0
 
 **Release date:** 2021-01-13
