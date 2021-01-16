@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v3"
 )
 
 const testRepo = "testing/testing"
