@@ -182,10 +182,10 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/devigned/tab v0.1.1/go.mod h1:XG9mPq0dFghrYvoBF3xdRrJzSTX1b7IQrvaL9mzjeJY=
-github.com/dgraph-io/badger/v3 v3.2011.0 h1:S94zI3aSlc1nnUTPdVwnCHMaW44JerQHRUkeeHdxEXk=
-github.com/dgraph-io/badger/v3 v3.2011.0/go.mod h1:bo6m+cfT4VTQESaPd0O9SegI0XPzl5eKbUh1Uy4F9Do=
-github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2 h1:Ii2KMtC40rP1jJB08GVFfQh/NEca2LBjKokO45N7xes=
-github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
+github.com/dgraph-io/badger/v3 v3.0.0-20210118150219-63f09c34dec1 h1:5r/7OjpEnF2CdQCT4LLxgn4WMWND+NEDe0MBGrmLgWY=
+github.com/dgraph-io/badger/v3 v3.0.0-20210118150219-63f09c34dec1/go.mod h1:6ao9JG07ANaxT3Fb6x3+mBAfaQkWPnFoH+OtSxewGIk=
+github.com/dgraph-io/ristretto v0.0.4-0.20201224172411-e860a6c48e8a h1:jbJJPy2En2HoeNzt3C8Pc03O6+WRmle0O+xTNiORZW0=
+github.com/dgraph-io/ristretto v0.0.4-0.20201224172411-e860a6c48e8a/go.mod h1:tv2ec8nA7vRpSYX7/MbP52ihrUMXIHit54CQMq8npXQ=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 h1:tdlZCpZ/P9DhczCTSixgIKmwPv6+wP5DGjqLYw5SUiA=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUnsFjfmXRMNPybcSiG0BgUW2AuFH8PAnS2iTw=
