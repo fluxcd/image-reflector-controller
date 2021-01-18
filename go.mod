@@ -21,3 +21,6 @@ require (
 	k8s.io/client-go v0.20.2
 	sigs.k8s.io/controller-runtime v0.8.0
 )
+
+// fix Badger build for ARM
+replace github.com/dgraph-io/ristretto => github.com/dgraph-io/ristretto v0.0.4-0.20210108140656-b1486d8516f2
