@@ -3,7 +3,8 @@
 
 The `ImagePolicy` type gives rules for selecting a "latest" image from a scanned
 `ImageRepository`. This can be used to drive automation, as with the
-[image-automation-controller][]; or more generally, to inform other processes of the state of an
+[image-automation-controller][];
+or more generally, to inform other processes of the state of an
 image repository.
 
 ## Specification
@@ -30,7 +31,6 @@ type ImagePolicySpec struct {
 
 The field `ImageRepositoryRef` names an `ImageRepository` object in the same namespace. It is this
 object that provides the scanned image metadata for the policy to use in selecting an image.
-
 
 ### Policy
 
@@ -94,8 +94,8 @@ type TagFilter struct {
 The `FilterTags` field gives you the opportunity to filter the image tags _before_ they are
 considered by the policy rule.
 
-The `Pattern` field takes a regular expression which can match anywhere in the tag string. Only tags
-that match the pattern are considered by the policy rule.
+The `Pattern` field takes a [regular expression][regex-go] which can match anywhere in the tag string.
+Only tags that match the pattern are considered by the policy rule.
 
 The optional `Extract` value will be expanded for each tag that matches the pattern. The resulting
 values will be supplied to the policy rule instead of the original tags. If `Extract` is empty, then
@@ -124,5 +124,77 @@ The `LatestImage` field contains the image selected by the policy rule, when it 
 There is one condition that may be present: the GitOps toolkit-standard `ReadyCondition`. This will
 be marked as true when the policy rule has selected an image.
 
+## Examples
+
+Select the latest `dev` branch build tagged as `<BRANCH>-<BUILD-ID>` (alphabetical):
+
+```yaml
+kind: ImagePolicy
+spec:
+  filterTags:
+    pattern: '^dev-(?P<id>.*)'
+    extract: '$id'
+  policy:
+    alphabetical:
+      order: asc
+```
+
+Select the latest stable version (semver):
+
+```yaml
+kind: ImagePolicy
+spec:
+  policy:
+    semver:
+      range: '>=1.0.0'
+```
+
+Select the latest stable patch version in the 1.x range (semver):
+
+```yaml
+kind: ImagePolicy
+spec:
+  policy:
+    semver:
+      range: '>=1.0.0 <2.0.0'
+```
+
+Select the latest version including pre-releases (semver):
+
+```yaml
+kind: ImagePolicy
+spec:
+  policy:
+    semver:
+      range: '>=1.0.0-0'
+```
+
+Select the latest release candidate (semver):
+
+```yaml
+kind: ImagePolicy
+spec:
+  filterTags:
+   pattern: '.*-rc.*'
+  policy:
+    semver:
+      range: '^1.x-0'
+```
+
+Select the latest release tagged as `RELEASE.<RFC3339-TIMESTAMP>`
+e.g. [Minio](https://hub.docker.com/r/minio/minio) (alphabetical):
+
+```yaml
+kind: ImagePolicy
+spec:
+  filterTags:
+    pattern: '^RELEASE\.(?P<timestamp>.*)Z$'
+    extract: '$timestamp'
+  policy:
+    alphabetical:
+      order: asc
+```
+
 [image-automation-controller]: https://github.com/image-automation-controller
 [semver-range]: https://github.com/Masterminds/semver#checking-version-constraints
+[regex-go]: https://golang.org/pkg/regexp/syntax

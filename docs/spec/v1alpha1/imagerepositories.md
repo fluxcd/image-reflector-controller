@@ -98,5 +98,39 @@ type ScanResult struct {
 There is one condition used: the GitOps toolkit-standard `ReadyCondition`. This will be marked as
 true when a scan succeeds, and false when a scan fails.
 
+### Examples
+
+Fetch metadata for a public image every ten minutes:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1alpha1
+kind: ImageRepository
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 10m
+  image: ghcr.io/stefanprodan/podinfo
+```
+
+Fetch metadata for a private image every minute:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1alpha1
+kind: ImageRepository
+metadata:
+  name: podinfo
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  image: docker.io/org/image
+  secretRef:
+    name: regcred
+```
+
+For private images, you can create a Kubernetes secret in the same namespace
+as the `ImageRepository` with `kubectl create secret docker-registry`,
+and reference it under `secretRef`.
+
 [image-pull-secrets]: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod
 [image-auto-provider-secrets]: https://toolkit.fluxcd.io/guides/image-update/#imagerepository-cloud-providers-authentication
