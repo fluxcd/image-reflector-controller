@@ -3,7 +3,7 @@
 
 The `ImagePolicy` type gives rules for selecting a "latest" image from a scanned
 `ImageRepository`. This can be used to drive automation, as with the
-[image-automation-controller](https://github.com/image-automation-controller);
+[image-automation-controller][];
 or more generally, to inform other processes of the state of an
 image repository.
 
@@ -38,7 +38,7 @@ The ImagePolicy field specifies how to choose a latest image given the image met
 between
 
  - **SemVer**: interpreting all tags as semver versions, and choosing the highest version available
-   that fits the given [semver constraints](https://github.com/Masterminds/semver#checking-version-constraints); or,
+   that fits the given [semver constraints][semver-range]; or,
  - **Alphabetical**: choosing the _last_ tag when all the tags are sorted alphabetically (in either
    ascending or descending order).
 
@@ -94,8 +94,8 @@ type TagFilter struct {
 The `FilterTags` field gives you the opportunity to filter the image tags _before_ they are
 considered by the policy rule.
 
-The `Pattern` field takes a regular expression which can match anywhere in the tag string. Only tags
-that match the pattern are considered by the policy rule.
+The `Pattern` field takes a [regular expression][regex-go] which can match anywhere in the tag string.
+Only tags that match the pattern are considered by the policy rule.
 
 The optional `Extract` value will be expanded for each tag that matches the pattern. The resulting
 values will be supplied to the policy rule instead of the original tags. If `Extract` is empty, then
@@ -194,3 +194,7 @@ spec:
     alphabetical:
       order: asc
 ```
+
+[image-automation-controller]: https://github.com/image-automation-controller
+[semver-range]: https://github.com/Masterminds/semver#checking-version-constraints
+[regex-go]: https://golang.org/pkg/regexp/syntax
