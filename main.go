@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	goflag "flag"
 	"os"
 
 	"github.com/dgraph-io/badger/v3"
@@ -28,6 +27,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
+	"github.com/fluxcd/pkg/runtime/client"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/logger"
 	"github.com/fluxcd/pkg/runtime/metrics"
@@ -59,6 +59,7 @@ func main() {
 		eventsAddr           string
 		healthAddr           string
 		enableLeaderElection bool
+		clientOptions        client.Options
 		logOptions           logger.Options
 		watchAllNamespaces   bool
 		storagePath          string
@@ -75,11 +76,8 @@ func main() {
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Bool("log-json", false, "Set logging to JSON format.")
 	flag.CommandLine.MarkDeprecated("log-json", "Please use --log-encoding=json instead.")
-	{
-		var fs goflag.FlagSet
-		logOptions.BindFlags(&fs)
-		flag.CommandLine.AddGoFlagSet(&fs)
-	}
+	clientOptions.BindFlags(flag.CommandLine)
+	logOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	log := logger.NewLogger(logOptions)
@@ -103,7 +101,8 @@ func main() {
 		watchNamespace = os.Getenv("RUNTIME_NAMESPACE")
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	restConfig := client.GetConfigOrDie(clientOptions)
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		HealthProbeBindAddress: healthAddr,

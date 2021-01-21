@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -47,7 +46,7 @@ type ImageRepositorySpec struct {
 	// credentials to use for the image registry. The secret should be
 	// created with `kubectl create secret docker-registry`, or the
 	// equivalent.
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *meta.LocalObjectReference `json:"secretRef,omitempty"`
 
 	// This flag tells the controller to suspend subsequent image scans.
 	// It does not apply to already started scans. Defaults to false.

@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -31,7 +30,7 @@ type ImagePolicySpec struct {
 	// ImageRepositoryRef points at the object specifying the image
 	// being scanned
 	// +required
-	ImageRepositoryRef corev1.LocalObjectReference `json:"imageRepositoryRef"`
+	ImageRepositoryRef meta.LocalObjectReference `json:"imageRepositoryRef"`
 	// Policy gives the particulars of the policy to be followed in
 	// selecting the most recent image
 	// +required
