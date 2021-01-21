@@ -20,9 +20,9 @@ import (
 	"context"
 	"net/http/httptest"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -83,7 +83,7 @@ var _ = Describe("ImagePolicy controller", func() {
 				}
 				pol := imagev1alpha1.ImagePolicy{
 					Spec: imagev1alpha1.ImagePolicySpec{
-						ImageRepositoryRef: corev1.LocalObjectReference{
+						ImageRepositoryRef: meta.LocalObjectReference{
 							Name: imageObjectName.Name,
 						},
 						Policy: imagev1alpha1.ImagePolicyChoice{
@@ -148,7 +148,7 @@ var _ = Describe("ImagePolicy controller", func() {
 				}
 				pol := imagev1alpha1.ImagePolicy{
 					Spec: imagev1alpha1.ImagePolicySpec{
-						ImageRepositoryRef: corev1.LocalObjectReference{
+						ImageRepositoryRef: meta.LocalObjectReference{
 							Name: imageObjectName.Name,
 						},
 						Policy: imagev1alpha1.ImagePolicyChoice{

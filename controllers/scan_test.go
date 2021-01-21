@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo"
@@ -30,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
-	"github.com/fluxcd/pkg/apis/meta"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -249,7 +249,7 @@ var _ = Describe("ImageRepository controller", func() {
 				Spec: imagev1alpha1.ImageRepositorySpec{
 					Interval: metav1.Duration{Duration: reconciliationInterval},
 					Image:    imgRepo,
-					SecretRef: &corev1.LocalObjectReference{
+					SecretRef: &meta.LocalObjectReference{
 						Name: "docker",
 					},
 				},
