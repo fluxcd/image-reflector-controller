@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.1
+
+**Release date:** 2021-01-22
+
+This prerelease comes with a new argument flag to set the database's
+memory mapped value log file size in bytes (`--storage-value-log-file-size`),
+with a 32bit ARMv7 friendly default of `1<<28` (`256MiB`).
+
 ## 0.4.0
 
 **Release date:** 2021-01-21
