@@ -55,14 +55,15 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr          string
-		eventsAddr           string
-		healthAddr           string
-		enableLeaderElection bool
-		clientOptions        client.Options
-		logOptions           logger.Options
-		watchAllNamespaces   bool
-		storagePath          string
+		metricsAddr             string
+		eventsAddr              string
+		healthAddr              string
+		enableLeaderElection    bool
+		clientOptions           client.Options
+		logOptions              logger.Options
+		watchAllNamespaces      bool
+		storagePath             string
+		storageValueLogFileSize int64
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -74,6 +75,7 @@ func main() {
 	flag.BoolVar(&watchAllNamespaces, "watch-all-namespaces", true,
 		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
+	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.Bool("log-json", false, "Set logging to JSON format.")
 	flag.CommandLine.MarkDeprecated("log-json", "Please use --log-encoding=json instead.")
 	clientOptions.BindFlags(flag.CommandLine)
@@ -82,6 +84,16 @@ func main() {
 
 	log := logger.NewLogger(logOptions)
 	ctrl.SetLogger(log)
+
+	badgerOpts := badger.DefaultOptions(storagePath)
+	badgerOpts.ValueLogFileSize = storageValueLogFileSize
+	badgerDB, err := badger.Open(badgerOpts)
+	if err != nil {
+		setupLog.Error(err, "unable to open the Badger database")
+		os.Exit(1)
+	}
+	defer badgerDB.Close()
+	db := database.NewBadgerDatabase(badgerDB)
 
 	var eventRecorder *events.Recorder
 	if eventsAddr != "" {
@@ -117,14 +129,6 @@ func main() {
 	}
 
 	probes.SetupChecks(mgr, setupLog)
-
-	badgerDB, err := badger.Open(badger.DefaultOptions(storagePath))
-	if err != nil {
-		setupLog.Error(err, "unable to open the Badger database")
-		os.Exit(1)
-	}
-	defer badgerDB.Close()
-	db := database.NewBadgerDatabase(badgerDB)
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
