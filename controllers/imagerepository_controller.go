@@ -19,8 +19,11 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -44,6 +47,16 @@ import (
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+)
+
+// These are intended to match the keys used in e.g.,
+// https://github.com/fluxcd/flux2/blob/main/cmd/flux/create_secret_helm.go,
+// for consistency (and perhaps this will have its own flux create
+// secret subcommand at some point).
+const (
+	ClientCert = "certFile"
+	ClientKey  = "keyFile"
+	CACert     = "caFile"
 )
 
 // ImageRepositoryReconciler reconciles a ImageRepository object
@@ -161,12 +174,12 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	defer cancel()
 
 	var options []remote.Option
+	var authSecret corev1.Secret
 	if imageRepo.Spec.SecretRef != nil {
-		var secret corev1.Secret
 		if err := r.Get(ctx, types.NamespacedName{
 			Namespace: imageRepo.GetNamespace(),
 			Name:      imageRepo.Spec.SecretRef.Name,
-		}, &secret); err != nil {
+		}, &authSecret); err != nil {
 			imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
@@ -175,7 +188,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			)
 			return err
 		}
-		auth, err := authFromSecret(secret, ref.Context().RegistryStr())
+		auth, err := authFromSecret(authSecret, ref.Context().RegistryStr())
 		if err != nil {
 			imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
@@ -186,6 +199,32 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			return err
 		}
 		options = append(options, remote.WithAuth(auth))
+	}
+
+	if imageRepo.Spec.CertSecretRef != nil {
+		var certSecret corev1.Secret
+		if imageRepo.Spec.SecretRef != nil && imageRepo.Spec.SecretRef.Name == imageRepo.Spec.CertSecretRef.Name {
+			certSecret = authSecret
+		} else {
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: imageRepo.GetNamespace(),
+				Name:      imageRepo.Spec.CertSecretRef.Name,
+			}, &certSecret); err != nil {
+				imagev1alpha1.SetImageRepositoryReadiness(
+					imageRepo,
+					metav1.ConditionFalse,
+					meta.ReconciliationFailedReason,
+					err.Error(),
+				)
+				return err
+			}
+		}
+
+		tr, err := transportFromSecret(&certSecret)
+		if err != nil {
+			return err
+		}
+		options = append(options, remote.WithTransport(tr))
 	}
 
 	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
@@ -225,6 +264,39 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	)
 
 	return nil
+}
+
+func transportFromSecret(certSecret *corev1.Secret) (*http.Transport, error) {
+	// It's possible the secret doesn't contain any certs after
+	// all and the default transport could be used; but it's
+	// simpler here to assume a fresh transport is needed.
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{},
+	}
+	tlsConfig := transport.TLSClientConfig
+
+	if clientCert, ok := certSecret.Data[ClientCert]; ok {
+		// parse and set client cert and secret
+		if clientKey, ok := certSecret.Data[ClientKey]; ok {
+			cert, err := tls.X509KeyPair(clientCert, clientKey)
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.Certificates = append(tlsConfig.Certificates, cert)
+		} else {
+			return nil, fmt.Errorf("client certificate found, but no key")
+		}
+	}
+	if caCert, ok := certSecret.Data[CACert]; ok {
+		syscerts, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		syscerts.AppendCertsFromPEM(caCert)
+		tlsConfig.RootCAs = syscerts
+	}
+
+	return transport, nil
 }
 
 // shouldScan takes an image repo and the time now, and says whether
