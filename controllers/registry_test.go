@@ -85,6 +85,9 @@ func newAuthenticatedRegistryServer(username, pass string) *httptest.Server {
 
 // Get the registry part of an image from the registry server
 func registryName(srv *httptest.Server) string {
+	if strings.HasPrefix(srv.URL, "https://") {
+		return strings.TrimPrefix(srv.URL, "https://")
+	} // else assume HTTP
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 

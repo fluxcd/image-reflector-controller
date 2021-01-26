@@ -31,7 +31,22 @@ type ImageRepositorySpec struct {
 	// credentials to use for the image registry. The secret should be
 	// created with `kubectl create secret docker-registry`, or the
 	// equivalent.
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	// +optional
+	SecretRef *meta.LocalObjectReference `json:"secretRef,omitempty"`
+
+	// CertSecretRef can be given the name of a secret containing
+	// either or both of
+	//
+	//  - a PEM-encoded client certificate (`certFile`) and private
+	//  key (`keyFile`);
+	//  - a PEM-encoded CA certificate (`caFile`)
+	//
+	//  and whichever are supplied, will be used for connecting to the
+	//  registry. The client cert and key are useful if you are
+	//  authenticating with a certificate; the CA cert is useful if
+	//  you are using a self-signed server certificate.
+	// +optional
+	CertSecretRef *meta.LocalObjectReference `json:"certSecretRef,omitempty"`
 
 	// This flag tells the controller to suspend subsequent image scans.
 	// It does not apply to already started scans. Defaults to false.
@@ -39,6 +54,11 @@ type ImageRepositorySpec struct {
 	Suspend bool `json:"suspend,omitempty"`
 }
 ```
+
+The `Suspend` field can be set to `true` to stop the controller scanning the image repository
+specified; remove the field value or set to `false` to resume scanning.
+
+**`secretRef` for credentials**
 
 The `secretRef` names a secret in the same namespace that holds credentials for accessing the image
 repository. This secret is expected to be in the same format as for
@@ -52,8 +72,43 @@ is advice specific to some platforms [in the image automation guide][image-auto-
 
 For a publicly accessible image repository, you don't need to provide a `secretRef`.
 
-The `Suspend` field can be set to `true` to stop the controller scanning the image repository
-specified; remove the field value or set to `false` to resume scanning.
+**`certSecretRef` for TLS certificates**
+
+The `certSecretRef` field names a secret with TLS certificate data. This is for two separate
+purposes:
+
+ - to provide a client certificate and private key, if you use a certificate to authenticate with
+   the image registry; and,
+ - to provide a CA certificate, if the registry uses a self-signed certificate.
+
+These will often go together, if you are hosting an image registry yourself. All the files in the
+secret are expected to be [PEM-encoded][pem-encoding]. This is an ASCII format for certificates and
+keys; `openssl` and such tools will typically give you an option of PEM output.
+
+Assuming you have obtained a certificate file and private key and put them in the files `client.crt`
+and `client.key` respectively, you can create a secret with `kubectl` like this:
+
+```bash
+SECRET_NAME=tls-certs
+kubectl create secret generic $SECRET_NAME \
+  --from-file=certFile=client.crt \
+  --from-file=keyFile=client.key
+```
+
+You could also [prepare a secret and encrypt it][sops-guide]; the important bit is that the data
+keys in the secret are `certFile` and `keyFile`.
+
+If you have a CA certificate for the client to use, the data key for that is `caFile`. Adapting the
+previous example, if you have the certificate in the file `ca.crt`, and the client certificate and
+key as before, the whole command would be:
+
+```bash
+SECRET_NAME=tls-certs
+kubectl create secret generic $SECRET_NAME \
+  --from-file=certFile=client.crt \
+  --from-file=keyFile=client.key \
+  --from-file=caFile=ca.crt
+```
 
 ## Status
 
@@ -134,3 +189,5 @@ and reference it under `secretRef`.
 
 [image-pull-secrets]: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod
 [image-auto-provider-secrets]: https://toolkit.fluxcd.io/guides/image-update/#imagerepository-cloud-providers-authentication
+[pem-encoding]: https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail
+[sops-guide]: https://toolkit.fluxcd.io/guides/mozilla-sops/

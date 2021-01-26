@@ -12,6 +12,41 @@ image repositories into a cluster, so they can be consulted for
 e.g., automation.</p>
 Resource Types:
 <ul class="simple"></ul>
+<h3 id="image.toolkit.fluxcd.io/v1alpha1.AlphabeticalPolicy">AlphabeticalPolicy
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.ImagePolicyChoice">ImagePolicyChoice</a>)
+</p>
+<p>AlphabeticalPolicy specifices a alphabetical ordering policy.</p>
+<div class="md-typeset__scrollwrap">
+<div class="md-typeset__table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>order</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Order specifies the sorting order of the tags. Given the letters of the
+alphabet as tags, ascending order would select Z, and descending order
+would select A.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <h3 id="image.toolkit.fluxcd.io/v1alpha1.ImagePolicy">ImagePolicy
 </h3>
 <p>ImagePolicy is the Schema for the imagepolicies API</p>
@@ -56,8 +91,8 @@ ImagePolicySpec
 <td>
 <code>imageRepositoryRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
@@ -78,6 +113,22 @@ ImagePolicyChoice
 <td>
 <p>Policy gives the particulars of the policy to be followed in
 selecting the most recent image</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>filterTags</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.TagFilter">
+TagFilter
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FilterTags enables filtering for only a subset of tags based on a set of
+rules. If no rules are provided, all the tags from the repository will be
+ordered and compared.</p>
 </td>
 </tr>
 </table>
@@ -132,6 +183,20 @@ SemVerPolicy
 available.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>alphabetical</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.AlphabeticalPolicy">
+AlphabeticalPolicy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Alphabetical set of rules to use for alphabetical ordering of the tags.</p>
+</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -158,8 +223,8 @@ ImagePolicy</p>
 <td>
 <code>imageRepositoryRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
@@ -180,6 +245,22 @@ ImagePolicyChoice
 <td>
 <p>Policy gives the particulars of the policy to be followed in
 selecting the most recent image</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>filterTags</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.TagFilter">
+TagFilter
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FilterTags enables filtering for only a subset of tags based on a set of
+rules. If no rules are provided, all the tags from the repository will be
+ordered and compared.</p>
 </td>
 </tr>
 </tbody>
@@ -214,6 +295,30 @@ string
 <p>LatestImage gives the first in the list of images scanned by
 the image repository, when filtered and ordered according to
 the policy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>observedGeneration</code><br>
+<em>
+int64
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>conditions</code><br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#condition-v1-meta">
+[]Kubernetes meta/v1.Condition
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>
@@ -304,16 +409,41 @@ Defaults to &lsquo;Interval&rsquo; duration.</p>
 <td>
 <code>secretRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>SecretRef can be given the name of a secret containing
 credentials to use for the image registry. The secret should be
 created with <code>kubectl create secret docker-registry</code>, or the
 equivalent.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>certSecretRef</code><br>
+<em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertSecretRef can be given the name of a secret containing
+either or both of</p>
+<ul>
+<li>a PEM-encoded client certificate (<code>certFile</code>) and private
+key (<code>keyFile</code>);</li>
+<li>a PEM-encoded CA certificate (<code>caFile</code>)</li>
+</ul>
+<p>and whichever are supplied, will be used for connecting to the
+registry. The client cert and key are useful if you are
+authenticating with a certificate; the CA cert is useful if
+you are using a self-signed server certificate.</p>
 </td>
 </tr>
 <tr>
@@ -410,16 +540,41 @@ Defaults to &lsquo;Interval&rsquo; duration.</p>
 <td>
 <code>secretRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>SecretRef can be given the name of a secret containing
 credentials to use for the image registry. The secret should be
 created with <code>kubectl create secret docker-registry</code>, or the
 equivalent.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>certSecretRef</code><br>
+<em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>CertSecretRef can be given the name of a secret containing
+either or both of</p>
+<ul>
+<li>a PEM-encoded client certificate (<code>certFile</code>) and private
+key (<code>keyFile</code>);</li>
+<li>a PEM-encoded CA certificate (<code>caFile</code>)</li>
+</ul>
+<p>and whichever are supplied, will be used for connecting to the
+registry. The client cert and key are useful if you are
+authenticating with a certificate; the CA cert is useful if
+you are using a self-signed server certificate.</p>
 </td>
 </tr>
 <tr>
@@ -490,7 +645,7 @@ string
 </td>
 <td>
 <em>(Optional)</em>
-<p>CannonicalName is the name of the image repository with all the
+<p>CanonicalName is the name of the image repository with all the
 implied bits made explicit; e.g., <code>docker.io/library/alpine</code>
 rather than <code>alpine</code>.</p>
 </td>
@@ -597,6 +752,53 @@ string
 <td>
 <p>Range gives a semver range for the image tag; the highest
 version within the range that&rsquo;s a tag yields the latest image.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<h3 id="image.toolkit.fluxcd.io/v1alpha1.TagFilter">TagFilter
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.ImagePolicySpec">ImagePolicySpec</a>)
+</p>
+<p>TagFilter enables filtering tags based on a set of defined rules</p>
+<div class="md-typeset__scrollwrap">
+<div class="md-typeset__table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>pattern</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Pattern specifies a regular expression pattern used to filter for image
+tags.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>extract</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Extract allows a capture group to be extracted from the specified regular
+expression pattern, useful before tag evaluation.</p>
 </td>
 </tr>
 </tbody>

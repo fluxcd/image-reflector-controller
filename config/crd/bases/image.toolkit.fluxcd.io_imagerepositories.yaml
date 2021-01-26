@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
+    controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
   name: imagerepositories.image.toolkit.fluxcd.io
 spec:
@@ -44,6 +44,21 @@ spec:
             description: ImageRepositorySpec defines the parameters for scanning an
               image repository, e.g., `fluxcd/flux`.
             properties:
+              certSecretRef:
+                description: "CertSecretRef can be given the name of a secret containing
+                  either or both of \n  - a PEM-encoded client certificate (`certFile`)
+                  and private  key (`keyFile`);  - a PEM-encoded CA certificate (`caFile`)
+                  \n  and whichever are supplied, will be used for connecting to the
+                  \ registry. The client cert and key are useful if you are  authenticating
+                  with a certificate; the CA cert is useful if  you are using a self-signed
+                  server certificate."
+                properties:
+                  name:
+                    description: Name of the referent
+                    type: string
+                required:
+                - name
+                type: object
               image:
                 description: Image is the name of the image repository
                 type: string
@@ -75,7 +90,7 @@ spec:
             description: ImageRepositoryStatus defines the observed state of ImageRepository
             properties:
               canonicalImageName:
-                description: CannonicalName is the name of the image repository with
+                description: CanonicalName is the name of the image repository with
                   all the implied bits made explicit; e.g., `docker.io/library/alpine`
                   rather than `alpine`.
                 type: string
