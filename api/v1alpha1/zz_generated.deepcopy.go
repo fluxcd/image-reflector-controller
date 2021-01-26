@@ -244,7 +244,7 @@ func (in *ImageRepositorySpec) DeepCopyInto(out *ImageRepositorySpec) {
 	}
 	if in.CertSecretRef != nil {
 		in, out := &in.CertSecretRef, &out.CertSecretRef
-		*out = new(corev1.LocalObjectReference)
+		*out = new(meta.LocalObjectReference)
 		**out = **in
 	}
 }

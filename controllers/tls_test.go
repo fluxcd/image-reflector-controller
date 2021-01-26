@@ -179,7 +179,7 @@ var _ = Context("using TLS certificates", func() {
 			Spec: imagev1.ImageRepositorySpec{
 				Interval: metav1.Duration{Duration: time.Hour},
 				Image:    imgRepo,
-				CertSecretRef: &corev1.LocalObjectReference{
+				CertSecretRef: &meta.LocalObjectReference{
 					Name: secretName,
 				},
 			},

@@ -46,6 +46,7 @@ type ImageRepositorySpec struct {
 	// credentials to use for the image registry. The secret should be
 	// created with `kubectl create secret docker-registry`, or the
 	// equivalent.
+	// +optional
 	SecretRef *meta.LocalObjectReference `json:"secretRef,omitempty"`
 
 	// CertSecretRef can be given the name of a secret containing
@@ -60,7 +61,7 @@ type ImageRepositorySpec struct {
 	//  authenticating with a certificate; the CA cert is useful if
 	//  you are using a self-signed server certificate.
 	// +optional
-	CertSecretRef *corev1.LocalObjectReference `json:"certSecretRef,omitempty"`
+	CertSecretRef *meta.LocalObjectReference `json:"certSecretRef,omitempty"`
 
 	// This flag tells the controller to suspend subsequent image scans.
 	// It does not apply to already started scans. Defaults to false.

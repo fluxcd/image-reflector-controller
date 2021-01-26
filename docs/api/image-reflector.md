@@ -409,12 +409,13 @@ Defaults to &lsquo;Interval&rsquo; duration.</p>
 <td>
 <code>secretRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>SecretRef can be given the name of a secret containing
 credentials to use for the image registry. The secret should be
 created with <code>kubectl create secret docker-registry</code>, or the
@@ -425,8 +426,8 @@ equivalent.</p>
 <td>
 <code>certSecretRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
@@ -539,12 +540,13 @@ Defaults to &lsquo;Interval&rsquo; duration.</p>
 <td>
 <code>secretRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>SecretRef can be given the name of a secret containing
 credentials to use for the image registry. The secret should be
 created with <code>kubectl create secret docker-registry</code>, or the
@@ -555,8 +557,8 @@ equivalent.</p>
 <td>
 <code>certSecretRef</code><br>
 <em>
-<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#localobjectreference-v1-core">
-Kubernetes core/v1.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 </a>
 </em>
 </td>
