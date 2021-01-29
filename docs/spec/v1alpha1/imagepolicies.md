@@ -126,18 +126,23 @@ be marked as true when the policy rule has selected an image.
 
 ## Examples
 
-Select the latest `dev` branch build tagged as `<BRANCH>-<BUILD-ID>` (alphabetical):
+Select the latest `main` branch build tagged as `${GIT_BRANCH}-${GIT_SHA:0:7}-$(date +%s)` (alphabetical):
 
 ```yaml
 kind: ImagePolicy
 spec:
   filterTags:
-    pattern: '^dev-(?P<id>.*)'
-    extract: '$id'
+    pattern: '^main-[a-fA-F0-9]+-(?P<ts>.*)'
+    extract: '$ts'
   policy:
     alphabetical:
       order: asc
 ```
+
+A more strict filter would be `^main-[a-fA-F0-9]+-(?P<ts>[1-9][0-9]*)`.
+Before applying policies in-cluster, you can validate your filters using
+a [Go regular expression tester](https://regoio.herokuapp.com)
+or [regex101.com](https://regex101.com/).
 
 Select the latest stable version (semver):
 
