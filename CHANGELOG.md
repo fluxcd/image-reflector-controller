@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+**Release date:** 2021-02-01
+
+This prerelease comes with support for supplying a client cert, key
+and CA (self-singed TLS) to be used for authentication with
+container image registries.
+
 ## 0.4.1
 
 **Release date:** 2021-01-22
