@@ -31,6 +31,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/logger"
 	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
 	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
@@ -129,6 +130,7 @@ func main() {
 	}
 
 	probes.SetupChecks(mgr, setupLog)
+	pprof.SetupHandlers(mgr, setupLog)
 
 	if err = (&controllers.ImageRepositoryReconciler{
 		Client:                mgr.GetClient(),
