@@ -22,7 +22,7 @@ COPY internal/ internal/
 # build without giving the arch, so that it gets it from the machine
 RUN CGO_ENABLED=0 go build -a -o image-reflector-controller main.go
 
-FROM alpine:3.12
+FROM alpine:3.13
 
 LABEL org.opencontainers.image.source="https://github.com/fluxcd/image-reflector-controller"
 
@@ -34,7 +34,7 @@ RUN apk add --no-cache ca-certificates tini
 
 COPY --from=builder /workspace/image-reflector-controller /usr/local/bin/
 
-RUN addgroup -S controller && adduser -S -g controller controller
+RUN addgroup -S controller && adduser -S controller -G controller
 
 USER controller
 
