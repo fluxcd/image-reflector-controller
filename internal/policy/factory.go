@@ -32,6 +32,8 @@ func PolicerFromSpec(choice imagev1.ImagePolicyChoice) (Policer, error) {
 		p, err = NewSemVer(choice.SemVer.Range)
 	case choice.Alphabetical != nil:
 		p, err = NewAlphabetical(strings.ToUpper(choice.Alphabetical.Order))
+	case choice.Numerical != nil:
+		p, err = NewNumerical(strings.ToUpper(choice.Numerical.Order))
 	default:
 		return nil, fmt.Errorf("given ImagePolicyChoice object is invalid")
 	}
