@@ -57,7 +57,7 @@ type ImagePolicyChoice struct {
 	Numerical *NumericalPolicy `json:"numerical,omitempty"`
 }
 
-// SemVerPolicy specifices a semantic version policy.
+// SemVerPolicy specifies a semantic version policy.
 type SemVerPolicy struct {
 	// Range gives a semver range for the image tag; the highest
 	// version within the range that's a tag yields the latest image.
@@ -65,7 +65,7 @@ type SemVerPolicy struct {
 	Range string `json:"range"`
 }
 
-// AlphabeticalPolicy specifices a alphabetical ordering policy.
+// AlphabeticalPolicy specifies a alphabetical ordering policy.
 type AlphabeticalPolicy struct {
 	// Order specifies the sorting order of the tags. Given the letters of the
 	// alphabet as tags, ascending order would select Z, and descending order
@@ -76,7 +76,7 @@ type AlphabeticalPolicy struct {
 	Order string `json:"order,omitempty"`
 }
 
-// NumericalPolicy specifices a numerical ordering policy.
+// NumericalPolicy specifies a numerical ordering policy.
 type NumericalPolicy struct {
 	// Order specifies the sorting order of the tags. Given the integer values
 	// from 0 to 9 as tags, ascending order would select 9, and descending order
