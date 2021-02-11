@@ -37,25 +37,30 @@ object that provides the scanned image metadata for the policy to use in selecti
 The ImagePolicy field specifies how to choose a latest image given the image metadata. The choice is
 between
 
- - **SemVer**: interpreting all tags as semver versions, and choosing the highest version available
+- **SemVer**: interpreting all tags as semver versions, and choosing the highest version available
    that fits the given [semver constraints][semver-range]; or,
- - **Alphabetical**: choosing the _last_ tag when all the tags are sorted alphabetically (in either
-   ascending or descending order).
+- **Alphabetical**: choosing the _last_ tag when all the tags are sorted alphabetically (in either
+   ascending or descending order); or,
+- **Numerical**: choosing the _last_ tag when all the tags are sorted numerically (in either
+  ascending or descending order).
 
 ```go
-// ImagePolicyChoice is a union of all the types of policy that can be
-// supplied.
+// ImagePolicyChoice is a union of all the types of policy that can be supplied.
 type ImagePolicyChoice struct {
-	// SemVer gives a semantic version range to check against the tags
-	// available.
+	// SemVer gives a semantic version range to check against the tags available.
 	// +optional
 	SemVer *SemVerPolicy `json:"semver,omitempty"`
+
 	// Alphabetical set of rules to use for alphabetical ordering of the tags.
 	// +optional
 	Alphabetical *AlphabeticalPolicy `json:"alphabetical,omitempty"`
+
+	// Numerical set of rules to use for numerical ordering of the tags.
+	// +optional
+	Numerical *NumericalPolicy `json:"numerical,omitempty"`
 }
 
-// SemVerPolicy specifices a semantic version policy.
+// SemVerPolicy specifies a semantic version policy.
 type SemVerPolicy struct {
 	// Range gives a semver range for the image tag; the highest
 	// version within the range that's a tag yields the latest image.
@@ -63,11 +68,22 @@ type SemVerPolicy struct {
 	Range string `json:"range"`
 }
 
-// AlphabeticalPolicy specifices a alphabetical ordering policy.
+// AlphabeticalPolicy specifies a alphabetical ordering policy.
 type AlphabeticalPolicy struct {
 	// Order specifies the sorting order of the tags. Given the letters of the
 	// alphabet as tags, ascending order would select Z, and descending order
 	// would select A.
+	// +kubebuilder:default:="asc"
+	// +kubebuilder:validation:Enum=asc;desc
+	// +optional
+Order string `json:"order,omitempty"`
+}
+
+// NumericalPolicy specifies a numerical ordering policy.
+type NumericalPolicy struct {
+	// Order specifies the sorting order of the tags. Given the integer values
+	// from 0 to 9 as tags, ascending order would select 9, and descending order
+	// would select 0.
 	// +kubebuilder:default:="asc"
 	// +kubebuilder:validation:Enum=asc;desc
 	// +optional
@@ -117,7 +133,7 @@ type ImagePolicyStatus struct {
 }
 ```
 
-The `LatestImage` field contains the image selected by the policy rule, when it has run sucessfully.
+The `LatestImage` field contains the image selected by the policy rule, when it has run successfully.
 
 ### Conditions
 
@@ -126,7 +142,7 @@ be marked as true when the policy rule has selected an image.
 
 ## Examples
 
-Select the latest `main` branch build tagged as `${GIT_BRANCH}-${GIT_SHA:0:7}-$(date +%s)` (alphabetical):
+Select the latest `main` branch build tagged as `${GIT_BRANCH}-${GIT_SHA:0:7}-$(date +%s)` (numerical):
 
 ```yaml
 kind: ImagePolicy
@@ -135,7 +151,7 @@ spec:
     pattern: '^main-[a-fA-F0-9]+-(?P<ts>.*)'
     extract: '$ts'
   policy:
-    alphabetical:
+     numerical:
       order: asc
 ```
 
