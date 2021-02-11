@@ -84,6 +84,21 @@ spec:
                         - desc
                         type: string
                     type: object
+                  numerical:
+                    description: Numerical set of rules to use for numerical ordering
+                      of the tags.
+                    properties:
+                      order:
+                        default: asc
+                        description: Order specifies the sorting order of the tags.
+                          Given the integer values from 0 to 9 as tags, ascending
+                          order would select 9, and descending order would select
+                          0.
+                        enum:
+                        - asc
+                        - desc
+                        type: string
+                    type: object
                   semver:
                     description: SemVer gives a semantic version range to check against
                       the tags available.

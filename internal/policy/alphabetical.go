@@ -33,7 +33,8 @@ type Alphabetical struct {
 	Order string
 }
 
-// NewAlphabetical constructs a Alphabetical object validating the provided semver constraint
+// NewAlphabetical constructs a Alphabetical object validating the provided
+// order argument
 func NewAlphabetical(order string) (*Alphabetical, error) {
 	switch order {
 	case "":
