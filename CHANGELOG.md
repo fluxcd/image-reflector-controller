@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0
+
+**Release date:** 2021-02-12
+
+This prerelease comes with support for defining policies
+with numerical ordering.
+
+Features:
+* Implement numerical ordering policy
+  [#104](https://github.com/fluxcd/image-reflector-controller/pull/104)
+  [#106](https://github.com/fluxcd/image-reflector-controller/pull/106)
+
+Improvements:
+* Enable pprof endpoints on metrics server
+  [#100](https://github.com/fluxcd/image-reflector-controller/pull/100)
+* Update Alpine to v3.13
+  [#101](https://github.com/fluxcd/image-reflector-controller/pull/101)
+
 ## 0.5.0
 
 **Release date:** 2021-02-01
