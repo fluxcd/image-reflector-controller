@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.1
+
+**Release date:** 2021-02-24
+
+This prerelease comes with various updates to the controller's
+dependencies; most notable the `go-containerregistry` library
+was upgrade from `v0.1.1` to `v0.4.0`.
+
+Improvements:
+* Refactor release workflow
+  [#110](https://github.com/fluxcd/image-reflector-controller/pull/110)
+* Update dependencies
+  [#109](https://github.com/fluxcd/image-reflector-controller/pull/109)
+
 ## 0.6.0
 
 **Release date:** 2021-02-12
