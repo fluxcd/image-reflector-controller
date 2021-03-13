@@ -17,7 +17,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.lastScanTime
+    - jsonPath: .status.lastScanResult.scanTime
       name: Last scan
       type: string
     - jsonPath: .status.lastScanResult.tagCount
