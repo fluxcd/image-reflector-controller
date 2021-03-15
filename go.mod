@@ -9,7 +9,7 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2011.1
 	github.com/fluxcd/image-reflector-controller/api v0.7.0
 	github.com/fluxcd/pkg/apis/meta v0.8.0
-	github.com/fluxcd/pkg/runtime v0.8.3
+	github.com/fluxcd/pkg/runtime v0.8.4
 	github.com/fluxcd/pkg/version v0.0.1
 	github.com/go-logr/logr v0.3.0
 	github.com/google/go-containerregistry v0.4.0
@@ -20,5 +20,5 @@ require (
 	k8s.io/api v0.20.2
 	k8s.io/apimachinery v0.20.2
 	k8s.io/client-go v0.20.2
-	sigs.k8s.io/controller-runtime v0.8.2
+	sigs.k8s.io/controller-runtime v0.8.3
 )
