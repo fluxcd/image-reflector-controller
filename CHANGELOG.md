@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.1
+
+**Release date:** 2021-03-16
+
+This prerelease comes with updates to the runtime packages.
+
+Improvements:
+* Update dependencies
+  [#121](https://github.com/fluxcd/image-reflector-controller/pull/121)
+
+Fixes:
+* Fix `last scan` print column for `ImageRepository`
+  [#119](https://github.com/fluxcd/image-reflector-controller/pull/119)
+
 ## 0.7.0
 
 **Release date:** 2021-02-24
