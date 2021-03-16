@@ -13,7 +13,7 @@ endif
 all: manager
 
 # Run tests
-test: generate fmt vet manifests
+test: generate fmt vet manifests api-docs
 	go test ./... -coverprofile cover.out
 	cd api; go test ./... -coverprofile cover.out
 

@@ -18,7 +18,7 @@ Resource Types:
 (<em>Appears on:</em>
 <a href="#image.toolkit.fluxcd.io/v1alpha1.ImagePolicyChoice">ImagePolicyChoice</a>)
 </p>
-<p>AlphabeticalPolicy specifices a alphabetical ordering policy.</p>
+<p>AlphabeticalPolicy specifies a alphabetical ordering policy.</p>
 <div class="md-typeset__scrollwrap">
 <div class="md-typeset__table">
 <table>
@@ -195,6 +195,20 @@ AlphabeticalPolicy
 <td>
 <em>(Optional)</em>
 <p>Alphabetical set of rules to use for alphabetical ordering of the tags.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>numerical</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.NumericalPolicy">
+NumericalPolicy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Numerical set of rules to use for numerical ordering of the tags.</p>
 </td>
 </tr>
 </tbody>
@@ -683,6 +697,41 @@ github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
 </table>
 </div>
 </div>
+<h3 id="image.toolkit.fluxcd.io/v1alpha1.NumericalPolicy">NumericalPolicy
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1alpha1.ImagePolicyChoice">ImagePolicyChoice</a>)
+</p>
+<p>NumericalPolicy specifies a numerical ordering policy.</p>
+<div class="md-typeset__scrollwrap">
+<div class="md-typeset__table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>order</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Order specifies the sorting order of the tags. Given the integer values
+from 0 to 9 as tags, ascending order would select 9, and descending order
+would select 0.</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <h3 id="image.toolkit.fluxcd.io/v1alpha1.ScanResult">ScanResult
 </h3>
 <p>
@@ -731,7 +780,7 @@ Kubernetes meta/v1.Time
 (<em>Appears on:</em>
 <a href="#image.toolkit.fluxcd.io/v1alpha1.ImagePolicyChoice">ImagePolicyChoice</a>)
 </p>
-<p>SemVerPolicy specifices a semantic version policy.</p>
+<p>SemVerPolicy specifies a semantic version policy.</p>
 <div class="md-typeset__scrollwrap">
 <div class="md-typeset__table">
 <table>
