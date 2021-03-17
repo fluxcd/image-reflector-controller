@@ -88,6 +88,8 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	defer r.recordSuspension(ctx, imageRepo)
+
 	log := logr.FromContext(ctx)
 
 	if imageRepo.Spec.Suspend {
@@ -409,5 +411,24 @@ func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, r
 			Type:   meta.ReadyCondition,
 			Status: metav1.ConditionUnknown,
 		}, !repo.DeletionTimestamp.IsZero())
+	}
+}
+
+func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageRepo imagev1alpha1.ImageRepository) {
+	if r.MetricsRecorder == nil {
+		return
+	}
+	log := logr.FromContext(ctx)
+
+	objRef, err := reference.GetReference(r.Scheme, &imageRepo)
+	if err != nil {
+		log.Error(err, "unable to record suspended metric")
+		return
+	}
+
+	if !imageRepo.DeletionTimestamp.IsZero() {
+		r.MetricsRecorder.RecordSuspend(*objRef, false)
+	} else {
+		r.MetricsRecorder.RecordSuspend(*objRef, imageRepo.Spec.Suspend)
 	}
 }

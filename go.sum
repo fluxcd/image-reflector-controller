@@ -133,8 +133,8 @@ github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLi
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/fluxcd/pkg/apis/meta v0.8.0 h1:wqWpUsxhKHB1ZztcvOz+vnyhdKW9cWmjFp8Vci/XOdk=
 github.com/fluxcd/pkg/apis/meta v0.8.0/go.mod h1:yHuY8kyGHYz22I0jQzqMMGCcHViuzC/WPdo9Gisk8Po=
-github.com/fluxcd/pkg/runtime v0.8.4 h1:amuhfoHGCUfFCPXg3Zrcyy7f9J+fho+/+FbQDDyewko=
-github.com/fluxcd/pkg/runtime v0.8.4/go.mod h1:JD0eZIn5xkTeHHQUWXSqJPIh/ecO0d0qrUKbSVHnpnw=
+github.com/fluxcd/pkg/runtime v0.8.5 h1:ynh8fszbLQ3QSisQBNOABEUTnvt+/QfCdaL6gOJQcoQ=
+github.com/fluxcd/pkg/runtime v0.8.5/go.mod h1:JD0eZIn5xkTeHHQUWXSqJPIh/ecO0d0qrUKbSVHnpnw=
 github.com/fluxcd/pkg/version v0.0.1 h1:/8asQoDXSThz3csiwi4Qo8Zb6blAxLXbtxNgeMJ9bCg=
 github.com/fluxcd/pkg/version v0.0.1/go.mod h1:WAF4FEEA9xyhngF8TDxg3UPu5fA1qhEYV8Pmi2Il01Q=
 github.com/form3tech-oss/jwt-go v3.2.2+incompatible/go.mod h1:pbq4aXjuKjdthFRnoDwaVPLA+WlJuPGy+QneDUgJi2k=
