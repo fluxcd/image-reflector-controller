@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/dgraph-io/badger/v3"
@@ -122,7 +123,7 @@ func main() {
 		LeaseDuration:                 &leaderElectionOptions.LeaseDuration,
 		RenewDeadline:                 &leaderElectionOptions.RenewDeadline,
 		RetryPeriod:                   &leaderElectionOptions.RetryPeriod,
-		LeaderElectionID:              "e189b2df.fluxcd.io",
+		LeaderElectionID:              fmt.Sprintf("%s-leader-election", controllerName),
 		Namespace:                     watchNamespace,
 	})
 	if err != nil {
