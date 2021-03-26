@@ -216,6 +216,6 @@ spec:
       order: asc
 ```
 
-[image-automation-controller]: https://github.com/image-automation-controller
+[image-automation-controller]: https://github.com/fluxcd/image-automation-controller
 [semver-range]: https://github.com/Masterminds/semver#checking-version-constraints
 [regex-go]: https://golang.org/pkg/regexp/syntax
