@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.0
+
+**Release date:** 2021-04-06
+
+This prerelease comes with a breaking change to the leader election ID
+from `e189b2df.fluxcd.io` to `image-reflector-controller-leader-election`
+to be more descriptive. This change should not have an impact on most
+installations, as the default replica count is `1`. If you are running
+a setup with multiple replicas, it is however advised to scale down
+before upgrading.
+
+The controller exposes a gauge metric to track the suspended status
+of `ImageRepository` objects: `gotk_suspend_status{kind,name,namespace}`.
+
+Improvements:
+* Set leader election deadline to 30s
+  [#125](https://github.com/fluxcd/image-reflector-controller/pull/125)
+* Record suspension metrics
+  [#123](hhttps://github.com/fluxcd/image-reflector-controller/pull/123)
+
 ## 0.7.1
 
 **Release date:** 2021-03-16
