@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -36,7 +37,12 @@ func TestExtractAuthn(t *testing.T) {
 	if err = json.Unmarshal(b, &secret); err != nil {
 		t.Fatal(err)
 	}
-	auth, err := authFromSecret(secret, "https://index.docker.io/v1/")
+	dockerReg, err := name.ParseReference("docker.io/stefan/podinfo:v5.1.02")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	auth, err := authFromSecret(secret, dockerReg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,5 +53,59 @@ func TestExtractAuthn(t *testing.T) {
 	if authConfig.Username != "fooser" || authConfig.Password != "foopass" {
 		t.Errorf("expected username/password to be fooser/foopass, got %s/%s",
 			authConfig.Username, authConfig.Password)
+	}
+}
+
+func TestExtractAuthForURLs(t *testing.T) {
+	dockerReg, err := name.ParseReference("docker.io/stefan/podinfo:5.1.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	portReg, err := name.ParseReference("registry.me:8082/stefan/podinfo:v5.1.02")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFiles := []struct {
+		secretFile string
+		registry   name.Reference
+	}{
+		{
+			secretFile: "secret.json",
+			registry:   dockerReg,
+		},
+		{
+			secretFile: "auth_secret_with_http.json",
+			registry:   dockerReg,
+		},
+		{
+			secretFile: "auth_secret_without_https.json",
+			registry:   dockerReg,
+		},
+		{
+			secretFile: "auth_secret_with_port_without_https.json",
+			registry:   portReg,
+		},
+		{
+			secretFile: "auth_secret_with_http_and_port.json",
+			registry:   portReg,
+		},
+	}
+
+	for _, test := range testFiles {
+		b, err := ioutil.ReadFile("testdata/" + test.secretFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var secret corev1.Secret
+		if err = json.Unmarshal(b, &secret); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = authFromSecret(secret, test.registry)
+		if err != nil {
+			t.Fatalf("error getting secret for %s: %s", "index.docker.io", err)
+		}
 	}
 }
