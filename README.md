@@ -1,5 +1,7 @@
 # Image (metadata) reflector controller
 
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/4790/badge)](https://bestpractices.coreinfrastructure.org/projects/4790)
+
 This is a controller that reflects container image metadata into a
 Kubernetes cluster. It pairs with the [image update automation][auto]
 controller to drive automated config updates.
