@@ -22,8 +22,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -70,6 +73,10 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+}
+
+type dockerConfig struct {
+	Auths map[string]authn.AuthConfig
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
@@ -190,7 +197,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			)
 			return err
 		}
-		auth, err := authFromSecret(authSecret, ref.Context().RegistryStr())
+		auth, err := authFromSecret(authSecret, ref)
 		if err != nil {
 			imagev1alpha1.SetImageRepositoryReadiness(
 				imageRepo,
@@ -355,17 +362,21 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // authFromSecret creates an Authenticator that can be given to the
 // `remote` funcs, from a Kubernetes secret. If the secret doesn't
 // have the right format or data, it returns an error.
-func authFromSecret(secret corev1.Secret, registry string) (authn.Authenticator, error) {
+func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticator, error) {
 	switch secret.Type {
 	case "kubernetes.io/dockerconfigjson":
-		var dockerconfig struct {
-			Auths map[string]authn.AuthConfig
-		}
+		var dockerconfig dockerConfig
 		configData := secret.Data[".dockerconfigjson"]
 		if err := json.NewDecoder(bytes.NewBuffer(configData)).Decode(&dockerconfig); err != nil {
 			return nil, err
 		}
-		auth, ok := dockerconfig.Auths[registry]
+
+		authMap, err := parseAuthMap(dockerconfig)
+		if err != nil {
+			return nil, err
+		}
+		registry := ref.Context().RegistryStr()
+		auth, ok := authMap[registry]
 		if !ok {
 			return nil, fmt.Errorf("auth for %q not found in secret %v", registry, types.NamespacedName{Name: secret.GetName(), Namespace: secret.GetNamespace()})
 		}
@@ -431,4 +442,47 @@ func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageR
 	} else {
 		r.MetricsRecorder.RecordSuspend(*objRef, imageRepo.Spec.Suspend)
 	}
+}
+
+func parseAuthMap(config dockerConfig) (map[string]authn.AuthConfig, error) {
+	auth := map[string]authn.AuthConfig{}
+	for url, entry := range config.Auths {
+		host, err := getURLHost(url)
+		if err != nil {
+			return nil, err
+		}
+
+		auth[host] = entry
+	}
+
+	return auth, nil
+}
+
+func getURLHost(urlStr string) (string, error) {
+	if urlStr == "http://" || urlStr == "https://" {
+		return "", errors.New("Empty url")
+	}
+
+	// ensure url has https:// or http:// prefix
+	// url.Parse won't parse the ip:port format very well without the prefix.
+	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
+		urlStr = fmt.Sprintf("https://%s/", urlStr)
+	}
+
+	// Some users were passing in credentials in the form of
+	// http://docker.io and http://docker.io/v1/, etc.
+	// So strip everything down to the host.
+	// Also, the registry might be local and on a different port.
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return "", err
+	}
+
+	if u.Host == "" {
+		return "", errors.New(fmt.Sprintf(
+			"Invalid registry auth key: %s. Expected an HTTPS URL (e.g. 'https://index.docker.io/v2/' or 'https://index.docker.io'), or the same without the 'https://' (e.g., 'index.docker.io/v2/' or 'index.docker.io')",
+			urlStr))
+	}
+
+	return u.Host, nil
 }
