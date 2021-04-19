@@ -30,13 +30,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 	// +kubebuilder:scaffold:imports
 )
 
 var _ = Describe("ImageRepository controller", func() {
 	const imageName = "alpine-image"
-	var repo imagev1alpha1.ImageRepository
+	var repo imagev1.ImageRepository
 
 	var registryServer *httptest.Server
 
@@ -53,8 +53,8 @@ var _ = Describe("ImageRepository controller", func() {
 		// would be good to test this without needing to do the scanning, since
 		// 1. better to not rely on external services being available
 		// 2. probably going to want to have several test cases
-		repo = imagev1alpha1.ImageRepository{
-			Spec: imagev1alpha1.ImageRepositorySpec{
+		repo = imagev1.ImageRepository{
+			Spec: imagev1.ImageRepositorySpec{
 				Interval: metav1.Duration{Duration: reconciliationInterval},
 				Image:    "alpine",
 			},
@@ -87,8 +87,8 @@ var _ = Describe("ImageRepository controller", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
 		imgRepo := loadImages(registryServer, "test-fetch", versions)
 
-		repo = imagev1alpha1.ImageRepository{
-			Spec: imagev1alpha1.ImageRepositorySpec{
+		repo = imagev1.ImageRepository{
+			Spec: imagev1.ImageRepositorySpec{
 				Interval: metav1.Duration{Duration: reconciliationInterval},
 				Image:    imgRepo,
 			},
@@ -117,8 +117,8 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("when the ImageRepository is suspended", func() {
 		It("does not process the image", func() {
-			repo = imagev1alpha1.ImageRepository{
-				Spec: imagev1alpha1.ImageRepositorySpec{
+			repo = imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
 					Interval: metav1.Duration{Duration: reconciliationInterval},
 					Image:    "alpine",
 					Suspend:  true,
@@ -157,8 +157,8 @@ var _ = Describe("ImageRepository controller", func() {
 		It("scans right away", func() {
 			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
 
-			repo = imagev1alpha1.ImageRepository{
-				Spec: imagev1alpha1.ImageRepositorySpec{
+			repo = imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
 					Interval: metav1.Duration{Duration: reconciliationInterval},
 					Image:    imgRepo,
 				},
@@ -245,8 +245,8 @@ var _ = Describe("ImageRepository controller", func() {
 				Password: password,
 			}))
 
-			repo = imagev1alpha1.ImageRepository{
-				Spec: imagev1alpha1.ImageRepositorySpec{
+			repo = imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
 					Interval: metav1.Duration{Duration: reconciliationInterval},
 					Image:    imgRepo,
 					SecretRef: &meta.LocalObjectReference{

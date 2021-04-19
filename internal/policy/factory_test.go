@@ -19,7 +19,7 @@ package policy
 import (
 	"testing"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 )
 
 func TestFactory_PolicerFromSpec(t *testing.T) {

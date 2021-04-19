@@ -38,7 +38,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 
-	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
 
@@ -64,7 +64,7 @@ type ImagePolicyReconciler struct {
 func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileStart := time.Now()
 
-	var pol imagev1alpha1.ImagePolicy
+	var pol imagev1.ImagePolicy
 	if err := r.Get(ctx, req.NamespacedName, &pol); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -81,13 +81,13 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	defer r.recordReadinessMetric(ctx, &pol)
 
-	var repo imagev1alpha1.ImageRepository
+	var repo imagev1.ImageRepository
 	if err := r.Get(ctx, types.NamespacedName{
 		Namespace: pol.Namespace,
 		Name:      pol.Spec.ImageRepositoryRef.Name,
 	}, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			imagev1alpha1.SetImagePolicyReadiness(
+			imagev1.SetImagePolicyReadiness(
 				&pol,
 				metav1.ConditionFalse,
 				meta.DependencyNotReadyReason,
@@ -105,7 +105,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// if the image repo hasn't been scanned, don't bother
 	if repo.Status.CanonicalImageName == "" {
 		msg := "referenced ImageRepository has not been scanned yet"
-		imagev1alpha1.SetImagePolicyReadiness(
+		imagev1.SetImagePolicyReadiness(
 			&pol,
 			metav1.ConditionFalse,
 			meta.DependencyNotReadyReason,
@@ -142,7 +142,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 	if err != nil {
-		imagev1alpha1.SetImagePolicyReadiness(
+		imagev1.SetImagePolicyReadiness(
 			&pol,
 			metav1.ConditionFalse,
 			meta.ReconciliationFailedReason,
@@ -158,7 +158,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if latest == "" {
 		msg := "no image found for policy"
 		pol.Status.LatestImage = ""
-		imagev1alpha1.SetImagePolicyReadiness(
+		imagev1.SetImagePolicyReadiness(
 			&pol,
 			metav1.ConditionFalse,
 			meta.ReconciliationFailedReason,
@@ -174,7 +174,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
 	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
-	imagev1alpha1.SetImagePolicyReadiness(
+	imagev1.SetImagePolicyReadiness(
 		&pol,
 		metav1.ConditionTrue,
 		meta.ReconciliationSucceededReason,
@@ -192,17 +192,17 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// index the policies by which image repo they point at, so that
 	// it's easy to list those out when an image repo changes.
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1alpha1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
-		pol := obj.(*imagev1alpha1.ImagePolicy)
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
+		pol := obj.(*imagev1.ImagePolicy)
 		return []string{pol.Spec.ImageRepositoryRef.Name}
 	}); err != nil {
 		return err
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&imagev1alpha1.ImagePolicy{}).
+		For(&imagev1.ImagePolicy{}).
 		Watches(
-			&source.Kind{Type: &imagev1alpha1.ImageRepository{}},
+			&source.Kind{Type: &imagev1.ImageRepository{}},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
 		).
 		Complete(r)
@@ -212,7 +212,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []reconcile.Request {
 	ctx := context.Background()
-	var policies imagev1alpha1.ImagePolicyList
+	var policies imagev1.ImagePolicyList
 	if err := r.List(ctx, &policies, client.InNamespace(obj.GetNamespace()),
 		client.MatchingFields{imageRepoKey: obj.GetName()}); err != nil {
 		return nil
@@ -226,7 +226,7 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []
 }
 
 // event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1alpha1.ImagePolicy, severity, msg string) {
+func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1.ImagePolicy, severity, msg string) {
 	if r.EventRecorder != nil {
 		r.EventRecorder.Event(&policy, "Normal", severity, msg)
 	}
@@ -242,7 +242,7 @@ func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1alpha1.
 	}
 }
 
-func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, policy *imagev1alpha1.ImagePolicy) {
+func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, policy *imagev1.ImagePolicy) {
 	if r.MetricsRecorder == nil {
 		return
 	}
@@ -263,8 +263,8 @@ func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, polic
 }
 
 func (r *ImagePolicyReconciler) patchStatus(ctx context.Context, req ctrl.Request,
-	newStatus imagev1alpha1.ImagePolicyStatus) error {
-	var res imagev1alpha1.ImagePolicy
+	newStatus imagev1.ImagePolicyStatus) error {
+	var res imagev1.ImagePolicy
 	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
 		return err
 	}

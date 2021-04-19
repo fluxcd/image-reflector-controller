@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	flag "github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,7 +37,8 @@ import (
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
-	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1_reflect "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	// +kubebuilder:scaffold:imports
@@ -50,9 +52,10 @@ var (
 )
 
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	_ = imagev1alpha1.AddToScheme(scheme)
+	utilruntime.Must(imagev1_reflect.AddToScheme(scheme))
+	utilruntime.Must(imagev1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -142,7 +145,7 @@ func main() {
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImageRepositoryKind)
+		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
 	}
 	if err = (&controllers.ImagePolicyReconciler{
@@ -153,7 +156,7 @@ func main() {
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", imagev1alpha1.ImagePolicyKind)
+		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImagePolicyKind)
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

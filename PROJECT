@@ -6,5 +6,5 @@ resources:
   version: v1alpha1
 - group: image
   kind: ImagePolicy
-  version: v1alpha1
+  version: v1alpha2
 version: "2"
