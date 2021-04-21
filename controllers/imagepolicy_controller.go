@@ -93,7 +93,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				meta.DependencyNotReadyReason,
 				err.Error(),
 			)
-			if err := r.Status().Update(ctx, &pol); err != nil {
+			if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 				return ctrl.Result{Requeue: true}, err
 			}
 			log.Error(err, "referenced ImageRepository does not exist")
@@ -111,7 +111,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			meta.DependencyNotReadyReason,
 			msg,
 		)
-		if err := r.Status().Update(ctx, &pol); err != nil {
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 		log.Info(msg)
@@ -148,7 +148,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			meta.ReconciliationFailedReason,
 			err.Error(),
 		)
-		if err := r.Status().Update(ctx, &pol); err != nil {
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
 		r.event(ctx, pol, events.EventSeverityError, err.Error())
@@ -165,7 +165,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			msg,
 		)
 
-		if err := r.Status().Update(ctx, &pol); err != nil {
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 			return ctrl.Result{}, err
 		}
 		r.event(ctx, pol, events.EventSeverityError, msg)
@@ -181,7 +181,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		msg,
 	)
 
-	if err := r.Status().Update(ctx, &pol); err != nil {
+	if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 		return ctrl.Result{}, err
 	}
 	r.event(ctx, pol, events.EventSeverityInfo, msg)
@@ -260,4 +260,17 @@ func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, polic
 			Status: metav1.ConditionUnknown,
 		}, !policy.DeletionTimestamp.IsZero())
 	}
+}
+
+func (r *ImagePolicyReconciler) patchStatus(ctx context.Context, req ctrl.Request,
+	newStatus imagev1alpha1.ImagePolicyStatus) error {
+	var res imagev1alpha1.ImagePolicy
+	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(res.DeepCopy())
+	res.Status = newStatus
+
+	return r.Status().Patch(ctx, &res, patch)
 }
