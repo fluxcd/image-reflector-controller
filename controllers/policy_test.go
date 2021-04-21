@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -51,8 +51,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
 				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
 
-				repo := imagev1alpha1.ImageRepository{
-					Spec: imagev1alpha1.ImageRepositorySpec{
+				repo := imagev1.ImageRepository{
+					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
 					},
@@ -81,13 +81,13 @@ var _ = Describe("ImagePolicy controller", func() {
 					Name:      "random-pol-" + randStringRunes(5),
 					Namespace: imageObjectName.Namespace,
 				}
-				pol := imagev1alpha1.ImagePolicy{
-					Spec: imagev1alpha1.ImagePolicySpec{
+				pol := imagev1.ImagePolicy{
+					Spec: imagev1.ImagePolicySpec{
 						ImageRepositoryRef: meta.LocalObjectReference{
 							Name: imageObjectName.Name,
 						},
-						Policy: imagev1alpha1.ImagePolicyChoice{
-							SemVer: &imagev1alpha1.SemVerPolicy{
+						Policy: imagev1.ImagePolicyChoice{
+							SemVer: &imagev1.SemVerPolicy{
 								Range: "1.0.x",
 							},
 						},
@@ -116,8 +116,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				versions := []string{"xenial", "yakkety", "zesty", "artful", "bionic"}
 				imgRepo := loadImages(registryServer, "test-alphabetical-policy-"+randStringRunes(5), versions)
 
-				repo := imagev1alpha1.ImageRepository{
-					Spec: imagev1alpha1.ImageRepositorySpec{
+				repo := imagev1.ImageRepository{
+					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
 					},
@@ -146,13 +146,13 @@ var _ = Describe("ImagePolicy controller", func() {
 					Name:      "random-pol-" + randStringRunes(5),
 					Namespace: imageObjectName.Namespace,
 				}
-				pol := imagev1alpha1.ImagePolicy{
-					Spec: imagev1alpha1.ImagePolicySpec{
+				pol := imagev1.ImagePolicy{
+					Spec: imagev1.ImagePolicySpec{
 						ImageRepositoryRef: meta.LocalObjectReference{
 							Name: imageObjectName.Name,
 						},
-						Policy: imagev1alpha1.ImagePolicyChoice{
-							Alphabetical: &imagev1alpha1.AlphabeticalPolicy{},
+						Policy: imagev1.ImagePolicyChoice{
+							Alphabetical: &imagev1.AlphabeticalPolicy{},
 						},
 					},
 				}

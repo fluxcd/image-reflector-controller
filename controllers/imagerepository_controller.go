@@ -49,7 +49,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
-	imagev1alpha1 "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 )
 
 // These are intended to match the keys used in e.g.,
@@ -90,7 +90,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// is usually made explicit by _also_ returning
 	// `ctrl.Result{Requeue: true}`.
 
-	var imageRepo imagev1alpha1.ImageRepository
+	var imageRepo imagev1.ImageRepository
 	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -101,7 +101,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
-		imagev1alpha1.SetImageRepositoryReadiness(
+		imagev1.SetImageRepositoryReadiness(
 			&imageRepo,
 			metav1.ConditionFalse,
 			meta.SuspendedReason,
@@ -128,10 +128,10 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
-		imagev1alpha1.SetImageRepositoryReadiness(
+		imagev1.SetImageRepositoryReadiness(
 			&imageRepo,
 			metav1.ConditionFalse,
-			imagev1alpha1.ImageURLInvalidReason,
+			imagev1.ImageURLInvalidReason,
 			err.Error(),
 		)
 		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
@@ -177,7 +177,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: when}, nil
 }
 
-func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1alpha1.ImageRepository, ref name.Reference) error {
+func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1.ImageRepository, ref name.Reference) error {
 	timeout := imageRepo.GetTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -189,7 +189,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			Namespace: imageRepo.GetNamespace(),
 			Name:      imageRepo.Spec.SecretRef.Name,
 		}, &authSecret); err != nil {
-			imagev1alpha1.SetImageRepositoryReadiness(
+			imagev1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
 				meta.ReconciliationFailedReason,
@@ -199,7 +199,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		}
 		auth, err := authFromSecret(authSecret, ref)
 		if err != nil {
-			imagev1alpha1.SetImageRepositoryReadiness(
+			imagev1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
 				meta.ReconciliationFailedReason,
@@ -219,7 +219,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				Namespace: imageRepo.GetNamespace(),
 				Name:      imageRepo.Spec.CertSecretRef.Name,
 			}, &certSecret); err != nil {
-				imagev1alpha1.SetImageRepositoryReadiness(
+				imagev1.SetImageRepositoryReadiness(
 					imageRepo,
 					metav1.ConditionFalse,
 					meta.ReconciliationFailedReason,
@@ -238,7 +238,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 
 	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
 	if err != nil {
-		imagev1alpha1.SetImageRepositoryReadiness(
+		imagev1.SetImageRepositoryReadiness(
 			imageRepo,
 			metav1.ConditionFalse,
 			meta.ReconciliationFailedReason,
@@ -253,7 +253,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	}
 
 	scanTime := metav1.Now()
-	imageRepo.Status.LastScanResult = &imagev1alpha1.ScanResult{
+	imageRepo.Status.LastScanResult = &imagev1.ScanResult{
 		TagCount: len(tags),
 		ScanTime: scanTime,
 	}
@@ -265,7 +265,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		imageRepo.Status.SetLastHandledReconcileRequest(token)
 	}
 
-	imagev1alpha1.SetImageRepositoryReadiness(
+	imagev1.SetImageRepositoryReadiness(
 		imageRepo,
 		metav1.ConditionTrue,
 		meta.ReconciliationSucceededReason,
@@ -311,7 +311,7 @@ func transportFromSecret(certSecret *corev1.Secret) (*http.Transport, error) {
 // shouldScan takes an image repo and the time now, and says whether
 // the repository should be scanned now, and how long to wait for the
 // next scan.
-func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepository, now time.Time) (bool, time.Duration, error) {
+func (r *ImageRepositoryReconciler) shouldScan(repo imagev1.ImageRepository, now time.Time) (bool, time.Duration, error) {
 	scanInterval := repo.Spec.Interval.Duration
 
 	// never scanned; do it now
@@ -354,7 +354,7 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1alpha1.ImageRepositor
 
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&imagev1alpha1.ImageRepository{}).
+		For(&imagev1.ImageRepository{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
 		Complete(r)
 }
@@ -387,7 +387,7 @@ func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticat
 }
 
 // event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1alpha1.ImageRepository, severity, msg string) {
+func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.ImageRepository, severity, msg string) {
 	if r.EventRecorder != nil {
 		r.EventRecorder.Eventf(&repo, "Normal", severity, msg)
 	}
@@ -405,7 +405,7 @@ func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1alpha
 	}
 }
 
-func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1alpha1.ImageRepository) {
+func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1.ImageRepository) {
 	if r.MetricsRecorder == nil {
 		return
 	}
@@ -425,7 +425,7 @@ func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, r
 	}
 }
 
-func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageRepo imagev1alpha1.ImageRepository) {
+func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageRepo imagev1.ImageRepository) {
 	if r.MetricsRecorder == nil {
 		return
 	}
@@ -445,8 +445,8 @@ func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageR
 }
 
 func (r *ImageRepositoryReconciler) patchStatus(ctx context.Context, req ctrl.Request,
-	newStatus imagev1alpha1.ImageRepositoryStatus) error {
-	var res imagev1alpha1.ImageRepository
+	newStatus imagev1.ImageRepositoryStatus) error {
+	var res imagev1.ImageRepository
 	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
 		return err
 	}
