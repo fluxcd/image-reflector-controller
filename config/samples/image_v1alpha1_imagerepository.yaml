@@ -1,6 +1,0 @@
-apiVersion: image.toolkit.fluxcd.io/v1alpha1
-kind: ImageRepository
-metadata:
-  name: flux-repo
-spec:
-  image: fluxcd/flux
