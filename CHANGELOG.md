@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.9.0
+
+**Release date:** 2021-04-21
+
+This prerelease comes with breaking changes to the `image.toolkit.fluxcd.io` APIs.
+
+The `v1alpha1` APIs have been promoted to `v1alpha2`, while the version has
+changed the API definitions have not, and upgrading can be done by changing
+the version in your manifests for the `ImageRepository` and `ImagePolicy` kinds.
+
+Improvements:
+* Move API v1alpha1 to v1alpha2
+  [#132](https://github.com/fluxcd/image-reflector-controller/pull/132)
+* Add API docs for v1alpha2
+  [#134](https://github.com/fluxcd/image-reflector-controller/pull/134)
+
+Fixes:
+* Parse docker auths and use only hostname
+  [#119](https://github.com/fluxcd/image-reflector-controller/pull/119)
+  
 ## 0.8.0
 
 **Release date:** 2021-04-06
