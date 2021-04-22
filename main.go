@@ -37,7 +37,6 @@ import (
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
-	imagev1_reflect "github.com/fluxcd/image-reflector-controller/api/v1alpha1"
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
@@ -54,7 +53,6 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(imagev1_reflect.AddToScheme(scheme))
 	utilruntime.Must(imagev1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
