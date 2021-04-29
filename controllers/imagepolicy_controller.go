@@ -118,29 +118,31 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
+	var err error
 	policer, err := policy.PolicerFromSpec(pol.Spec.Policy)
 
 	var latest string
 	if policer != nil {
-		tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
+		var tags []string
+		tags, err = r.Database.Tags(repo.Status.CanonicalImageName)
 		if err == nil {
 			var filter *policy.RegexFilter
 			if pol.Spec.FilterTags != nil {
 				filter, err = policy.NewRegexFilter(pol.Spec.FilterTags.Pattern, pol.Spec.FilterTags.Extract)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				filter.Apply(tags)
-				tags = filter.Items()
-				latest, err = policer.Latest(tags)
 				if err == nil {
-					latest = filter.GetOriginalTag(latest)
+					filter.Apply(tags)
+					tags = filter.Items()
+					latest, err = policer.Latest(tags)
+					if err == nil {
+						latest = filter.GetOriginalTag(latest)
+					}
 				}
 			} else {
 				latest, err = policer.Latest(tags)
 			}
 		}
 	}
+
 	if err != nil {
 		imagev1.SetImagePolicyReadiness(
 			&pol,
