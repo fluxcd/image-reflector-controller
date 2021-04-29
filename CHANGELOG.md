@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.1
+
+**Release date:** 2021-04-29
+
+This prerelease comes with improvements to error reporting.
+
+Fixes:
+* Ensure invalid regex errors are reported to user
+  [#140](https://github.com/fluxcd/image-reflector-controller/pull/140)
+* Remove v1alpha1 API from Scheme
+  [#136](https://github.com/fluxcd/image-reflector-controller/pull/136)
+
 ## 0.9.0
 
 **Release date:** 2021-04-21
