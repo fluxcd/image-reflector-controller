@@ -113,6 +113,11 @@ func TestNumerical_Latest(t *testing.T) {
 			expectedVersion: "1",
 		},
 		{
+			label:     "With invalid numerical value",
+			versions:  []string{"0", "1a", "b"},
+			expectErr: true,
+		},
+		{
 			label:     "Empty version list",
 			versions:  []string{},
 			expectErr: true,
