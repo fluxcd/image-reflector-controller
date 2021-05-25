@@ -66,7 +66,7 @@ func (p *Numerical) Latest(versions []string) (string, error) {
 
 		switch {
 		case i == 0:
-			break // First iteration, nothing to compare
+			// First iteration, nothing to compare
 		case p.Order == NumericalOrderAsc && cv < pv, p.Order == NumericalOrderDesc && cv > pv:
 			continue
 		}

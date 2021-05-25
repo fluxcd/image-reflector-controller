@@ -158,7 +158,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	if latest == "" {
-		msg := "no image found for policy"
+		msg := fmt.Sprintf("Cannot determine latest tag for policy: %s", err.Error())
 		pol.Status.LatestImage = ""
 		imagev1.SetImagePolicyReadiness(
 			&pol,
