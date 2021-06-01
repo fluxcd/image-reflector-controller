@@ -21,11 +21,14 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -43,6 +46,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ecr"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
@@ -177,6 +184,54 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: when}, nil
 }
 
+func parseAwsImageURL(imageUrl string) (accountId, awsEcrRegion, awsPartition, ecrRepository, tag string, err error) {
+	err = nil
+	registryUrlPartRe := regexp.MustCompile("([0-9+]*).dkr.ecr.([^/.]*).(amazonaws.com[.cn]*)/([^:]+):?(.*)")
+	registryUrlParts := registryUrlPartRe.FindAllStringSubmatch(imageUrl, -1)
+	if len(registryUrlParts) < 1 {
+		err = errors.New("imageUrl does not match AWS elastic container registry URL pattern")
+		return
+	}
+	accountId = registryUrlParts[0][1]
+	awsEcrRegion = registryUrlParts[0][2]
+	awsPartition = registryUrlParts[0][3]
+	ecrRepository = registryUrlParts[0][4]
+	if len(registryUrlParts[0]) <= 4 {
+		tag = ""
+		return
+	}
+	tag = registryUrlParts[0][5]
+	return
+}
+
+// TODO: Still missing from Flux 1:
+// Caching of tokens (one per account/region pair), this fetches a fresh token every time
+// handling of expiry
+// Back-Off in case of errors
+// Possibly: special behaviour for non-global partitions (China, GovCloud)
+func getAwsECRLoginAuth(accountId, awsEcrRegion string) (authConfig authn.AuthConfig, err error) {
+	accountIDs := []string{accountId}
+	ecrService := ecr.New(session.Must(session.NewSession(&aws.Config{Region: aws.String(awsEcrRegion)})))
+	ecrToken, err := ecrService.GetAuthorizationToken(&ecr.GetAuthorizationTokenInput{
+		RegistryIds: aws.StringSlice(accountIDs),
+	})
+	if err != nil {
+		return
+	}
+
+	token, err := base64.StdEncoding.DecodeString(*ecrToken.AuthorizationData[0].AuthorizationToken)
+	if err != nil {
+		return
+	}
+
+	tokenSplit := strings.Split(string(token), ":")
+	authConfig = authn.AuthConfig{
+		Username: tokenSplit[0],
+		Password: tokenSplit[1],
+	}
+	return
+}
+
 func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1.ImageRepository, ref name.Reference) error {
 	timeout := imageRepo.GetTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -208,6 +263,28 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			return err
 		}
 		options = append(options, remote.WithAuth(auth))
+	}
+
+	if accountId, awsEcrRegion, _, _, _, err := parseAwsImageURL(imageRepo.Spec.Image); err == nil {
+		if _, present := os.LookupEnv("USE_ECR"); present {
+			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
+
+			authConfig, err := getAwsECRLoginAuth(accountId, awsEcrRegion)
+			if err != nil {
+				imagev1.SetImageRepositoryReadiness(
+					imageRepo,
+					metav1.ConditionFalse,
+					meta.ReconciliationFailedReason,
+					err.Error(),
+				)
+				return err
+			}
+
+			auth := authn.FromConfig(authConfig)
+			options = append(options, remote.WithAuth(auth))
+		} else {
+			logr.FromContext(ctx).Info("AWS ECR authentication is not enabled, to enable, set USE_ECR environment variable")
+		}
 	}
 
 	if imageRepo.Spec.CertSecretRef != nil {
