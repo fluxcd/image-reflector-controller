@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0
+
+**Release date:** 2021-06-10
+
+This prerelease comes with an update to the Kubernetes and controller-runtime
+dependencies to align them with the Kubernetes 1.21 release, including an update
+of Badger to `v3.2103.0`.
+
+Improvements:
+* Better error reporting for image policy evaluation
+  [#144](https://github.com/fluxcd/image-reflector-controller/pull/144)
+* Update Go and Badger
+  [#149](https://github.com/fluxcd/image-reflector-controller/pull/149)
+* Update dependencies
+  [#150](https://github.com/fluxcd/image-reflector-controller/pull/150)
+* Add nightly builds workflow and allow RC releases
+  [#151](https://github.com/fluxcd/image-reflector-controller/pull/151)
+
 ## 0.9.1
 
 **Release date:** 2021-04-29
