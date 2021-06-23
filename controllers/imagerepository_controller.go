@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -65,11 +66,12 @@ const (
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              interface {
+	Scheme                  *runtime.Scheme
+	EventRecorder           kuberecorder.EventRecorder
+	ExternalEventRecorder   *events.Recorder
+	MetricsRecorder         *metrics.Recorder
+	MaxConcurrentReconciles int
+	Database                interface {
 		DatabaseWriter
 		DatabaseReader
 	}
@@ -356,6 +358,9 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImageRepository{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
+		}).
 		Complete(r)
 }
 

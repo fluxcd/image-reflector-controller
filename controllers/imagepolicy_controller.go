@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -50,11 +51,12 @@ const imageRepoKey = ".spec.imageRepository.name"
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              DatabaseReader
+	Scheme                  *runtime.Scheme
+	EventRecorder           kuberecorder.EventRecorder
+	ExternalEventRecorder   *events.Recorder
+	MetricsRecorder         *metrics.Recorder
+	Database                DatabaseReader
+	MaxConcurrentReconciles int
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
@@ -207,6 +209,9 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&source.Kind{Type: &imagev1.ImageRepository{}},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
 		).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
+		}).
 		Complete(r)
 }
 
