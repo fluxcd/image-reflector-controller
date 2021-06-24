@@ -189,7 +189,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: when}, nil
 }
 
-func parseAwsImageURL(imageUrl string) (accountId, awsEcrRegion, awsPartition, ecrRepository, tag string, err error) {
+func parseAwsImageURL(imageUrl string) (accountId, awsEcrRegion string, err error) {
 	err = nil
 	registryUrlPartRe := regexp.MustCompile(`([0-9+]*).dkr.ecr.([^/.]*)\.(amazonaws\.com[.cn]*)/([^:]+):?(.*)`)
 	registryUrlParts := registryUrlPartRe.FindAllStringSubmatch(imageUrl, -1)
@@ -199,13 +199,6 @@ func parseAwsImageURL(imageUrl string) (accountId, awsEcrRegion, awsPartition, e
 	}
 	accountId = registryUrlParts[0][1]
 	awsEcrRegion = registryUrlParts[0][2]
-	awsPartition = registryUrlParts[0][3]
-	ecrRepository = registryUrlParts[0][4]
-	if len(registryUrlParts[0]) <= 4 {
-		tag = ""
-		return
-	}
-	tag = registryUrlParts[0][5]
 	return
 }
 
@@ -270,7 +263,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		options = append(options, remote.WithAuth(auth))
 	}
 
-	if accountId, awsEcrRegion, _, _, _, err := parseAwsImageURL(imageRepo.Spec.Image); err == nil {
+	if accountId, awsEcrRegion, err := parseAwsImageURL(imageRepo.Spec.Image); err == nil {
 		if r.UseAwsEcr {
 			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
 
