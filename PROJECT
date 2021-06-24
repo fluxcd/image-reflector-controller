@@ -7,4 +7,10 @@ resources:
 - group: image
   kind: ImagePolicy
   version: v1alpha2
+- group: image
+  kind: ImageRepository
+  version: v1beta1
+- group: image
+  kind: ImagePolicy
+  version: v1beta1
 version: "2"

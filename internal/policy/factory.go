@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 )
 
 // PolicerFromSpec constructs a new policy object based on
