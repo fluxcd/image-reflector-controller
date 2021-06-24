@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -81,6 +80,7 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+	UseAwsEcr bool
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -191,7 +191,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 func parseAwsImageURL(imageUrl string) (accountId, awsEcrRegion, awsPartition, ecrRepository, tag string, err error) {
 	err = nil
-	registryUrlPartRe := regexp.MustCompile("([0-9+]*).dkr.ecr.([^/.]*).(amazonaws.com[.cn]*)/([^:]+):?(.*)")
+	registryUrlPartRe := regexp.MustCompile(`([0-9+]*).dkr.ecr.([^/.]*)\.(amazonaws\.com[.cn]*)/([^:]+):?(.*)`)
 	registryUrlParts := registryUrlPartRe.FindAllStringSubmatch(imageUrl, -1)
 	if len(registryUrlParts) < 1 {
 		err = errors.New("imageUrl does not match AWS elastic container registry URL pattern")
@@ -271,7 +271,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	}
 
 	if accountId, awsEcrRegion, _, _, _, err := parseAwsImageURL(imageRepo.Spec.Image); err == nil {
-		if _, present := os.LookupEnv("USE_ECR"); present {
+		if r.UseAwsEcr {
 			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
 
 			authConfig, err := getAwsECRLoginAuth(accountId, awsEcrRegion)
