@@ -42,6 +42,7 @@ import (
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -73,6 +74,10 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+}
+
+type ImageRepositoryReconcilerOptions struct {
+	MaxConcurrentReconciles int
 }
 
 type dockerConfig struct {
@@ -352,10 +357,13 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1.ImageRepository, now
 	return false, when, nil
 }
 
-func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImageRepository{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
+		}).
 		Complete(r)
 }
 

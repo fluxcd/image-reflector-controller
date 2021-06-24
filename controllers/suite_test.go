@@ -105,14 +105,14 @@ var _ = BeforeSuite(func(done Done) {
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	Expect(imageRepoReconciler.SetupWithManager(k8sMgr)).To(Succeed())
+	Expect(imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})).To(Succeed())
 
 	imagePolicyReconciler = &ImagePolicyReconciler{
 		Client:   k8sMgr.GetClient(),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr)).To(Succeed())
+	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})).To(Succeed())
 
 	// this must be started for the caches to be running, and thereby
 	// for the client to be usable.
