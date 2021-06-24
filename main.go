@@ -138,14 +138,15 @@ func main() {
 	pprof.SetupHandlers(mgr, setupLog)
 
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:                  mgr.GetClient(),
-		Scheme:                  mgr.GetScheme(),
-		EventRecorder:           mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder:   eventRecorder,
-		MetricsRecorder:         metricsRecorder,
-		Database:                db,
+		Client:                mgr.GetClient(),
+		Scheme:                mgr.GetScheme(),
+		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
+		ExternalEventRecorder: eventRecorder,
+		MetricsRecorder:       metricsRecorder,
+		Database:              db,
+	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
-	}).SetupWithManager(mgr); err != nil {
+	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
 	}
@@ -156,8 +157,9 @@ func main() {
 		ExternalEventRecorder: eventRecorder,
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
+	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
-	}).SetupWithManager(mgr); err != nil {
+	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImagePolicyKind)
 		os.Exit(1)
 	}

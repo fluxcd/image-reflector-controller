@@ -66,15 +66,18 @@ const (
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Scheme                  *runtime.Scheme
-	EventRecorder           kuberecorder.EventRecorder
-	ExternalEventRecorder   *events.Recorder
-	MetricsRecorder         *metrics.Recorder
-	MaxConcurrentReconciles int
-	Database                interface {
+	Scheme                *runtime.Scheme
+	EventRecorder         kuberecorder.EventRecorder
+	ExternalEventRecorder *events.Recorder
+	MetricsRecorder       *metrics.Recorder
+	Database              interface {
 		DatabaseWriter
 		DatabaseReader
 	}
+}
+
+type ImageRepositoryReconcilerOptions struct {
+	MaxConcurrentReconciles int
 }
 
 type dockerConfig struct {
@@ -354,12 +357,12 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1.ImageRepository, now
 	return false, when, nil
 }
 
-func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImageRepository{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
+			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
 		}).
 		Complete(r)
 }

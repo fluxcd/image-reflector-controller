@@ -51,11 +51,14 @@ const imageRepoKey = ".spec.imageRepository.name"
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	Scheme                  *runtime.Scheme
-	EventRecorder           kuberecorder.EventRecorder
-	ExternalEventRecorder   *events.Recorder
-	MetricsRecorder         *metrics.Recorder
-	Database                DatabaseReader
+	Scheme                *runtime.Scheme
+	EventRecorder         kuberecorder.EventRecorder
+	ExternalEventRecorder *events.Recorder
+	MetricsRecorder       *metrics.Recorder
+	Database              DatabaseReader
+}
+
+type ImagePolicyReconcilerOptions struct {
 	MaxConcurrentReconciles int
 }
 
@@ -193,7 +196,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return ctrl.Result{}, err
 }
 
-func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
 	// index the policies by which image repo they point at, so that
 	// it's easy to list those out when an image repo changes.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
@@ -210,7 +213,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
 		).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: r.MaxConcurrentReconciles,
+			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
 		}).
 		Complete(r)
 }
