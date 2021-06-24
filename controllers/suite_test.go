@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	// +kubebuilder:scaffold:imports
 )
@@ -105,14 +105,14 @@ var _ = BeforeSuite(func(done Done) {
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	Expect(imageRepoReconciler.SetupWithManager(k8sMgr)).To(Succeed())
+	Expect(imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})).To(Succeed())
 
 	imagePolicyReconciler = &ImagePolicyReconciler{
 		Client:   k8sMgr.GetClient(),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr)).To(Succeed())
+	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})).To(Succeed())
 
 	// this must be started for the caches to be running, and thereby
 	// for the client to be usable.

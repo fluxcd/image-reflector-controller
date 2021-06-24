@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha2
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -121,6 +121,7 @@ func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reas
 	meta.SetResourceCondition(p, meta.ReadyCondition, status, reason, message)
 }
 
+// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`

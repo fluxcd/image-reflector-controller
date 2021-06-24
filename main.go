@@ -37,10 +37,10 @@ import (
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	// +kubebuilder:scaffold:imports
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
-	// +kubebuilder:scaffold:imports
 )
 
 const controllerName = "image-reflector-controller"
@@ -68,6 +68,7 @@ func main() {
 		watchAllNamespaces      bool
 		storagePath             string
 		storageValueLogFileSize int64
+		concurrent              int
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -77,6 +78,7 @@ func main() {
 		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
+	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
 	leaderElectionOptions.BindFlags(flag.CommandLine)
@@ -142,7 +144,9 @@ func main() {
 		ExternalEventRecorder: eventRecorder,
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
+		MaxConcurrentReconciles: concurrent,
+	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
 	}
@@ -153,7 +157,9 @@ func main() {
 		ExternalEventRecorder: eventRecorder,
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
+		MaxConcurrentReconciles: concurrent,
+	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImagePolicyKind)
 		os.Exit(1)
 	}

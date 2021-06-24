@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -38,7 +39,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1alpha2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
 
@@ -55,6 +56,10 @@ type ImagePolicyReconciler struct {
 	ExternalEventRecorder *events.Recorder
 	MetricsRecorder       *metrics.Recorder
 	Database              DatabaseReader
+}
+
+type ImagePolicyReconcilerOptions struct {
+	MaxConcurrentReconciles int
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
@@ -191,7 +196,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return ctrl.Result{}, err
 }
 
-func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
 	// index the policies by which image repo they point at, so that
 	// it's easy to list those out when an image repo changes.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
@@ -207,6 +212,9 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&source.Kind{Type: &imagev1.ImageRepository{}},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
 		).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
+		}).
 		Complete(r)
 }
 

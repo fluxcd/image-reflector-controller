@@ -158,7 +158,7 @@ true when a scan succeeds, and false when a scan fails.
 Fetch metadata for a public image every ten minutes:
 
 ```yaml
-apiVersion: image.toolkit.fluxcd.io/v1alpha2
+apiVersion: image.toolkit.fluxcd.io/v1beta1
 kind: ImageRepository
 metadata:
   name: podinfo
@@ -171,7 +171,7 @@ spec:
 Fetch metadata for a private image every minute:
 
 ```yaml
-apiVersion: image.toolkit.fluxcd.io/v1alpha2
+apiVersion: image.toolkit.fluxcd.io/v1beta1
 kind: ImageRepository
 metadata:
   name: podinfo
