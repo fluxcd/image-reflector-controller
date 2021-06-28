@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.0
+
+**Release date:** 2021-06-28
+
+This prerelease promotes the API version from `v1alpha2` to `v1beta1`.
+
+:warning: With regard to the API version, no action is necessary at
+present, as Kubernetes will automatically convert between `v1alpha2`
+and `v1beta1` APIs.
+
+You may wish to migrate `v1alpha2` YAML files to `v1beta1`, in
+preparation for `v1alpha2` being deprecated (eventually; there is no
+date set at the time of writing). This is simply a case of setting the
+`apiVersion` field value:
+
+    `apiVersion: image.toolkit.fluxcd.io/v1beta1`
+
+Improvements:
+* Let people set the number of controller workers with a flag
+  [#153](https://github.com/fluxcd/image-reflector-controller/pull/153)
+
 ## 0.10.0
 
 **Release date:** 2021-06-10
