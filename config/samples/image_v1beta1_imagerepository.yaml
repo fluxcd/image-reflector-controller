@@ -1,4 +1,4 @@
-apiVersion: image.toolkit.fluxcd.io/v1alpha2
+apiVersion: image.toolkit.fluxcd.io/v1beta1
 kind: ImageRepository
 metadata:
   name: podinfo
