@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.1
+
+**Release date:** 2021-08-05
+
+This prerelease comes with an update to the Kubernetes and controller-runtime
+dependencies to align them with the Kubernetes `v1.21.3` release, including an update
+of Badger to `v3.2103.1`.
+
+Improvements:
+* Update dependencies
+  [#160](https://github.com/fluxcd/image-reflector-controller/pull/160)
+
 ## 0.11.0
 
 **Release date:** 2021-06-28
