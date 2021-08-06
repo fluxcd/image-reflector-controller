@@ -30,7 +30,7 @@ type ImagePolicySpec struct {
 	// ImageRepositoryRef points at the object specifying the image
 	// being scanned
 	// +required
-	ImageRepositoryRef meta.LocalObjectReference `json:"imageRepositoryRef"`
+	ImageRepositoryRef meta.NamespacedObjectReference `json:"imageRepositoryRef"`
 	// Policy gives the particulars of the policy to be followed in
 	// selecting the most recent image
 	// +required
