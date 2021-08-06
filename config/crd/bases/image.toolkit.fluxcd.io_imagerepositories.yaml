@@ -296,7 +296,7 @@ spec:
               accessFrom:
                 description: AccessFrom defines an ACL for allowing cross-namespace references to the ImageRepository object based on the caller's namespace labels.
                 properties:
-                  namespaceSelector:
+                  namespaceSelectors:
                     items:
                       properties:
                         matchLabels:

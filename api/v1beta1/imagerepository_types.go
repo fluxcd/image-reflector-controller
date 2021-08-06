@@ -75,7 +75,7 @@ type ImageRepositorySpec struct {
 }
 
 type AccessFrom struct {
-	NamespaceSelectors []NamespaceSelector `json:"namespaceSelector,omitempty"`
+	NamespaceSelectors []NamespaceSelector `json:"namespaceSelectors,omitempty"`
 }
 
 type NamespaceSelector struct {

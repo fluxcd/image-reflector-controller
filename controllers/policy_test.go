@@ -458,6 +458,85 @@ var _ = Describe("ImagePolicy controller", func() {
 			})
 		})
 
+		When("is in different namespace with no empty match labels", func() {
+			It("grants access", func() {
+				policyNamespace := &corev1.Namespace{}
+				policyNamespace.Name = "acl-" + randStringRunes(5)
+
+				Expect(k8sClient.Create(context.Background(), policyNamespace)).To(Succeed())
+				defer k8sClient.Delete(context.Background(), policyNamespace)
+
+				versions := []string{"1.0.0", "1.0.1"}
+				imgRepo := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+
+				repo := imagev1.ImageRepository{
+					Spec: imagev1.ImageRepositorySpec{
+						Interval: metav1.Duration{Duration: reconciliationInterval},
+						Image:    imgRepo,
+						AccessFrom: &imagev1.AccessFrom{
+							NamespaceSelectors: []imagev1.NamespaceSelector{
+								{
+									MatchLabels: make(map[string]string),
+								},
+							},
+						},
+					},
+				}
+				repoObjectName := types.NamespacedName{
+					Name:      "acl-repo-" + randStringRunes(5),
+					Namespace: "default",
+				}
+				repo.Name = repoObjectName.Name
+				repo.Namespace = repoObjectName.Namespace
+
+				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
+
+				r := imageRepoReconciler
+				Expect(r.Create(ctx, &repo)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, repoObjectName, &repo)
+					return err == nil && repo.Status.LastScanResult != nil
+				}, timeout, interval).Should(BeTrue())
+				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+				polObjectName := types.NamespacedName{
+					Name:      "acl-pol-" + randStringRunes(5),
+					Namespace: policyNamespace.Name,
+				}
+				pol := imagev1.ImagePolicy{
+					Spec: imagev1.ImagePolicySpec{
+						ImageRepositoryRef: meta.NamespacedObjectReference{
+							Name:      repoObjectName.Name,
+							Namespace: repoObjectName.Namespace,
+						},
+						Policy: imagev1.ImagePolicyChoice{
+							SemVer: &imagev1.SemVerPolicy{
+								Range: "1.0.x",
+							},
+						},
+					},
+				}
+				pol.Namespace = polObjectName.Namespace
+				pol.Name = polObjectName.Name
+
+				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
+
+				Expect(r.Create(ctx, &pol)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, polObjectName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
+				}, timeout, interval).Should(BeTrue())
+				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
+
+				Expect(r.Delete(ctx, &pol)).To(Succeed())
+			})
+		})
+
 		When("is in different namespace with matching ACL", func() {
 			It("grants access", func() {
 				policyNamespace := &corev1.Namespace{}

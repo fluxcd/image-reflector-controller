@@ -6,3 +6,7 @@ metadata:
 spec:
   image: ghcr.io/stefanprodan/podinfo
   interval: 1m0s
+  accessFrom:
+    namespaceSelectors:
+      - matchLabels:
+          kubernetes.io/metadata.name: flux-system

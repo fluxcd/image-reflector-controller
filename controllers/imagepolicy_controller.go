@@ -332,29 +332,17 @@ func (r *ImagePolicyReconciler) hasAccessToRepository(ctx context.Context, polic
 	}
 	policyLabels := policyNamespace.GetLabels()
 
-	// deny access if the policy namespace has no labels
-	if len(policyLabels) == 0 {
-		return false, fmt.Errorf("ImageRepository '%s/%s' can't be accessed due to missing lables on namespace '%s'",
-			repo.Namespace, repo.Name, policy.Namespace)
-	}
-
 	// check if the policy namespace labels match any ACL
-	var allowed bool
 	for _, selector := range acl.NamespaceSelectors {
 		sel, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: selector.MatchLabels})
 		if err != nil {
 			return false, err
 		}
 		if sel.Matches(labels.Set(policyLabels)) {
-			allowed = true
-			break
+			return true, nil
 		}
 	}
 
-	if !allowed {
-		return allowed, fmt.Errorf("ImageRepository '%s/%s' can't be accessed due to lables mismatch on namespace '%s'",
-			repo.Namespace, repo.Name, policy.Namespace)
-	}
-
-	return allowed, nil
+	return false, fmt.Errorf("ImageRepository '%s/%s' can't be accessed due to labels mismatch on namespace '%s'",
+		repo.Namespace, repo.Name, policy.Namespace)
 }

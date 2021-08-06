@@ -132,9 +132,9 @@ spec:
   secretRef:
     name: regcred
   accessFrom:
-  - namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: flux-system
+    namespaceSelectors:
+      - matchLabels:
+          kubernetes.io/metadata.name: flux-system
 ```
 
 **Note** that the `kubernetes.io/metadata.name` is a readonly label added by Kubernetes >= 1.21

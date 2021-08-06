@@ -30,7 +30,7 @@ Resource Types:
 <tbody>
 <tr>
 <td>
-<code>namespaceSelector</code><br>
+<code>namespaceSelectors</code><br>
 <em>
 <a href="#image.toolkit.fluxcd.io/v1beta1.NamespaceSelector">
 []NamespaceSelector
