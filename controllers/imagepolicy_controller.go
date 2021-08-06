@@ -19,12 +19,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	v1 "k8s.io/api/core/v1"
 	"time"
 
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
@@ -320,7 +321,7 @@ func (r *ImagePolicyReconciler) hasAccessToRepository(ctx context.Context, polic
 	}
 
 	// grant access if the repository ACL has no namespace selectors
-	if acl != nil && len(acl.NamespaceSelectors) == 0 {
+	if acl != nil && acl.NamespaceSelectors == nil {
 		return true, nil
 	}
 
@@ -339,16 +340,12 @@ func (r *ImagePolicyReconciler) hasAccessToRepository(ctx context.Context, polic
 
 	// check if the policy namespace labels match any ACL
 	var allowed bool
-	contains := func(subject map[string]string, match map[string]string) bool {
-		for k, v := range match {
-			if val, ok := subject[k]; !ok || val != v {
-				return false
-			}
-		}
-		return true
-	}
 	for _, selector := range acl.NamespaceSelectors {
-		if contains(policyLabels, selector.MatchLabels) {
+		sel, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: selector.MatchLabels})
+		if err != nil {
+			return false, err
+		}
+		if sel.Matches(labels.Set(policyLabels)) {
 			allowed = true
 			break
 		}
