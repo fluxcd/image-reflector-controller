@@ -16,7 +16,7 @@ type ImagePolicySpec struct {
 	// ImageRepositoryRef points at the object specifying the image
 	// being scanned
 	// +required
-	ImageRepositoryRef corev1.LocalObjectReference `json:"imageRepositoryRef"`
+	ImageRepositoryRef meta.NamespacedObjectReference `json:"imageRepositoryRef"`
 	// Policy gives the particulars of the policy to be followed in
 	// selecting the most recent image
 	// +required
@@ -29,8 +29,11 @@ type ImagePolicySpec struct {
 }
 ```
 
-The field `ImageRepositoryRef` names an `ImageRepository` object in the same namespace. It is this
+The field `ImageRepositoryRef` names an `ImageRepository` object. It is this
 object that provides the scanned image metadata for the policy to use in selecting an image.
+You can refer to an `ImageRepository` in another namespace with `ImageRepositoryRef.Namespace`,
+for more details on how to allow cross-namespace references see the
+[ImageRepository docs](imagerepositories.md#allow-cross-namespace-references).
 
 ### Policy
 

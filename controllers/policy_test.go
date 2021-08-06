@@ -174,7 +174,7 @@ var _ = Describe("ImagePolicy controller", func() {
 		})
 	})
 
-	Context("Filers tags", func() {
+	Context("Filters tags", func() {
 		When("valid regex supplied", func() {
 			It("correctly filters the repo tags", func() {
 				versions := []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
