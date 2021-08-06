@@ -159,6 +159,14 @@ spec:
       range: 1.0.x
 ```
 
+To grant access to all namespaces, an empty `matchLabels` must be provided:
+
+```yaml
+  accessFrom:
+    namespaceSelectors:
+      - matchLabels: {}
+```
+
 ## Status
 
 ```go

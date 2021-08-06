@@ -383,7 +383,7 @@ var _ = Describe("ImagePolicy controller", func() {
 		})
 
 		When("is in different namespace with empty ACL", func() {
-			It("grants access", func() {
+			It("deny access", func() {
 				policyNamespace := &corev1.Namespace{}
 				policyNamespace.Name = "acl-" + randStringRunes(5)
 				policyNamespace.Labels = map[string]string{
@@ -449,16 +449,16 @@ var _ = Describe("ImagePolicy controller", func() {
 				Expect(r.Create(ctx, &pol)).To(Succeed())
 
 				Eventually(func() bool {
-					err := r.Get(ctx, polObjectName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
+					_ = r.Get(ctx, polObjectName, &pol)
+					return apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
 				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
+				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal("AccessDenied"))
 
 				Expect(r.Delete(ctx, &pol)).To(Succeed())
 			})
 		})
 
-		When("is in different namespace with no empty match labels", func() {
+		When("is in different namespace with empty match labels", func() {
 			It("grants access", func() {
 				policyNamespace := &corev1.Namespace{}
 				policyNamespace.Name = "acl-" + randStringRunes(5)

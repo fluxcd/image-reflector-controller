@@ -320,11 +320,6 @@ func (r *ImagePolicyReconciler) hasAccessToRepository(ctx context.Context, polic
 			repo.Namespace, repo.Name)
 	}
 
-	// grant access if the repository ACL has no namespace selectors
-	if acl != nil && acl.NamespaceSelectors == nil {
-		return true, nil
-	}
-
 	// get the policy namespace labels
 	var policyNamespace v1.Namespace
 	if err := r.Get(ctx, types.NamespacedName{Name: policy.Namespace}, &policyNamespace); err != nil {
