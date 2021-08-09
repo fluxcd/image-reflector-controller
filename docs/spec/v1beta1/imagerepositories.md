@@ -52,13 +52,18 @@ type ImageRepositorySpec struct {
 	// It does not apply to already started scans. Defaults to false.
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
+	
+	// AccessFrom defines an ACL for allowing cross-namespace references
+	// to the ImageRepository object based on the caller's namespace labels.
+	// +optional
+	AccessFrom *AccessFrom `json:"accessFrom,omitempty"`
 }
 ```
 
 The `Suspend` field can be set to `true` to stop the controller scanning the image repository
 specified; remove the field value or set to `false` to resume scanning.
 
-**`secretRef` for credentials**
+### Authentication 
 
 The `secretRef` names a secret in the same namespace that holds credentials for accessing the image
 repository. This secret is expected to be in the same format as for
@@ -72,7 +77,7 @@ is advice specific to some platforms [in the image automation guide][image-auto-
 
 For a publicly accessible image repository, you don't need to provide a `secretRef`.
 
-**`certSecretRef` for TLS certificates**
+### TLS Certificates
 
 The `certSecretRef` field names a secret with TLS certificate data. This is for two separate
 purposes:
@@ -108,6 +113,58 @@ kubectl create secret generic $SECRET_NAME \
   --from-file=certFile=client.crt \
   --from-file=keyFile=client.key \
   --from-file=caFile=ca.crt
+```
+
+### Allow cross-namespace references
+
+To grant access to an `ImageRepository` for policies in other namespaces, the owner of the `ImageRepository`
+has to specify a list of label selectors that match the namespaces of the `ImagePolicy` objects.
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageRepository
+metadata:
+  name: app1
+  namespace: apps
+spec:
+  interval: 5m
+  image: docker.io/org/image
+  secretRef:
+    name: regcred
+  accessFrom:
+    namespaceSelectors:
+      - matchLabels:
+          kubernetes.io/metadata.name: flux-system
+```
+
+**Note** that the `kubernetes.io/metadata.name` is a readonly label added by Kubernetes >= 1.21
+automatically on namespaces. If you're using an older version of Kubernetes, please set labels
+on the namespaces where the `ImagePolicy` are.
+
+The above definition, allows for `ImagePolicy` in the `flux-system` namespace
+to reference the app1 `ImageRepository` e.g.:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImagePolicy
+metadata:
+  name: app1
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: app1
+    namespace: apps
+  policy:
+    semver:
+      range: 1.0.x
+```
+
+To grant access to all namespaces, an empty `matchLabels` must be provided:
+
+```yaml
+  accessFrom:
+    namespaceSelectors:
+      - matchLabels: {}
 ```
 
 ## Status

@@ -293,6 +293,19 @@ spec:
           spec:
             description: ImageRepositorySpec defines the parameters for scanning an image repository, e.g., `fluxcd/flux`.
             properties:
+              accessFrom:
+                description: AccessFrom defines an ACL for allowing cross-namespace references to the ImageRepository object based on the caller's namespace labels.
+                properties:
+                  namespaceSelectors:
+                    items:
+                      properties:
+                        matchLabels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                      type: object
+                    type: array
+                type: object
               certSecretRef:
                 description: "CertSecretRef can be given the name of a secret containing either or both of \n  - a PEM-encoded client certificate (`certFile`) and private  key (`keyFile`);  - a PEM-encoded CA certificate (`caFile`) \n  and whichever are supplied, will be used for connecting to the  registry. The client cert and key are useful if you are  authenticating with a certificate; the CA cert is useful if  you are using a self-signed server certificate."
                 properties:

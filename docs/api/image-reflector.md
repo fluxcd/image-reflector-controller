@@ -12,6 +12,38 @@ OCI image repositories into a cluster, so they can be consulted for
 e.g., automation.</p>
 Resource Types:
 <ul class="simple"></ul>
+<h3 id="image.toolkit.fluxcd.io/v1beta1.AccessFrom">AccessFrom
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1beta1.ImageRepositorySpec">ImageRepositorySpec</a>)
+</p>
+<div class="md-typeset__scrollwrap">
+<div class="md-typeset__table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>namespaceSelectors</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta1.NamespaceSelector">
+[]NamespaceSelector
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
 <h3 id="image.toolkit.fluxcd.io/v1beta1.AlphabeticalPolicy">AlphabeticalPolicy
 </h3>
 <p>
@@ -91,8 +123,8 @@ ImagePolicySpec
 <td>
 <code>imageRepositoryRef</code><br>
 <em>
-<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
-github.com/fluxcd/pkg/apis/meta.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#NamespacedObjectReference">
+github.com/fluxcd/pkg/apis/meta.NamespacedObjectReference
 </a>
 </em>
 </td>
@@ -237,8 +269,8 @@ ImagePolicy</p>
 <td>
 <code>imageRepositoryRef</code><br>
 <em>
-<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
-github.com/fluxcd/pkg/apis/meta.LocalObjectReference
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#NamespacedObjectReference">
+github.com/fluxcd/pkg/apis/meta.NamespacedObjectReference
 </a>
 </em>
 </td>
@@ -473,6 +505,21 @@ bool
 It does not apply to already started scans. Defaults to false.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>accessFrom</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta1.AccessFrom">
+AccessFrom
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>AccessFrom defines an ACL for allowing cross-namespace references
+to the ImageRepository object based on the caller&rsquo;s namespace labels.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -604,6 +651,21 @@ bool
 It does not apply to already started scans. Defaults to false.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>accessFrom</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta1.AccessFrom">
+AccessFrom
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>AccessFrom defines an ACL for allowing cross-namespace references
+to the ImageRepository object based on the caller&rsquo;s namespace labels.</p>
+</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -691,6 +753,36 @@ github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
 <p>
 (Members of <code>ReconcileRequestStatus</code> are embedded into this type.)
 </p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<h3 id="image.toolkit.fluxcd.io/v1beta1.NamespaceSelector">NamespaceSelector
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1beta1.AccessFrom">AccessFrom</a>)
+</p>
+<div class="md-typeset__scrollwrap">
+<div class="md-typeset__table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>matchLabels</code><br>
+<em>
+map[string]string
+</em>
+</td>
+<td>
 </td>
 </tr>
 </tbody>

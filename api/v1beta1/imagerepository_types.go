@@ -67,6 +67,19 @@ type ImageRepositorySpec struct {
 	// It does not apply to already started scans. Defaults to false.
 	// +optional
 	Suspend bool `json:"suspend,omitempty"`
+
+	// AccessFrom defines an ACL for allowing cross-namespace references
+	// to the ImageRepository object based on the caller's namespace labels.
+	// +optional
+	AccessFrom *AccessFrom `json:"accessFrom,omitempty"`
+}
+
+type AccessFrom struct {
+	NamespaceSelectors []NamespaceSelector `json:"namespaceSelectors,omitempty"`
+}
+
+type NamespaceSelector struct {
+	MatchLabels map[string]string `json:"matchLabels,omitempty"`
 }
 
 type ScanResult struct {
