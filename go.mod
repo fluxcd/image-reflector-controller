@@ -9,8 +9,8 @@ require (
 	github.com/aws/aws-sdk-go v1.42.9
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/fluxcd/image-reflector-controller/api v0.14.0
-	github.com/fluxcd/pkg/apis/meta v0.10.0
-	github.com/fluxcd/pkg/runtime v0.12.0
+	github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1
+	github.com/fluxcd/pkg/runtime v0.13.0-rc.5
 	github.com/fluxcd/pkg/version v0.1.0
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-containerregistry v0.7.0
