@@ -130,7 +130,6 @@ github.com/evanphx/json-patch v4.9.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLi
 github.com/evanphx/json-patch v4.11.0+incompatible h1:glyUF9yIYtMHzn8xaKw5rMhdWcwsYV8dZHIq5567/xs=
 github.com/evanphx/json-patch v4.11.0+incompatible/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
-github.com/fluxcd/pkg/apis/meta v0.10.0/go.mod h1:CW9X9ijMTpNe7BwnokiUOrLl/h13miwVr/3abEQLbKE=
 github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1 h1:RHHrztAFv9wmjM+Pk7Svt1UdD+1SdnQSp76MWFiM7Hg=
 github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1/go.mod h1:yUblM2vg+X8TE3A2VvJfdhkGmg+uqBlSPkLk7dxi0UM=
 github.com/fluxcd/pkg/runtime v0.13.0-rc.2 h1:+4uTEg+CU++hlr7NpOP4KYp60MtHDOgYvpz/74tbATg=
@@ -640,7 +639,6 @@ golang.org/x/sys v0.0.0-20201119102817-f84b799fce68/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210112080510-489259a85091/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
-golang.org/x/sys v0.0.0-20210225134936-a50acf3fe073/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210330210617-4fbd30eecc44/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210423082822-04245dca01da/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210426230700-d19ff857e887/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
@@ -836,7 +834,6 @@ k8s.io/api v0.21.3/go.mod h1:hUgeYHUbBp23Ue4qdX9tR8/ANi/g3ehylAqDn9NWVOg=
 k8s.io/apiextensions-apiserver v0.21.2/go.mod h1:+Axoz5/l3AYpGLlhJDfcVQzCerVYq3K3CvDMvw6X1RA=
 k8s.io/apiextensions-apiserver v0.21.3 h1:+B6biyUWpqt41kz5x6peIsljlsuwvNAp/oFax/j2/aY=
 k8s.io/apiextensions-apiserver v0.21.3/go.mod h1:kl6dap3Gd45+21Jnh6utCx8Z2xxLm8LGDkprcd+KbsE=
-k8s.io/apimachinery v0.21.1/go.mod h1:jbreFvJo3ov9rj7eWT7+sYiRx+qZuCYXwWT1bcDswPY=
 k8s.io/apimachinery v0.21.2/go.mod h1:CdTY8fU/BlvAbJ2z/8kBwimGki5Zp8/fbVuLY8gJumM=
 k8s.io/apimachinery v0.21.3 h1:3Ju4nvjCngxxMYby0BimUk+pQHPOQp3eCGChk5kfVII=
 k8s.io/apimachinery v0.21.3/go.mod h1:H/IM+5vH9kZRNJ4l3x/fXP/5bOPJaVP/guptnZPeCFI=

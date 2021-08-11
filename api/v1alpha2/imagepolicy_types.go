@@ -115,12 +115,6 @@ func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
 	return &p.Status.Conditions
 }
 
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reason, message string) {
-	p.Status.ObservedGeneration = p.ObjectMeta.Generation
-	meta.SetResourceCondition(p, meta.ReadyCondition, status, reason, message)
-}
-
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`

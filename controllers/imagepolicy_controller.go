@@ -38,12 +38,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
+
+const ImageRepositoryNotReadyReason = "ImageRepositoryNotReady"
 
 // this is used as the key for the index of policy->repository; the
 // string is arbitrary and acts as a reminder where the value comes
@@ -100,10 +103,10 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	if err := r.Get(ctx, repoNamespacedName, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			imagev1.SetImagePolicyReadiness(
+			conditions.MarkFalse(
 				&pol,
-				metav1.ConditionFalse,
-				meta.DependencyNotReadyReason,
+				meta.ReadyCondition,
+				ImageRepositoryNotReadyReason,
 				err.Error(),
 			)
 			if err := r.patchStatus(ctx, req, pol.Status); err != nil {
@@ -133,10 +136,10 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// if the image repo hasn't been scanned, don't bother
 	if repo.Status.CanonicalImageName == "" {
 		msg := "referenced ImageRepository has not been scanned yet"
-		imagev1.SetImagePolicyReadiness(
+		conditions.MarkFalse(
 			&pol,
-			metav1.ConditionFalse,
-			meta.DependencyNotReadyReason,
+			meta.ReadyCondition,
+			ImageRepositoryNotReadyReason,
 			msg,
 		)
 		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
@@ -172,10 +175,10 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	if err != nil {
-		imagev1.SetImagePolicyReadiness(
+		conditions.MarkFalse(
 			&pol,
-			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
+			meta.ReadyCondition,
+			meta.FailedReason,
 			err.Error(),
 		)
 		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
@@ -188,10 +191,10 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if latest == "" {
 		msg := fmt.Sprintf("Cannot determine latest tag for policy: %s", err.Error())
 		pol.Status.LatestImage = ""
-		imagev1.SetImagePolicyReadiness(
+		conditions.MarkFalse(
 			&pol,
-			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
+			meta.ReadyCondition,
+			meta.FailedReason,
 			msg,
 		)
 
@@ -204,10 +207,10 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
 	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
-	imagev1.SetImagePolicyReadiness(
+	conditions.MarkTrue(
 		&pol,
-		metav1.ConditionTrue,
-		meta.ReconciliationSucceededReason,
+		meta.ReadyCondition,
+		meta.SucceededReason,
 		msg,
 	)
 

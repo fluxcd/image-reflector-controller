@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/predicates"
@@ -108,9 +109,9 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
-		imagev1.SetImageRepositoryReadiness(
+		conditions.MarkFalse(
 			&imageRepo,
-			metav1.ConditionFalse,
+			meta.ReadyCondition,
 			meta.SuspendedReason,
 			msg,
 		)
@@ -135,9 +136,9 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
-		imagev1.SetImageRepositoryReadiness(
+		conditions.MarkFalse(
 			&imageRepo,
-			metav1.ConditionFalse,
+			meta.ReadyCondition,
 			imagev1.ImageURLInvalidReason,
 			err.Error(),
 		)
@@ -171,7 +172,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{Requeue: true}, reconcileErr
 		}
 		// emit successful scan event
-		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.ReconciliationSucceededReason); rc != nil {
+		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.SucceededReason); rc != nil {
 			r.event(ctx, imageRepo, events.EventSeverityInfo, rc.Message)
 		}
 	}
@@ -196,20 +197,20 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			Namespace: imageRepo.GetNamespace(),
 			Name:      imageRepo.Spec.SecretRef.Name,
 		}, &authSecret); err != nil {
-			imagev1.SetImageRepositoryReadiness(
+			conditions.MarkFalse(
 				imageRepo,
-				metav1.ConditionFalse,
-				meta.ReconciliationFailedReason,
+				meta.ReadyCondition,
+				meta.FailedReason,
 				err.Error(),
 			)
 			return err
 		}
 		auth, err := authFromSecret(authSecret, ref)
 		if err != nil {
-			imagev1.SetImageRepositoryReadiness(
+			conditions.MarkFalse(
 				imageRepo,
-				metav1.ConditionFalse,
-				meta.ReconciliationFailedReason,
+				meta.ReadyCondition,
+				meta.FailedReason,
 				err.Error(),
 			)
 			return err
@@ -226,10 +227,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				Namespace: imageRepo.GetNamespace(),
 				Name:      imageRepo.Spec.CertSecretRef.Name,
 			}, &certSecret); err != nil {
-				imagev1.SetImageRepositoryReadiness(
+				conditions.MarkFalse(
 					imageRepo,
-					metav1.ConditionFalse,
-					meta.ReconciliationFailedReason,
+					meta.ReadyCondition,
+					meta.FailedReason,
 					err.Error(),
 				)
 				return err
@@ -245,10 +246,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 
 	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
 	if err != nil {
-		imagev1.SetImageRepositoryReadiness(
+		conditions.MarkFalse(
 			imageRepo,
-			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
+			meta.ReadyCondition,
+			meta.FailedReason,
 			err.Error(),
 		)
 		return err
@@ -272,10 +273,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		imageRepo.Status.SetLastHandledReconcileRequest(token)
 	}
 
-	imagev1.SetImageRepositoryReadiness(
+	conditions.MarkTrue(
 		imageRepo,
-		metav1.ConditionTrue,
-		meta.ReconciliationSucceededReason,
+		meta.ReadyCondition,
+		meta.SucceededReason,
 		fmt.Sprintf("successful scan, found %v tags", len(tags)),
 	)
 
