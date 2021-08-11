@@ -111,14 +111,21 @@ type ImagePolicyStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
-	return &p.Status.Conditions
+// GetConditions returns the slice of status conditions for the object.
+func (in ImagePolicy) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
 }
 
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reason, message string) {
-	p.Status.ObservedGeneration = p.ObjectMeta.Generation
-	meta.SetResourceCondition(p, meta.ReadyCondition, status, reason, message)
+// SetConditions sets the slice of status conditions for the object.
+func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
+}
+
+// GetStatusConditions returns a pointer to the slice of status
+// conditions. Deprecated: use GetConditions (and possibly
+// SetConditions) instead.
+func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
+	return &p.Status.Conditions
 }
 
 // +kubebuilder:storageversion

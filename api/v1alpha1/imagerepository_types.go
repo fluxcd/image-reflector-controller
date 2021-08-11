@@ -96,12 +96,6 @@ type ImageRepositoryStatus struct {
 	meta.ReconcileRequestStatus `json:",inline"`
 }
 
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImageRepositoryReadiness(ir *ImageRepository, status metav1.ConditionStatus, reason, message string) {
-	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
-	meta.SetResourceCondition(ir, meta.ReadyCondition, status, reason, message)
-}
-
 // GetStatusConditions returns a pointer to the Status.Conditions slice
 func (in *ImageRepository) GetStatusConditions() *[]metav1.Condition {
 	return &in.Status.Conditions

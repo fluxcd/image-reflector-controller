@@ -189,7 +189,7 @@ var _ = Describe("ImageRepository controller", func() {
 			lastScanTime := repo.Status.LastScanResult.ScanTime
 
 			repo.Annotations = map[string]string{
-				meta.ReconcileAtAnnotation: requestToken,
+				meta.ReconcileRequestAnnotation: requestToken,
 			}
 			Expect(r.Update(ctx, &repo)).To(Succeed())
 			Eventually(func() bool {
