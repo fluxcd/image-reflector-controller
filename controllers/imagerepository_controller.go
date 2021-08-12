@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,6 +50,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
@@ -90,7 +92,7 @@ type dockerConfig struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	reconcileStart := time.Now()
 
 	// NB: In general, if an error is returned then controller-runtime
@@ -102,6 +104,18 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	patcher, err := patch.NewHelper(&imageRepo, r.Client)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, err
+	}
+	defer func() {
+		if err := patcher.Patch(ctx, &imageRepo, patch.WithOwnedConditions{
+			Conditions: []string{meta.ReadyCondition},
+		}, patch.WithStatusObservedGeneration{}); err != nil {
+			retErr = kerrors.NewAggregate([]error{retErr, err})
+		}
+	}()
 
 	defer r.recordSuspension(ctx, imageRepo)
 
@@ -115,11 +129,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			meta.SuspendedReason,
 			msg,
 		)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			log.Error(err, "unable to update status")
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Info(msg)
 		return ctrl.Result{}, nil
 	}
 
@@ -142,9 +151,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			imagev1.ImageURLInvalidReason,
 			err.Error(),
 		)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -152,9 +158,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// Set CanonicalImageName based on the parsed reference
 	if c := ref.Context().String(); imageRepo.Status.CanonicalImageName != c {
 		imageRepo.Status.CanonicalImageName = c
-		if err = r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 	}
 
 	// Throttle scans based on spec Interval
@@ -164,9 +167,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if ok {
 		reconcileErr := r.scan(ctx, &imageRepo, ref)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 		if reconcileErr != nil {
 			r.event(ctx, imageRepo, events.EventSeverityError, reconcileErr.Error())
 			return ctrl.Result{Requeue: true}, reconcileErr
@@ -453,19 +453,6 @@ func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageR
 	} else {
 		r.MetricsRecorder.RecordSuspend(*objRef, imageRepo.Spec.Suspend)
 	}
-}
-
-func (r *ImageRepositoryReconciler) patchStatus(ctx context.Context, req ctrl.Request,
-	newStatus imagev1.ImageRepositoryStatus) error {
-	var res imagev1.ImageRepository
-	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
-		return err
-	}
-
-	patch := client.MergeFrom(res.DeepCopy())
-	res.Status = newStatus
-
-	return r.Status().Patch(ctx, &res, patch)
 }
 
 func parseAuthMap(config dockerConfig) (map[string]authn.AuthConfig, error) {
