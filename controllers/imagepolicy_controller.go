@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -41,6 +42,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/runtime/patch"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
@@ -73,7 +75,7 @@ type ImagePolicyReconcilerOptions struct {
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	reconcileStart := time.Now()
 
 	var pol imagev1.ImagePolicy
@@ -82,6 +84,18 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	log := logr.FromContext(ctx)
+
+	patcher, err := patch.NewHelper(&pol, r.Client)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, err
+	}
+	defer func() {
+		if err := patcher.Patch(ctx, &pol, patch.WithOwnedConditions{
+			Conditions: []string{meta.ReadyCondition},
+		}, patch.WithStatusObservedGeneration{}); err != nil {
+			retErr = kerrors.NewAggregate([]error{retErr, err})
+		}
+	}()
 
 	// record reconciliation duration
 	if r.MetricsRecorder != nil {
@@ -109,9 +123,6 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				ImageRepositoryNotReadyReason,
 				err.Error(),
 			)
-			if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
 			log.Error(err, "referenced ImageRepository does not exist")
 			return ctrl.Result{}, nil
 		}
@@ -142,14 +153,10 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			ImageRepositoryNotReadyReason,
 			msg,
 		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 		log.Info(msg)
 		return ctrl.Result{}, nil
 	}
 
-	var err error
 	policer, err := policy.PolicerFromSpec(pol.Spec.Policy)
 
 	var latest string
@@ -181,9 +188,6 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			meta.FailedReason,
 			err.Error(),
 		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 		r.event(ctx, pol, events.EventSeverityError, err.Error())
 		return ctrl.Result{}, err
 	}
@@ -197,10 +201,6 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			meta.FailedReason,
 			msg,
 		)
-
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{}, err
-		}
 		r.event(ctx, pol, events.EventSeverityError, msg)
 		return ctrl.Result{}, nil
 	}
