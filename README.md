@@ -17,7 +17,7 @@ guide](https://toolkit.fluxcd.io/guides/image-update/).
 If you just want to run this controller for development purposes, do
 
 ```bash
-kustomize build github.com/fluxcd/image-reflector-controller//config/default/?ref=main | kubectl apply -f-
+kubectl kustomize https://github.com/fluxcd/image-reflector-controller.git//config/default/?ref=main | kubectl apply -f-
 ```
 
 [auto]: https://github.com/fluxcd/image-automation-controller
