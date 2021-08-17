@@ -116,6 +116,9 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	r.RecordSuspend(ctx, &imageRepo, imageRepo.Spec.Suspend)
+	if imageRepo.Spec.Suspend {
+		return ctrl.Result{}, nil
+	}
 
 	patcher, err := patch.NewHelper(&imageRepo, r.Client)
 	if err != nil {
@@ -139,17 +142,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		r.RecordReadiness(ctx, &imageRepo)
 		r.RecordDuration(ctx, &imageRepo, reconcileStart)
 	}()
-
-	if imageRepo.Spec.Suspend {
-		msg := "ImageRepository is suspended, skipping reconciliation"
-		conditions.MarkFalse(
-			&imageRepo,
-			meta.ReadyCondition,
-			meta.SuspendedReason,
-			msg,
-		)
-		return ctrl.Result{}, nil
-	}
 
 	log := logr.FromContext(ctx)
 
