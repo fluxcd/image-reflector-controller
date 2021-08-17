@@ -30,6 +30,7 @@ import (
 	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/fluxcd/pkg/runtime/client"
+	helpers "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/leaderelection"
 	"github.com/fluxcd/pkg/runtime/logger"
@@ -140,14 +141,15 @@ func main() {
 	probes.SetupChecks(mgr, setupLog)
 	pprof.SetupHandlers(mgr, setupLog)
 
+	events := helpers.MakeEvents(mgr, controllerName, eventRecorder)
+	metrics := helpers.MustMakeMetrics(mgr)
+
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:                mgr.GetClient(),
-		Scheme:                mgr.GetScheme(),
-		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
-		MetricsRecorder:       metricsRecorder,
-		Database:              db,
-		AwsAutoLogin:          awsAutoLogin,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Database: db,
+		Events:   events,
+		Metrics:  metrics,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
@@ -155,12 +157,11 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.ImagePolicyReconciler{
-		Client:                mgr.GetClient(),
-		Scheme:                mgr.GetScheme(),
-		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
-		MetricsRecorder:       metricsRecorder,
-		Database:              db,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Database: db,
+		Events:   events,
+		Metrics:  metrics,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
