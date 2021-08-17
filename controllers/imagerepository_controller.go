@@ -39,8 +39,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	kuberecorder "k8s.io/client-go/tools/record"
-	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -48,8 +46,8 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
+	helpers "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
-	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
@@ -66,17 +64,22 @@ const (
 	CACert     = "caFile"
 )
 
+const (
+	EventReasonScanFailed    = "ScanFailed"
+	EventReasonScanSucceeded = "ScanSucceeded"
+)
+
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              interface {
+	Scheme   *runtime.Scheme
+	Database interface {
 		DatabaseWriter
 		DatabaseReader
 	}
+
+	helpers.Events
+	helpers.Metrics
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -105,21 +108,30 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	r.RecordSuspend(ctx, &imageRepo, imageRepo.Spec.Suspend)
+
 	patcher, err := patch.NewHelper(&imageRepo, r.Client)
 	if err != nil {
 		return ctrl.Result{Requeue: true}, err
 	}
 	defer func() {
+		// if the reconcile request annotation was set, consider it
+		// handled (NB it doesn't matter here if it was changed since last
+		// time)
+		if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
+			imageRepo.Status.SetLastHandledReconcileRequest(token)
+		}
+
 		if err := patcher.Patch(ctx, &imageRepo, patch.WithOwnedConditions{
 			Conditions: []string{meta.ReadyCondition},
 		}, patch.WithStatusObservedGeneration{}); err != nil {
 			retErr = kerrors.NewAggregate([]error{retErr, err})
 		}
+
+		// Always record readiness and duration metrics
+		r.RecordReadiness(ctx, &imageRepo)
+		r.RecordDuration(ctx, &imageRepo, reconcileStart)
 	}()
-
-	defer r.recordSuspension(ctx, imageRepo)
-
-	log := logr.FromContext(ctx)
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
@@ -132,16 +144,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	// Record readiness metric
-	defer r.recordReadinessMetric(ctx, &imageRepo)
-	// Record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
-	}
+	log := logr.FromContext(ctx)
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
@@ -168,12 +171,12 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if ok {
 		reconcileErr := r.scan(ctx, &imageRepo, ref)
 		if reconcileErr != nil {
-			r.event(ctx, imageRepo, events.EventSeverityError, reconcileErr.Error())
+			r.Event(ctx, &imageRepo, events.EventSeverityError, EventReasonScanFailed, reconcileErr.Error())
 			return ctrl.Result{Requeue: true}, reconcileErr
 		}
 		// emit successful scan event
 		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.SucceededReason); rc != nil {
-			r.event(ctx, imageRepo, events.EventSeverityInfo, rc.Message)
+			r.Event(ctx, &imageRepo, events.EventSeverityInfo, EventReasonScanSucceeded, rc.Message)
 		}
 	}
 
@@ -264,13 +267,6 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	imageRepo.Status.LastScanResult = &imagev1.ScanResult{
 		TagCount: len(tags),
 		ScanTime: scanTime,
-	}
-
-	// if the reconcile request annotation was set, consider it
-	// handled (NB it doesn't matter here if it was changed since last
-	// time)
-	if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
-		imageRepo.Status.SetLastHandledReconcileRequest(token)
 	}
 
 	conditions.MarkTrue(
@@ -394,64 +390,6 @@ func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticat
 		return authn.FromConfig(auth), nil
 	default:
 		return nil, fmt.Errorf("unknown secret type %q", secret.Type)
-	}
-}
-
-// event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.ImageRepository, severity, msg string) {
-	if r.EventRecorder != nil {
-		r.EventRecorder.Eventf(&repo, "Normal", severity, msg)
-	}
-	if r.ExternalEventRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &repo)
-		if err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
-			return
-		}
-
-		if err := r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg); err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
-			return
-		}
-	}
-}
-
-func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1.ImageRepository) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-
-	objRef, err := reference.GetReference(r.Scheme, repo)
-	if err != nil {
-		logr.FromContext(ctx).Error(err, "unable to record readiness metric")
-		return
-	}
-	if rc := apimeta.FindStatusCondition(repo.Status.Conditions, meta.ReadyCondition); rc != nil {
-		r.MetricsRecorder.RecordCondition(*objRef, *rc, !repo.DeletionTimestamp.IsZero())
-	} else {
-		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
-			Type:   meta.ReadyCondition,
-			Status: metav1.ConditionUnknown,
-		}, !repo.DeletionTimestamp.IsZero())
-	}
-}
-
-func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageRepo imagev1.ImageRepository) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-	log := logr.FromContext(ctx)
-
-	objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-	if err != nil {
-		log.Error(err, "unable to record suspended metric")
-		return
-	}
-
-	if !imageRepo.DeletionTimestamp.IsZero() {
-		r.MetricsRecorder.RecordSuspend(*objRef, false)
-	} else {
-		r.MetricsRecorder.RecordSuspend(*objRef, imageRepo.Spec.Suspend)
 	}
 }
 
