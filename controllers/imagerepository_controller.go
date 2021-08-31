@@ -38,16 +38,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	kuberecorder "k8s.io/client-go/tools/record"
-	"k8s.io/client-go/tools/reference"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/conditions"
+	helpers "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
-	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
@@ -63,17 +64,22 @@ const (
 	CACert     = "caFile"
 )
 
+const (
+	EventReasonScanFailed    = "ScanFailed"
+	EventReasonScanSucceeded = "ScanSucceeded"
+)
+
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              interface {
+	Scheme   *runtime.Scheme
+	Database interface {
 		DatabaseWriter
 		DatabaseReader
 	}
+
+	helpers.Events
+	helpers.Metrics
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -89,7 +95,7 @@ type dockerConfig struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	reconcileStart := time.Now()
 
 	// NB: In general, if an error is returned then controller-runtime
@@ -102,48 +108,44 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	defer r.recordSuspension(ctx, imageRepo)
-
-	log := logr.FromContext(ctx)
-
+	r.RecordSuspend(ctx, &imageRepo, imageRepo.Spec.Suspend)
 	if imageRepo.Spec.Suspend {
-		msg := "ImageRepository is suspended, skipping reconciliation"
-		imagev1.SetImageRepositoryReadiness(
-			&imageRepo,
-			metav1.ConditionFalse,
-			meta.SuspendedReason,
-			msg,
-		)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			log.Error(err, "unable to update status")
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Info(msg)
 		return ctrl.Result{}, nil
 	}
 
-	// Record readiness metric
-	defer r.recordReadinessMetric(ctx, &imageRepo)
-	// Record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
+	patcher, err := patch.NewHelper(&imageRepo, r.Client)
+	if err != nil {
+		return ctrl.Result{Requeue: true}, err
 	}
+	defer func() {
+		// if the reconcile request annotation was set, consider it
+		// handled (NB it doesn't matter here if it was changed since last
+		// time)
+		if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
+			imageRepo.Status.SetLastHandledReconcileRequest(token)
+		}
+
+		if err := patcher.Patch(ctx, &imageRepo, patch.WithOwnedConditions{
+			Conditions: []string{meta.ReadyCondition},
+		}, patch.WithStatusObservedGeneration{}); err != nil {
+			retErr = kerrors.NewAggregate([]error{retErr, err})
+		}
+
+		// Always record readiness and duration metrics
+		r.RecordReadiness(ctx, &imageRepo)
+		r.RecordDuration(ctx, &imageRepo, reconcileStart)
+	}()
+
+	log := logr.FromContext(ctx)
 
 	ref, err := name.ParseReference(imageRepo.Spec.Image)
 	if err != nil {
-		imagev1.SetImageRepositoryReadiness(
+		conditions.MarkFalse(
 			&imageRepo,
-			metav1.ConditionFalse,
+			meta.ReadyCondition,
 			imagev1.ImageURLInvalidReason,
 			err.Error(),
 		)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -151,9 +153,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// Set CanonicalImageName based on the parsed reference
 	if c := ref.Context().String(); imageRepo.Status.CanonicalImageName != c {
 		imageRepo.Status.CanonicalImageName = c
-		if err = r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 	}
 
 	// Throttle scans based on spec Interval
@@ -163,16 +162,13 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if ok {
 		reconcileErr := r.scan(ctx, &imageRepo, ref)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
 		if reconcileErr != nil {
-			r.event(ctx, imageRepo, events.EventSeverityError, reconcileErr.Error())
+			r.Event(ctx, &imageRepo, events.EventSeverityError, EventReasonScanFailed, reconcileErr.Error())
 			return ctrl.Result{Requeue: true}, reconcileErr
 		}
 		// emit successful scan event
-		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.ReconciliationSucceededReason); rc != nil {
-			r.event(ctx, imageRepo, events.EventSeverityInfo, rc.Message)
+		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.SucceededReason); rc != nil {
+			r.Event(ctx, &imageRepo, events.EventSeverityInfo, EventReasonScanSucceeded, rc.Message)
 		}
 	}
 
@@ -196,20 +192,20 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			Namespace: imageRepo.GetNamespace(),
 			Name:      imageRepo.Spec.SecretRef.Name,
 		}, &authSecret); err != nil {
-			imagev1.SetImageRepositoryReadiness(
+			conditions.MarkFalse(
 				imageRepo,
-				metav1.ConditionFalse,
-				meta.ReconciliationFailedReason,
+				meta.ReadyCondition,
+				meta.FailedReason,
 				err.Error(),
 			)
 			return err
 		}
 		auth, err := authFromSecret(authSecret, ref)
 		if err != nil {
-			imagev1.SetImageRepositoryReadiness(
+			conditions.MarkFalse(
 				imageRepo,
-				metav1.ConditionFalse,
-				meta.ReconciliationFailedReason,
+				meta.ReadyCondition,
+				meta.FailedReason,
 				err.Error(),
 			)
 			return err
@@ -226,10 +222,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				Namespace: imageRepo.GetNamespace(),
 				Name:      imageRepo.Spec.CertSecretRef.Name,
 			}, &certSecret); err != nil {
-				imagev1.SetImageRepositoryReadiness(
+				conditions.MarkFalse(
 					imageRepo,
-					metav1.ConditionFalse,
-					meta.ReconciliationFailedReason,
+					meta.ReadyCondition,
+					meta.FailedReason,
 					err.Error(),
 				)
 				return err
@@ -245,10 +241,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 
 	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
 	if err != nil {
-		imagev1.SetImageRepositoryReadiness(
+		conditions.MarkFalse(
 			imageRepo,
-			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
+			meta.ReadyCondition,
+			meta.FailedReason,
 			err.Error(),
 		)
 		return err
@@ -265,17 +261,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		ScanTime: scanTime,
 	}
 
-	// if the reconcile request annotation was set, consider it
-	// handled (NB it doesn't matter here if it was changed since last
-	// time)
-	if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
-		imageRepo.Status.SetLastHandledReconcileRequest(token)
-	}
-
-	imagev1.SetImageRepositoryReadiness(
+	conditions.MarkTrue(
 		imageRepo,
-		metav1.ConditionTrue,
-		meta.ReconciliationSucceededReason,
+		meta.ReadyCondition,
+		meta.SucceededReason,
 		fmt.Sprintf("successful scan, found %v tags", len(tags)),
 	)
 
@@ -394,77 +383,6 @@ func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticat
 	default:
 		return nil, fmt.Errorf("unknown secret type %q", secret.Type)
 	}
-}
-
-// event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.ImageRepository, severity, msg string) {
-	if r.EventRecorder != nil {
-		r.EventRecorder.Eventf(&repo, "Normal", severity, msg)
-	}
-	if r.ExternalEventRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &repo)
-		if err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
-			return
-		}
-
-		if err := r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg); err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
-			return
-		}
-	}
-}
-
-func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1.ImageRepository) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-
-	objRef, err := reference.GetReference(r.Scheme, repo)
-	if err != nil {
-		logr.FromContext(ctx).Error(err, "unable to record readiness metric")
-		return
-	}
-	if rc := apimeta.FindStatusCondition(repo.Status.Conditions, meta.ReadyCondition); rc != nil {
-		r.MetricsRecorder.RecordCondition(*objRef, *rc, !repo.DeletionTimestamp.IsZero())
-	} else {
-		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
-			Type:   meta.ReadyCondition,
-			Status: metav1.ConditionUnknown,
-		}, !repo.DeletionTimestamp.IsZero())
-	}
-}
-
-func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageRepo imagev1.ImageRepository) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-	log := logr.FromContext(ctx)
-
-	objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-	if err != nil {
-		log.Error(err, "unable to record suspended metric")
-		return
-	}
-
-	if !imageRepo.DeletionTimestamp.IsZero() {
-		r.MetricsRecorder.RecordSuspend(*objRef, false)
-	} else {
-		r.MetricsRecorder.RecordSuspend(*objRef, imageRepo.Spec.Suspend)
-	}
-}
-
-func (r *ImageRepositoryReconciler) patchStatus(ctx context.Context, req ctrl.Request,
-	newStatus imagev1.ImageRepositoryStatus) error {
-	var res imagev1.ImageRepository
-	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
-		return err
-	}
-
-	patch := client.MergeFrom(res.DeepCopy())
-	res.Status = newStatus
-
-	return r.Status().Patch(ctx, &res, patch)
 }
 
 func parseAuthMap(config dockerConfig) (map[string]authn.AuthConfig, error) {

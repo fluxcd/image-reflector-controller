@@ -8,8 +8,8 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/fluxcd/image-reflector-controller/api v0.11.1
-	github.com/fluxcd/pkg/apis/meta v0.10.0
-	github.com/fluxcd/pkg/runtime v0.12.0
+	github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1
+	github.com/fluxcd/pkg/runtime v0.13.0-rc.2
 	github.com/fluxcd/pkg/version v0.1.0
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-containerregistry v0.4.0

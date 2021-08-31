@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	// +kubebuilder:scaffold:imports
@@ -135,21 +136,18 @@ var _ = Describe("ImageRepository controller", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 			defer cancel()
 
-			r := imageRepoReconciler
+			Expect(k8sClient.Create(ctx, &repo)).To(Succeed())
 
-			err := r.Create(ctx, &repo)
-			Expect(err).ToNot(HaveOccurred())
+			// call this explicitly, since suspend by definition will
+			// not change anything we can observe
+			res, err := imageRepoReconciler.Reconcile(ctx, ctrl.Request{NamespacedName: imageRepoName})
+			Expect(err).To(BeNil())
+			Expect(res.Requeue).ToNot(BeTrue())
 
-			Eventually(func() bool {
-				err := r.Get(ctx, imageRepoName, &repo)
-				return err == nil && len(repo.Status.Conditions) > 0
-			}, timeout, interval).Should(BeTrue())
-			Expect(repo.Status.CanonicalImageName).To(Equal(""))
-			cond := repo.Status.Conditions[0]
-			Expect(cond.Message).To(
-				Equal("ImageRepository is suspended, skipping reconciliation"))
-			Expect(cond.Reason).To(
-				Equal(meta.SuspendedReason))
+			// make sure no status was written
+			var ir imagev1.ImageRepository
+			Expect(k8sClient.Get(ctx, imageRepoName, &ir)).To(Succeed())
+			Expect(ir.Status.CanonicalImageName).To(Equal(""))
 		})
 	})
 
@@ -188,7 +186,7 @@ var _ = Describe("ImageRepository controller", func() {
 			lastScanTime := repo.Status.LastScanResult.ScanTime
 
 			repo.Annotations = map[string]string{
-				meta.ReconcileAtAnnotation: requestToken,
+				meta.ReconcileRequestAnnotation: requestToken,
 			}
 			Expect(r.Update(ctx, &repo)).To(Succeed())
 			Eventually(func() bool {
