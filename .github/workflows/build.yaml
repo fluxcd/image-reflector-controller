@@ -23,13 +23,9 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.16.x
-    - name: Set up kubebuilder
-      uses: fluxcd/pkg/actions/kubebuilder@main
+    - name: Setup envtest
+      uses: fluxcd/pkg/actions/envtest@main
     - name: Run tests
       run: make test
-      env:
-        KUBEBUILDER_ASSETS: ${{ github.workspace }}/kubebuilder/bin
     - name: Build container image
       run: make docker-build IMG=ghcr.io/fluxcd/${{ github.event.repository.name }}:latest
-      env:
-        KUBEBUILDER_ASSETS: ${{ github.workspace }}/kubebuilder/bin
