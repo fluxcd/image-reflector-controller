@@ -39,7 +39,8 @@ var _ = Context("Registry handler", func() {
 		defer srv.Close()
 
 		uploadedTags := []string{"tag1", "tag2"}
-		repoString := loadImages(srv, "testimage", uploadedTags)
+		repoString, err := loadImages(srv, "testimage", uploadedTags)
+		Expect(err).ToNot(HaveOccurred())
 		repo, _ := name.NewRepository(repoString)
 
 		tags, err := remote.List(repo)
@@ -95,16 +96,22 @@ func registryName(srv *httptest.Server) string {
 // image repo
 // name. https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
 // has an example of loading a test registry with a random image.
-func loadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) string {
+func loadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) (string, error) {
 	imgRepo := registryName(srv) + "/" + imageName
 	for _, tag := range versions {
 		imgRef, err := name.NewTag(imgRepo + ":" + tag)
-		Expect(err).ToNot(HaveOccurred())
+		if err != nil {
+			return imgRepo, err
+		}
 		img, err := random.Image(512, 1)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(remote.Write(imgRef, img, options...)).To(Succeed())
+		if err != nil {
+			return imgRepo, err
+		}
+		if err := remote.Write(imgRef, img, options...); err != nil {
+			return imgRepo, err
+		}
 	}
-	return imgRepo
+	return imgRepo, nil
 }
 
 // the go-containerregistry test registry implementation does not
@@ -134,7 +141,9 @@ func (h *tagListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Name: repo,
 				Tags: tags,
 			}
-			Expect(json.NewEncoder(w).Encode(result)).To(Succeed())
+			if err := json.NewEncoder(w).Encode(result); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			println("Requested tags", repo, strings.Join(tags, ", "))
 			return
 		}

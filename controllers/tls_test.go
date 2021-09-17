@@ -161,7 +161,8 @@ var _ = Context("using TLS certificates", func() {
 		pool.AddCert(srv.Certificate())
 		transport.TLSClientConfig.RootCAs = pool
 		transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-		imgRepo := loadImages(srv, "image", []string{"1.0.0"}, remote.WithTransport(transport))
+		imgRepo, err := loadImages(srv, "image", []string{"1.0.0"}, remote.WithTransport(transport))
+		Expect(err).ToNot(HaveOccurred())
 
 		secretName := "tls-secret"
 		tlsSecret := corev1.Secret{
