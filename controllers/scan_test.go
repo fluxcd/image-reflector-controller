@@ -19,203 +19,197 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"net/http/httptest"
+	"testing"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	"github.com/fluxcd/image-reflector-controller/internal/database"
 	// +kubebuilder:scaffold:imports
 )
 
-var _ = Describe("ImageRepository controller", func() {
-	const imageName = "alpine-image"
-	var repo imagev1.ImageRepository
+func TestImageRepositoryReconciler_canonicalImageName(t *testing.T) {
+	g := NewWithT(t)
 
-	var registryServer *httptest.Server
+	// Would be good to test this without needing to do the scanning, since
+	// 1. better to not rely on external services being available
+	// 2. probably going to want to have several test cases
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: reconciliationInterval},
+			Image:    "alpine",
+		},
+	}
+	imageRepoName := types.NamespacedName{
+		Name:      "test-canonical-name-" + randStringRunes(5),
+		Namespace: "default",
+	}
 
-	BeforeEach(func() {
-		registryServer = newRegistryServer()
-	})
+	repo.Name = imageRepoName.Name
+	repo.Namespace = imageRepoName.Namespace
 
-	AfterEach(func() {
-		registryServer.Close()
-		Expect(k8sClient.Delete(context.Background(), &repo)).To(Succeed())
-	})
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
 
-	It("expands the canonical image name", func() {
-		// would be good to test this without needing to do the scanning, since
-		// 1. better to not rely on external services being available
-		// 2. probably going to want to have several test cases
-		repo = imagev1.ImageRepository{
-			Spec: imagev1.ImageRepositorySpec{
-				Interval: metav1.Duration{Duration: reconciliationInterval},
-				Image:    "alpine",
-			},
-		}
-		imageRepoName := types.NamespacedName{
-			Name:      imageName,
-			Namespace: "default",
-		}
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
 
-		repo.Name = imageRepoName.Name
-		repo.Namespace = imageRepoName.Namespace
+	g.Eventually(func() bool {
+		err := testEnv.Get(context.Background(), imageRepoName, &repo)
+		return err == nil && repo.Status.LastScanResult != nil
+	}, timeout).Should(BeTrue())
+	g.Expect(repo.Name).To(Equal(imageRepoName.Name))
+	g.Expect(repo.Namespace).To(Equal(imageRepoName.Namespace))
+	g.Expect(repo.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
+}
 
-		ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-		defer cancel()
+func TestImageRepositoryReconciler_fetchImageTags(t *testing.T) {
+	g := NewWithT(t)
 
-		r := imageRepoReconciler
-		err := r.Create(ctx, &repo)
-		Expect(err).ToNot(HaveOccurred())
+	registryServer := newRegistryServer()
+	defer registryServer.Close()
 
-		Eventually(func() bool {
-			err := r.Get(context.Background(), imageRepoName, &repo)
-			return err == nil && repo.Status.LastScanResult != nil
-		}, timeout, interval).Should(BeTrue())
-		Expect(repo.Name).To(Equal(imageName))
-		Expect(repo.Namespace).To(Equal("default"))
-		Expect(repo.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
-	})
+	versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
+	imgRepo, err := loadImages(registryServer, "test-fetch-"+randStringRunes(5), versions)
+	g.Expect(err).ToNot(HaveOccurred())
 
-	It("fetches the tags for an image", func() {
-		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := loadImages(registryServer, "test-fetch", versions)
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: reconciliationInterval},
+			Image:    imgRepo,
+		},
+	}
+	objectName := types.NamespacedName{
+		Name:      "test-fetch-img-tags-" + randStringRunes(5),
+		Namespace: "default",
+	}
 
-		repo = imagev1.ImageRepository{
-			Spec: imagev1.ImageRepositorySpec{
-				Interval: metav1.Duration{Duration: reconciliationInterval},
-				Image:    imgRepo,
-			},
-		}
-		objectName := types.NamespacedName{
-			Name:      "random",
-			Namespace: "default",
-		}
+	repo.Name = objectName.Name
+	repo.Namespace = objectName.Namespace
 
-		repo.Name = objectName.Name
-		repo.Namespace = objectName.Namespace
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
 
-		ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-		defer cancel()
+	g.Eventually(func() bool {
+		err := testEnv.Get(context.Background(), objectName, &repo)
+		return err == nil && repo.Status.LastScanResult != nil
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+}
 
-		r := imageRepoReconciler
-		Expect(r.Create(ctx, &repo)).To(Succeed())
+func TestImageRepositoryReconciler_repositorySuspended(t *testing.T) {
+	g := NewWithT(t)
 
-		Eventually(func() bool {
-			err := r.Get(context.Background(), objectName, &repo)
-			return err == nil && repo.Status.LastScanResult != nil
-		}, timeout, interval).Should(BeTrue())
-		Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-		Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-	})
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: reconciliationInterval},
+			Image:    "alpine",
+			Suspend:  true,
+		},
+	}
+	imageRepoName := types.NamespacedName{
+		Name:      "test-suspended-repo-" + randStringRunes(5),
+		Namespace: "default",
+	}
 
-	Context("when the ImageRepository is suspended", func() {
-		It("does not process the image", func() {
-			repo = imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					Interval: metav1.Duration{Duration: reconciliationInterval},
-					Image:    "alpine",
-					Suspend:  true,
-				},
-			}
-			imageRepoName := types.NamespacedName{
-				Name:      imageName,
-				Namespace: "default",
-			}
+	repo.Name = imageRepoName.Name
+	repo.Namespace = imageRepoName.Namespace
 
-			repo.Name = imageRepoName.Name
-			repo.Namespace = imageRepoName.Namespace
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
 
-			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-			defer cancel()
+	r := &ImageRepositoryReconciler{
+		Client:   testEnv,
+		Scheme:   scheme.Scheme,
+		Database: database.NewBadgerDatabase(testBadgerDB),
+	}
 
-			Expect(k8sClient.Create(ctx, &repo)).To(Succeed())
+	key := client.ObjectKeyFromObject(&repo)
+	res, err := r.Reconcile(logr.NewContext(ctx, log.NullLogger{}), ctrl.Request{NamespacedName: key})
+	g.Expect(err).To(BeNil())
+	g.Expect(res.Requeue).ToNot(BeTrue())
 
-			// call this explicitly, since suspend by definition will
-			// not change anything we can observe
-			res, err := imageRepoReconciler.Reconcile(ctx, ctrl.Request{NamespacedName: imageRepoName})
-			Expect(err).To(BeNil())
-			Expect(res.Requeue).ToNot(BeTrue())
+	// Make sure no status was written.
+	var ir imagev1.ImageRepository
+	g.Eventually(func() bool {
+		err := testEnv.Get(ctx, imageRepoName, &ir)
+		return err == nil
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(ir.Status.CanonicalImageName).To(Equal(""))
+}
 
-			// make sure no status was written
-			var ir imagev1.ImageRepository
-			Expect(k8sClient.Get(ctx, imageRepoName, &ir)).To(Succeed())
-			Expect(ir.Status.CanonicalImageName).To(Equal(""))
-		})
-	})
+func TestImageRepositoryReconciler_reconcileAtAnnotation(t *testing.T) {
+	g := NewWithT(t)
 
-	Context("when the ImageRepository gets a 'reconcile at' annotation", func() {
-		It("scans right away", func() {
-			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
+	registryServer := newRegistryServer()
+	defer registryServer.Close()
 
-			repo = imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					Interval: metav1.Duration{Duration: reconciliationInterval},
-					Image:    imgRepo,
-				},
-			}
-			objectName := types.NamespacedName{
-				Name:      "random",
-				Namespace: "default",
-			}
+	imgRepo, err := loadImages(registryServer, "test-annot-"+randStringRunes(5), []string{"1.0.0"})
+	g.Expect(err).ToNot(HaveOccurred())
 
-			repo.Name = objectName.Name
-			repo.Namespace = objectName.Namespace
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: reconciliationInterval},
+			Image:    imgRepo,
+		},
+	}
+	objectName := types.NamespacedName{
+		Name:      "test-reconcile-at-annot-" + randStringRunes(5),
+		Namespace: "default",
+	}
 
-			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-			defer cancel()
+	repo.Name = objectName.Name
+	repo.Namespace = objectName.Namespace
 
-			r := imageRepoReconciler
-			err := r.Create(ctx, &repo)
-			Expect(err).ToNot(HaveOccurred())
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
 
-			// It'll get scanned on creation
-			Eventually(func() bool {
-				err := r.Get(ctx, objectName, &repo)
-				return err == nil && repo.Status.LastScanResult != nil
-			}, timeout, interval).Should(BeTrue())
+	g.Eventually(func() bool {
+		err := testEnv.Get(ctx, objectName, &repo)
+		return err == nil && repo.Status.LastScanResult != nil
+	}, timeout, interval).Should(BeTrue())
 
-			requestToken := "this can be anything, so long as it's a change"
-			lastScanTime := repo.Status.LastScanResult.ScanTime
+	requestToken := "this can be anything, so long as it's a change"
+	lastScanTime := repo.Status.LastScanResult.ScanTime
 
-			repo.Annotations = map[string]string{
-				meta.ReconcileRequestAnnotation: requestToken,
-			}
-			Expect(r.Update(ctx, &repo)).To(Succeed())
-			Eventually(func() bool {
-				err := r.Get(ctx, objectName, &repo)
-				return err == nil && repo.Status.LastScanResult.ScanTime.After(lastScanTime.Time)
-			}, timeout, interval).Should(BeTrue())
-			Expect(repo.Status.LastHandledReconcileAt).To(Equal(requestToken))
-		})
-	})
+	repo.Annotations = map[string]string{
+		meta.ReconcileRequestAnnotation: requestToken,
+	}
+	g.Expect(testEnv.Update(ctx, &repo)).To(Succeed())
+	g.Eventually(func() bool {
+		err := testEnv.Get(ctx, objectName, &repo)
+		return err == nil && repo.Status.LastScanResult.ScanTime.After(lastScanTime.Time)
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(repo.Status.LastHandledReconcileAt).To(Equal(requestToken))
+}
 
-	Context("using an authenticated registry", func() {
+func TestImageRepositoryReconciler_authRegistry(t *testing.T) {
+	g := NewWithT(t)
 
-		var (
-			secret             *corev1.Secret
-			username, password string
-		)
+	username, password := "authuser", "authpass"
+	registryServer := newAuthenticatedRegistryServer(username, password)
+	defer registryServer.Close()
 
-		BeforeEach(func() {
-			username, password = "authuser", "authpass"
-			// a little clumsy -- replace the registry server
-			registryServer.Close()
-			registryServer = newAuthenticatedRegistryServer(username, password)
-			// this mimics what you get if you use
-			//     docker create secret docker-registry ...
-			secret = &corev1.Secret{
-				Type: "kubernetes.io/dockerconfigjson",
-				StringData: map[string]string{
-					".dockerconfigjson": fmt.Sprintf(`
+	// this mimics what you get if you use
+	//     kubectl create secret docker-registry ...
+	secret := &corev1.Secret{
+		Type: "kubernetes.io/dockerconfigjson",
+		StringData: map[string]string{
+			".dockerconfigjson": fmt.Sprintf(`
 {
   "auths": {
     %q: {
@@ -225,89 +219,48 @@ var _ = Describe("ImageRepository controller", func() {
   }
 }
 `, registryName(registryServer), username, password),
-				},
-			}
-			secret.Namespace = "default"
-			secret.Name = "docker"
-			Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
-		})
+		},
+	}
+	secret.Namespace = "default"
+	secret.Name = "docker"
+	g.Expect(testEnv.Create(context.Background(), secret)).To(Succeed())
+	defer func() {
+		g.Expect(testEnv.Delete(context.Background(), secret)).To(Succeed())
+	}()
 
-		AfterEach(func() {
-			Expect(k8sClient.Delete(context.Background(), secret)).To(Succeed())
-		})
+	versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
+	imgRepo, err := loadImages(registryServer, "test-authn-"+randStringRunes(5),
+		versions, remote.WithAuth(&authn.Basic{
+			Username: username,
+			Password: password,
+		}))
+	g.Expect(err).ToNot(HaveOccurred())
 
-		It("can scan the registry", func() {
-			versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-			// this, as a side-effect, verifies that the username and password work with the registry
-			imgRepo := loadImages(registryServer, "test-auth", versions, remote.WithAuth(&authn.Basic{
-				Username: username,
-				Password: password,
-			}))
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: reconciliationInterval},
+			Image:    imgRepo,
+			SecretRef: &meta.LocalObjectReference{
+				Name: "docker",
+			},
+		},
+	}
+	objectName := types.NamespacedName{
+		Name:      "test-auth-reg-" + randStringRunes(5),
+		Namespace: "default",
+	}
 
-			repo = imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					Interval: metav1.Duration{Duration: reconciliationInterval},
-					Image:    imgRepo,
-					SecretRef: &meta.LocalObjectReference{
-						Name: "docker",
-					},
-				},
-			}
-			objectName := types.NamespacedName{
-				Name:      "random",
-				Namespace: "default",
-			}
+	repo.Name = objectName.Name
+	repo.Namespace = objectName.Namespace
 
-			repo.Name = objectName.Name
-			repo.Namespace = objectName.Namespace
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
 
-			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-			defer cancel()
-
-			r := imageRepoReconciler
-			Expect(r.Create(ctx, &repo)).To(Succeed())
-
-			Eventually(func() bool {
-				err := r.Get(context.Background(), objectName, &repo)
-				return err == nil && repo.Status.LastScanResult != nil
-			}, timeout, interval).Should(BeTrue())
-			Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-			Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-		})
-	})
-
-	Context("ImageRepository image attribute is invalid", func() {
-		It("fails with an error when prefixed with a scheme", func() {
-			imgRepo := "https://" + loadImages(registryServer, "test-fetch", []string{"1.0.0"})
-
-			repo = imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					Interval: metav1.Duration{Duration: reconciliationInterval},
-					Image:    imgRepo,
-				},
-			}
-			objectName := types.NamespacedName{
-				Name:      "random",
-				Namespace: "default",
-			}
-
-			repo.Name = objectName.Name
-			repo.Namespace = objectName.Namespace
-
-			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-			defer cancel()
-
-			r := imageRepoReconciler
-			err := r.Create(ctx, &repo)
-			Expect(err).ToNot(HaveOccurred())
-
-			var ready *metav1.Condition
-			Eventually(func() bool {
-				_ = r.Get(ctx, objectName, &repo)
-				ready = apimeta.FindStatusCondition(*repo.GetStatusConditions(), meta.ReadyCondition)
-				return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
-			}, timeout, interval).Should(BeTrue())
-			Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
-		})
-	})
-})
+	g.Eventually(func() bool {
+		err := testEnv.Get(ctx, objectName, &repo)
+		return err == nil && repo.Status.LastScanResult != nil
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+}

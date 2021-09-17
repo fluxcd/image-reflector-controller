@@ -51,7 +51,8 @@ var _ = Describe("ImagePolicy controller", func() {
 		When("Using SemVerPolicy", func() {
 			It("calculates an image from a repository's tags", func() {
 				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -116,7 +117,8 @@ var _ = Describe("ImagePolicy controller", func() {
 		When("Using SemVerPolicy with invalid range", func() {
 			It("fails with invalid policy error", func() {
 				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -182,7 +184,8 @@ var _ = Describe("ImagePolicy controller", func() {
 		When("Usign AlphabeticalPolicy", func() {
 			It("calculates an image from a repository's tags", func() {
 				versions := []string{"xenial", "yakkety", "zesty", "artful", "bionic"}
-				imgRepo := loadImages(registryServer, "test-alphabetical-policy-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "test-alphabetical-policy-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -244,7 +247,8 @@ var _ = Describe("ImagePolicy controller", func() {
 		When("valid regex supplied", func() {
 			It("correctly filters the repo tags", func() {
 				versions := []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
@@ -312,7 +316,8 @@ var _ = Describe("ImagePolicy controller", func() {
 		When("invalid regex supplied", func() {
 			It("fails to reconcile returning error", func() {
 				versions := []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
@@ -387,7 +392,8 @@ var _ = Describe("ImagePolicy controller", func() {
 			It("grants access", func() {
 				versions := []string{"1.0.0", "1.0.1"}
 				imageName := "test-acl-" + randStringRunes(5)
-				imgRepo := loadImages(registryServer, imageName, versions)
+				imgRepo, err := loadImages(registryServer, imageName, versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -446,7 +452,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
 
 				// Updating the image should reconcile the cross-namespace policy
-				imgRepo = loadImages(registryServer, imageName, []string{"1.0.2"})
+				imgRepo, err = loadImages(registryServer, imageName, []string{"1.0.2"})
+				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() bool {
 					err := r.Get(ctx, imageObjectName, &repo)
 					return err == nil && repo.Status.LastScanResult.TagCount == len(versions)+1
@@ -474,7 +481,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				defer k8sClient.Delete(context.Background(), policyNamespace)
 
 				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -547,7 +555,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				defer k8sClient.Delete(context.Background(), policyNamespace)
 
 				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -630,7 +639,8 @@ var _ = Describe("ImagePolicy controller", func() {
 
 				versions := []string{"1.0.0", "1.0.1"}
 				imageName := "acl-image-" + randStringRunes(5)
-				imgRepo := loadImages(registryServer, imageName, versions)
+				imgRepo, err := loadImages(registryServer, imageName, versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -703,7 +713,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
 
 				// Updating the image should reconcile the cross-namespace policy
-				imgRepo = loadImages(registryServer, imageName, []string{"1.0.2"})
+				imgRepo, err = loadImages(registryServer, imageName, []string{"1.0.2"})
+				Expect(err).ToNot(HaveOccurred())
 				Eventually(func() bool {
 					err := r.Get(ctx, repoObjectName, &repo)
 					return err == nil && repo.Status.LastScanResult.TagCount == len(versions)+1
@@ -731,7 +742,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				defer k8sClient.Delete(context.Background(), policyNamespace)
 
 				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				Expect(err).ToNot(HaveOccurred())
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
