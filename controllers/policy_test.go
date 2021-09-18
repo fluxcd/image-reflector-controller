@@ -18,10 +18,9 @@ package controllers
 
 import (
 	"context"
-	"net/http/httptest"
+	"testing"
 
 	"github.com/fluxcd/pkg/apis/meta"
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -35,785 +34,365 @@ import (
 // https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
 // has an example of loading a test registry with a random image.
 
-var _ = Describe("ImagePolicy controller", func() {
+func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
+	tests := []struct {
+		name         string
+		versions     []string
+		policy       imagev1.ImagePolicyChoice
+		wantImageTag string
+	}{
+		{
+			name:     "using SemVerPolicy",
+			versions: []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"},
+			policy: imagev1.ImagePolicyChoice{
+				SemVer: &imagev1.SemVerPolicy{
+					Range: "1.0.x",
+				},
+			},
+			wantImageTag: ":1.0.2",
+		},
+		{
+			name:     "using AlphabeticalPolicy",
+			versions: []string{"xenial", "yakkety", "zesty", "artful", "bionic"},
+			policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+			wantImageTag: ":zesty",
+		},
+	}
 
-	var registryServer *httptest.Server
+	registryServer := newRegistryServer()
+	defer registryServer.Close()
 
-	BeforeEach(func() {
-		registryServer = newRegistryServer()
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 
-	AfterEach(func() {
-		registryServer.Close()
-	})
+			imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), tt.versions)
+			g.Expect(err).ToNot(HaveOccurred())
 
-	Context("Calculates an image from a repository's tags", func() {
-		When("Using SemVerPolicy", func() {
-			It("calculates an image from a repository's tags", func() {
-				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
+			repo := imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
+				},
+			}
+			imageObjectName := types.NamespacedName{
+				Name:      "polimage-" + randStringRunes(5),
+				Namespace: "default",
+			}
+			repo.Name = imageObjectName.Name
+			repo.Namespace = imageObjectName.Namespace
 
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+
+			g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+			g.Eventually(func() bool {
+				err := testEnv.Get(ctx, imageObjectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
+			}, timeout, interval).Should(BeTrue())
+			g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+			g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(tt.versions)))
+
+			polName := types.NamespacedName{
+				Name:      "random-pol-" + randStringRunes(5),
+				Namespace: imageObjectName.Namespace,
+			}
+			pol := imagev1.ImagePolicy{
+				Spec: imagev1.ImagePolicySpec{
+					ImageRepositoryRef: meta.NamespacedObjectReference{
+						Name: imageObjectName.Name,
 					},
-				}
-				imageObjectName := types.NamespacedName{
-					Name:      "polimage-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = imageObjectName.Name
-				repo.Namespace = imageObjectName.Namespace
+					Policy: tt.policy,
+				},
+			}
+			pol.Namespace = polName.Namespace
+			pol.Name = polName.Name
 
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
+			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
+			g.Eventually(func() bool {
+				err := testEnv.Get(ctx, polName, &pol)
+				return err == nil && pol.Status.LatestImage != ""
+			}, timeout, interval).Should(BeTrue())
+			g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + tt.wantImageTag))
+			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
+		})
+	}
+}
 
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+func TestImagePolicyReconciler_filterTags(t *testing.T) {
+	tests := []struct {
+		name         string
+		versions     []string
+		filterTags   *imagev1.TagFilter
+		wantImageTag string
+		wantFailure  bool
+	}{
+		{
+			name:     "valid regex",
+			versions: []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"},
+			filterTags: &imagev1.TagFilter{
+				Pattern: "^test-(.*)$",
+				Extract: "$1",
+			},
+			wantImageTag: ":test-0.1.1",
+		},
+		{
+			name:     "invalid regex",
+			versions: []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"},
+			filterTags: &imagev1.TagFilter{
+				Pattern: "^test-(.*",
+				Extract: "$1",
+			},
+			wantFailure: true,
+		},
+	}
 
-				polName := types.NamespacedName{
-					Name:      "random-pol-" + randStringRunes(5),
-					Namespace: imageObjectName.Namespace,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name: imageObjectName.Name,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "1.0.x",
-							},
+	registryServer := newRegistryServer()
+	defer registryServer.Close()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), tt.versions)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			repo := imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
+				},
+			}
+			imageObjectName := types.NamespacedName{
+				Name:      "polimage-" + randStringRunes(5),
+				Namespace: "default",
+			}
+			repo.Name = imageObjectName.Name
+			repo.Namespace = imageObjectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+
+			g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+			g.Eventually(func() bool {
+				err := testEnv.Get(ctx, imageObjectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
+			}, timeout, interval).Should(BeTrue())
+			g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+			g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(tt.versions)))
+
+			polName := types.NamespacedName{
+				Name:      "random-pol-" + randStringRunes(5),
+				Namespace: imageObjectName.Namespace,
+			}
+			pol := imagev1.ImagePolicy{
+				Spec: imagev1.ImagePolicySpec{
+					ImageRepositoryRef: meta.NamespacedObjectReference{
+						Name: imageObjectName.Name,
+					},
+					FilterTags: tt.filterTags,
+					Policy: imagev1.ImagePolicyChoice{
+						SemVer: &imagev1.SemVerPolicy{
+							Range: ">=0.x",
 						},
 					},
-				}
-				pol.Namespace = polName.Namespace
-				pol.Name = polName.Name
+				},
+			}
+			pol.Namespace = polName.Namespace
+			pol.Name = polName.Name
 
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
+			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
+			if !tt.wantFailure {
+				g.Eventually(func() bool {
+					err := testEnv.Get(ctx, polName, &pol)
 					return err == nil && pol.Status.LatestImage != ""
 				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-
-		When("Using SemVerPolicy with invalid range", func() {
-			It("fails with invalid policy error", func() {
-				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
-
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-					},
-				}
-				imageObjectName := types.NamespacedName{
-					Name:      "polimage-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = imageObjectName.Name
-				repo.Namespace = imageObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polName := types.NamespacedName{
-					Name:      "random-pol-" + randStringRunes(5),
-					Namespace: imageObjectName.Namespace,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name: imageObjectName.Name,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "*-*",
-							},
-						},
-					},
-				}
-				pol.Namespace = polName.Namespace
-				pol.Name = polName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
+				g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + tt.wantImageTag))
+			} else {
+				g.Eventually(func() bool {
+					err := testEnv.Get(ctx, polName, &pol)
 					return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
 				}, timeout, interval).Should(BeTrue())
 				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
-				Expect(ready.Message).To(ContainSubstring("invalid policy"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
+				g.Expect(ready.Message).To(ContainSubstring("invalid regular expression pattern"))
+			}
+			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
+	}
+}
 
-		When("Usign AlphabeticalPolicy", func() {
-			It("calculates an image from a repository's tags", func() {
-				versions := []string{"xenial", "yakkety", "zesty", "artful", "bionic"}
-				imgRepo, err := loadImages(registryServer, "test-alphabetical-policy-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
-
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
+func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
+	tests := []struct {
+		name                       string
+		imageRepoNamespace         string
+		imageRepoAccessFrom        *imagev1.AccessFrom
+		imagePolicyNamespace       string
+		imagePolicyNamespaceLabels map[string]string
+		wantAccessible             bool
+	}{
+		{
+			name:                 "same namespace",
+			imageRepoNamespace:   "default",
+			imagePolicyNamespace: "default",
+			wantAccessible:       true,
+		},
+		{
+			name:                 "different namespaces, empty ACL",
+			imageRepoNamespace:   "default",
+			imageRepoAccessFrom:  &imagev1.AccessFrom{},
+			imagePolicyNamespace: "acl-" + randStringRunes(5),
+			imagePolicyNamespaceLabels: map[string]string{
+				"tenant": "a",
+				"env":    "test",
+			},
+			wantAccessible: false,
+		},
+		{
+			name:               "different namespaces, empty match labels",
+			imageRepoNamespace: "default",
+			imageRepoAccessFrom: &imagev1.AccessFrom{
+				NamespaceSelectors: []imagev1.NamespaceSelector{
+					{
+						MatchLabels: make(map[string]string),
 					},
-				}
-				imageObjectName := types.NamespacedName{
-					Name:      "polimage-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = imageObjectName.Name
-				repo.Namespace = imageObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polName := types.NamespacedName{
-					Name:      "random-pol-" + randStringRunes(5),
-					Namespace: imageObjectName.Namespace,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name: imageObjectName.Name,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							Alphabetical: &imagev1.AlphabeticalPolicy{},
-						},
-					},
-				}
-				pol.Namespace = polName.Namespace
-				pol.Name = polName.Name
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":zesty"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-	})
-
-	Context("Filters tags", func() {
-		When("valid regex supplied", func() {
-			It("correctly filters the repo tags", func() {
-				versions := []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-					},
-				}
-				imageObjectName := types.NamespacedName{
-					Name:      "polimage-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = imageObjectName.Name
-				repo.Namespace = imageObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polName := types.NamespacedName{
-					Name:      "random-pol-" + randStringRunes(5),
-					Namespace: imageObjectName.Namespace,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name: imageObjectName.Name,
-						},
-						FilterTags: &imagev1.TagFilter{
-							Pattern: "^test-(.*)$",
-							Extract: "$1",
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: ">=0.x",
-							},
+				},
+			},
+			imagePolicyNamespace: "acl-" + randStringRunes(5),
+			wantAccessible:       true,
+		},
+		{
+			name:               "different namespaces, matching ACL",
+			imageRepoNamespace: "default",
+			imageRepoAccessFrom: &imagev1.AccessFrom{
+				NamespaceSelectors: []imagev1.NamespaceSelector{
+					{
+						MatchLabels: map[string]string{
+							"tenant": "b",
+							"env":    "test",
 						},
 					},
-				}
-				pol.Namespace = polName.Namespace
-				pol.Name = polName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":test-0.1.1"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-
-		When("invalid regex supplied", func() {
-			It("fails to reconcile returning error", func() {
-				versions := []string{"test-0.1.0", "test-0.1.1", "dev-0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-				imgRepo, err := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-					},
-				}
-				imageObjectName := types.NamespacedName{
-					Name:      "polimage-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = imageObjectName.Name
-				repo.Namespace = imageObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polName := types.NamespacedName{
-					Name:      "random-pol-" + randStringRunes(5),
-					Namespace: imageObjectName.Namespace,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name: imageObjectName.Name,
-						},
-						FilterTags: &imagev1.TagFilter{
-							Pattern: "^test-(.*",
-							Extract: "$1",
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: ">=0.x",
-							},
+				},
+			},
+			imagePolicyNamespace: "acl-" + randStringRunes(5),
+			imagePolicyNamespaceLabels: map[string]string{
+				"tenant": "b",
+				"env":    "test",
+			},
+			wantAccessible: true,
+		},
+		{
+			name:               "different namespaces, mismatching ACL",
+			imageRepoNamespace: "default",
+			imageRepoAccessFrom: &imagev1.AccessFrom{
+				NamespaceSelectors: []imagev1.NamespaceSelector{
+					{
+						MatchLabels: map[string]string{
+							"tenant": "b",
+							"env":    "test",
 						},
 					},
-				}
-				pol.Namespace = polName.Namespace
-				pol.Name = polName.Name
+				},
+			},
+			imagePolicyNamespace: "acl-" + randStringRunes(5),
+			imagePolicyNamespaceLabels: map[string]string{
+				"tenant": "a",
+				"env":    "test",
+			},
+			wantAccessible: false,
+		},
+	}
 
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
+	registryServer := newRegistryServer()
+	defer registryServer.Close()
 
-				// Currently succeeds creating the resources as there's no
-				// admission webhook validation
-				Expect(r.Create(ctx, &pol)).To(Succeed())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
-					return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
-				}, timeout, interval).Should(BeTrue())
+			versions := []string{"1.0.0", "1.0.1"}
+			imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+			g.Expect(err).ToNot(HaveOccurred())
 
-				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
-				Expect(ready.Message).To(ContainSubstring("invalid regular expression pattern"))
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
 
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-	})
-
-	Context("Access ImageRepository", func() {
-		When("is in same namespace", func() {
-			It("grants access", func() {
-				versions := []string{"1.0.0", "1.0.1"}
-				imageName := "test-acl-" + randStringRunes(5)
-				imgRepo, err := loadImages(registryServer, imageName, versions)
-				Expect(err).ToNot(HaveOccurred())
-
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-					},
-				}
-				imageObjectName := types.NamespacedName{
-					Name:      "polimage-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = imageObjectName.Name
-				repo.Namespace = imageObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polName := types.NamespacedName{
-					Name:      "random-pol-" + randStringRunes(5),
-					Namespace: imageObjectName.Namespace,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name: imageObjectName.Name,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "1.0.x",
-							},
-						},
-					},
-				}
-				pol.Namespace = polName.Namespace
-				pol.Name = polName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
-
-				// Updating the image should reconcile the cross-namespace policy
-				imgRepo, err = loadImages(registryServer, imageName, []string{"1.0.2"})
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() bool {
-					err := r.Get(ctx, imageObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult.TagCount == len(versions)+1
-				}, timeout, interval).Should(BeTrue())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-
-		When("is in different namespace with empty ACL", func() {
-			It("deny access", func() {
+			// Create a new namespace if it's not the default one.
+			if tt.imagePolicyNamespace != "default" {
 				policyNamespace := &corev1.Namespace{}
-				policyNamespace.Name = "acl-" + randStringRunes(5)
-				policyNamespace.Labels = map[string]string{
-					"tenant": "a",
-					"env":    "test",
-				}
-				Expect(k8sClient.Create(context.Background(), policyNamespace)).To(Succeed())
-				defer k8sClient.Delete(context.Background(), policyNamespace)
+				policyNamespace.Name = tt.imagePolicyNamespace
+				policyNamespace.Labels = tt.imagePolicyNamespaceLabels
+				g.Expect(testEnv.Create(ctx, policyNamespace)).To(Succeed())
+				defer func() {
+					g.Expect(testEnv.Delete(ctx, policyNamespace)).To(Succeed())
+				}()
+			}
 
-				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
+			repo := imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval:   metav1.Duration{Duration: reconciliationInterval},
+					Image:      imgRepo,
+					AccessFrom: tt.imageRepoAccessFrom,
+				},
+			}
+			imageObjectName := types.NamespacedName{
+				Name:      "acl-repo-" + randStringRunes(5),
+				Namespace: tt.imageRepoNamespace,
+			}
+			repo.Name = imageObjectName.Name
+			repo.Namespace = imageObjectName.Namespace
 
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval:   metav1.Duration{Duration: reconciliationInterval},
-						Image:      imgRepo,
-						AccessFrom: &imagev1.AccessFrom{},
+			g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+			g.Eventually(func() bool {
+				err := testEnv.Get(ctx, imageObjectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
+			}, timeout, interval).Should(BeTrue())
+			g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+			g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+			polName := types.NamespacedName{
+				Name:      "acl-pol-" + randStringRunes(5),
+				Namespace: tt.imagePolicyNamespace,
+			}
+			pol := imagev1.ImagePolicy{
+				Spec: imagev1.ImagePolicySpec{
+					ImageRepositoryRef: meta.NamespacedObjectReference{
+						Name:      imageObjectName.Name,
+						Namespace: tt.imageRepoNamespace,
 					},
-				}
-				repoObjectName := types.NamespacedName{
-					Name:      "acl-repo-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = repoObjectName.Name
-				repo.Namespace = repoObjectName.Namespace
+					Policy: imagev1.ImagePolicyChoice{
+						SemVer: &imagev1.SemVerPolicy{
+							Range: "1.0.x",
+						},
+					},
+				},
+			}
+			pol.Namespace = polName.Namespace
+			pol.Name = polName.Name
 
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
+			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, repoObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
+			if tt.wantAccessible {
+				g.Eventually(func() bool {
+					err := testEnv.Get(ctx, polName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
 				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polObjectName := types.NamespacedName{
-					Name:      "acl-pol-" + randStringRunes(5),
-					Namespace: policyNamespace.Name,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name:      repoObjectName.Name,
-							Namespace: repoObjectName.Namespace,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "1.0.x",
-							},
-						},
-					},
-				}
-				pol.Namespace = polObjectName.Namespace
-				pol.Name = polObjectName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					_ = r.Get(ctx, polObjectName, &pol)
+				g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
+			} else {
+				g.Eventually(func() bool {
+					_ = testEnv.Get(ctx, polName, &pol)
 					return apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
 				}, timeout, interval).Should(BeTrue())
-				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal("AccessDenied"))
+				g.Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal("AccessDenied"))
+			}
 
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
+			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
-
-		When("is in different namespace with empty match labels", func() {
-			It("grants access", func() {
-				policyNamespace := &corev1.Namespace{}
-				policyNamespace.Name = "acl-" + randStringRunes(5)
-
-				Expect(k8sClient.Create(context.Background(), policyNamespace)).To(Succeed())
-				defer k8sClient.Delete(context.Background(), policyNamespace)
-
-				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
-
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
-								{
-									MatchLabels: make(map[string]string),
-								},
-							},
-						},
-					},
-				}
-				repoObjectName := types.NamespacedName{
-					Name:      "acl-repo-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = repoObjectName.Name
-				repo.Namespace = repoObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, repoObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polObjectName := types.NamespacedName{
-					Name:      "acl-pol-" + randStringRunes(5),
-					Namespace: policyNamespace.Name,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name:      repoObjectName.Name,
-							Namespace: repoObjectName.Namespace,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "1.0.x",
-							},
-						},
-					},
-				}
-				pol.Namespace = polObjectName.Namespace
-				pol.Name = polObjectName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polObjectName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-
-		When("is in different namespace with matching ACL", func() {
-			It("grants access", func() {
-				policyNamespace := &corev1.Namespace{}
-				policyNamespace.Name = "acl-" + randStringRunes(5)
-				policyNamespace.Labels = map[string]string{
-					"tenant": "a",
-					"env":    "test",
-				}
-				Expect(k8sClient.Create(context.Background(), policyNamespace)).To(Succeed())
-				defer k8sClient.Delete(context.Background(), policyNamespace)
-
-				versions := []string{"1.0.0", "1.0.1"}
-				imageName := "acl-image-" + randStringRunes(5)
-				imgRepo, err := loadImages(registryServer, imageName, versions)
-				Expect(err).ToNot(HaveOccurred())
-
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
-								{
-									MatchLabels: policyNamespace.Labels,
-								},
-								{
-									MatchLabels: map[string]string{
-										"tenant": "b",
-										"env":    "test",
-									},
-								},
-							},
-						},
-					},
-				}
-				repoObjectName := types.NamespacedName{
-					Name:      "acl-repo-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = repoObjectName.Name
-				repo.Namespace = repoObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, repoObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polObjectName := types.NamespacedName{
-					Name:      "acl-pol-" + randStringRunes(5),
-					Namespace: policyNamespace.Name,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name:      repoObjectName.Name,
-							Namespace: repoObjectName.Namespace,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "1.0.x",
-							},
-						},
-					},
-				}
-				pol.Namespace = polObjectName.Namespace
-				pol.Name = polObjectName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polObjectName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
-
-				// Updating the image should reconcile the cross-namespace policy
-				imgRepo, err = loadImages(registryServer, imageName, []string{"1.0.2"})
-				Expect(err).ToNot(HaveOccurred())
-				Eventually(func() bool {
-					err := r.Get(ctx, repoObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult.TagCount == len(versions)+1
-				}, timeout, interval).Should(BeTrue())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, polObjectName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
-				}, timeout, interval).Should(BeTrue())
-				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-
-		When("is in different namespace with mismatching ACL", func() {
-			It("denies access", func() {
-				policyNamespace := &corev1.Namespace{}
-				policyNamespace.Name = "acl-" + randStringRunes(5)
-				policyNamespace.Labels = map[string]string{
-					"tenant": "a",
-					"env":    "test",
-				}
-				Expect(k8sClient.Create(context.Background(), policyNamespace)).To(Succeed())
-				defer k8sClient.Delete(context.Background(), policyNamespace)
-
-				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo, err := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
-				Expect(err).ToNot(HaveOccurred())
-
-				repo := imagev1.ImageRepository{
-					Spec: imagev1.ImageRepositorySpec{
-						Interval: metav1.Duration{Duration: reconciliationInterval},
-						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
-								{
-									MatchLabels: map[string]string{
-										"tenant": "b",
-										"env":    "test",
-									},
-								},
-							},
-						},
-					},
-				}
-				repoObjectName := types.NamespacedName{
-					Name:      "acl-repo-" + randStringRunes(5),
-					Namespace: "default",
-				}
-				repo.Name = repoObjectName.Name
-				repo.Namespace = repoObjectName.Namespace
-
-				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				r := imageRepoReconciler
-				Expect(r.Create(ctx, &repo)).To(Succeed())
-
-				Eventually(func() bool {
-					err := r.Get(ctx, repoObjectName, &repo)
-					return err == nil && repo.Status.LastScanResult != nil
-				}, timeout, interval).Should(BeTrue())
-				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-
-				polObjectName := types.NamespacedName{
-					Name:      "acl-pol-" + randStringRunes(5),
-					Namespace: policyNamespace.Name,
-				}
-				pol := imagev1.ImagePolicy{
-					Spec: imagev1.ImagePolicySpec{
-						ImageRepositoryRef: meta.NamespacedObjectReference{
-							Name:      repoObjectName.Name,
-							Namespace: repoObjectName.Namespace,
-						},
-						Policy: imagev1.ImagePolicyChoice{
-							SemVer: &imagev1.SemVerPolicy{
-								Range: "1.0.x",
-							},
-						},
-					},
-				}
-				pol.Namespace = polObjectName.Namespace
-				pol.Name = polObjectName.Name
-
-				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
-				defer cancel()
-
-				Expect(r.Create(ctx, &pol)).To(Succeed())
-
-				Eventually(func() bool {
-					_ = r.Get(ctx, polObjectName, &pol)
-					return apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
-				}, timeout, interval).Should(BeTrue())
-				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal("AccessDenied"))
-
-				Expect(r.Delete(ctx, &pol)).To(Succeed())
-			})
-		})
-	})
-})
+	}
+}
