@@ -29,183 +29,132 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
-	"github.com/fluxcd/pkg/apis/meta"
 )
 
 // Certificate code adapted from
 // https://ericchiang.github.io/post/go-tls/ (license
 // https://ericchiang.github.io/license/)
 
-var _ = Context("using TLS certificates", func() {
+func TestCertAuthentication_failsWithNoClientCert(t *testing.T) {
+	// This checks that _not_ using the client cert will fail;
+	// i.e., that the server is expecting a valid client
+	// certificate.
 
-	var srv *httptest.Server
-	var clientKey *rsa.PrivateKey
-	var rootCertPEM, clientCertPEM, clientKeyPEM []byte
-	var clientTLSCert tls.Certificate
+	g := NewWithT(t)
 
-	BeforeEach(func() {
-		reg := &tagListHandler{
-			registryHandler: registry.New(),
-			imagetags:       map[string][]string{},
-		}
-		srv = httptest.NewUnstartedServer(reg)
+	srv, _, _, _, clientTLSCert, err := createTLSServer()
+	g.Expect(err).ToNot(HaveOccurred())
 
-		// create a self-signed cert to use as the CA and server cert.
-		rootKey, err := rsa.GenerateKey(rand.Reader, 2048)
-		Expect(err).To(BeNil())
-		rootCertTmpl, err := certTemplate()
-		Expect(err).To(BeNil())
-		rootCertTmpl.IsCA = true
-		rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
-		rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-		rootCertTmpl.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
-		var rootCert *x509.Certificate
-		rootCert, rootCertPEM, err = createCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
-		Expect(err).To(BeNil())
+	srv.StartTLS()
+	defer srv.Close()
 
-		rootKeyPEM := pem.EncodeToMemory(&pem.Block{
-			Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rootKey),
-		})
+	tlsConfig := &tls.Config{}
 
-		// Create a TLS cert using the private key and certificate
-		rootTLSCert, err := tls.X509KeyPair(rootCertPEM, rootKeyPEM)
-		Expect(err).To(BeNil())
+	// Use the server cert as a CA cert, so the client trusts the
+	// server cert. (Only works because the server uses the same
+	// cert in both roles).
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	tlsConfig.RootCAs = pool
+	// BUT: don't supply a client certificate, so the server
+	// doesn't authenticate the client.
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+	client := &http.Client{
+		Transport: transport,
+	}
+	_, err = client.Get(srv.URL + "/v2/")
+	g.Expect(err).ToNot(Succeed())
 
-		// To trust a client certificate, the server must be given a
-		// CA cert pool.
-		pool := x509.NewCertPool()
-		pool.AddCert(rootCert)
+	// .. and this checks that using the test transport will work,
+	// for the same operation.
+	// Patch the client cert in as the client certificate.
+	transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
+	_, err = client.Get(srv.URL + "/v2/")
+	g.Expect(err).To(Succeed())
+}
 
-		srv.TLS = &tls.Config{
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			Certificates: []tls.Certificate{rootTLSCert},
-			ClientCAs:    pool,
-		}
-		// StartTLS will use the certificate given as the server cert.
-		srv.StartTLS()
+func TestCertAuthentication_scanWithCertsFromSecret(t *testing.T) {
+	g := NewWithT(t)
 
-		// create a client cert, signed by the "CA"
-		clientKey, err = rsa.GenerateKey(rand.Reader, 2048)
-		Expect(err).To(BeNil())
-		clientCertTmpl, err := certTemplate()
-		Expect(err).To(BeNil())
-		clientCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
-		clientCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
-		_, clientCertPEM, err = createCert(clientCertTmpl, rootCert, &clientKey.PublicKey, rootKey)
-		Expect(err).To(BeNil())
-		// encode and load the cert and private key for the client
-		clientKeyPEM = pem.EncodeToMemory(&pem.Block{
-			Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
-		})
-		clientTLSCert, err = tls.X509KeyPair(clientCertPEM, clientKeyPEM)
-		Expect(err).To(BeNil())
-	})
+	srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err := createTLSServer()
+	g.Expect(err).ToNot(HaveOccurred())
 
-	AfterEach(func() {
-		srv.Close()
-	})
+	srv.StartTLS()
+	defer srv.Close()
 
-	It("fails to authenticate with no client cert", func() {
-		// This checks that _not_ using the client cert will fail;
-		// i.e., that the server is expecting a valid client
-		// certificate.
+	// Load an image to be scanned.
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{},
+	}
+	// Use the server cert as a CA cert, so the client trusts the
+	// server cert. (Only works because the server uses the same
+	// cert in both roles).
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	transport.TLSClientConfig.RootCAs = pool
+	transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
+	imgRepo, err := loadImages(srv, "image-"+randStringRunes(5), []string{"1.0.0"}, remote.WithTransport(transport))
+	g.Expect(err).ToNot(HaveOccurred())
 
-		tlsConfig := &tls.Config{}
+	secretName := "tls-secret-" + randStringRunes(5)
+	tlsSecret := corev1.Secret{
+		StringData: map[string]string{
+			CACert:     string(rootCertPEM),
+			ClientCert: string(clientCertPEM),
+			ClientKey:  string(clientKeyPEM),
+		},
+	}
+	tlsSecret.Name = secretName
+	tlsSecret.Namespace = "default"
 
-		// Use the server cert as a CA cert, so the client trusts the
-		// server cert. (Only works because the server uses the same
-		// cert in both roles).
-		pool := x509.NewCertPool()
-		pool.AddCert(srv.Certificate())
-		tlsConfig.RootCAs = pool
-		// BUT: don't supply a client certificate, so the server
-		// doesn't authenticate the client.
-		transport := &http.Transport{
-			TLSClientConfig: tlsConfig,
-		}
-		client := &http.Client{
-			Transport: transport,
-		}
-		_, err := client.Get(srv.URL + "/v2/")
-		Expect(err).ToNot(Succeed())
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
 
-		// .. and this checks that using the test transport will work,
-		// for the same operation.
-		// Patch the client cert in as the client certificate
-		transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-		_, err = client.Get(srv.URL + "/v2/")
-		Expect(err).To(Succeed())
-	})
+	g.Expect(testEnv.Create(ctx, &tlsSecret)).To(Succeed())
 
-	It("can scan using certs from the secret", func() {
-		// load an image to be scanned
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{},
-		}
-		// Use the server cert as a CA cert, so the client trusts the
-		// server cert. (Only works because the server uses the same
-		// cert in both roles).
-		pool := x509.NewCertPool()
-		pool.AddCert(srv.Certificate())
-		transport.TLSClientConfig.RootCAs = pool
-		transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-		imgRepo, err := loadImages(srv, "image", []string{"1.0.0"}, remote.WithTransport(transport))
-		Expect(err).ToNot(HaveOccurred())
-
-		secretName := "tls-secret"
-		tlsSecret := corev1.Secret{
-			StringData: map[string]string{
-				CACert:     string(rootCertPEM),
-				ClientCert: string(clientCertPEM),
-				ClientKey:  string(clientKeyPEM),
+	repoObj := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: time.Hour},
+			Image:    imgRepo,
+			CertSecretRef: &meta.LocalObjectReference{
+				Name: secretName,
 			},
-		}
-		tlsSecret.Name = secretName
-		tlsSecret.Namespace = "default"
-		Expect(k8sClient.Create(context.Background(), &tlsSecret)).To(Succeed())
+		},
+	}
+	imageRepoName := types.NamespacedName{
+		Name:      "scan-" + randStringRunes(5),
+		Namespace: "default",
+	}
+	repoObj.Name = imageRepoName.Name
+	repoObj.Namespace = imageRepoName.Namespace
+	g.Expect(testEnv.Create(ctx, &repoObj)).To(Succeed())
 
-		repoObj := imagev1.ImageRepository{
-			Spec: imagev1.ImageRepositorySpec{
-				Interval: metav1.Duration{Duration: time.Hour},
-				Image:    imgRepo,
-				CertSecretRef: &meta.LocalObjectReference{
-					Name: secretName,
-				},
-			},
-		}
-		imageRepoName := types.NamespacedName{
-			Name:      "scan",
-			Namespace: "default",
-		}
-		repoObj.Name = imageRepoName.Name
-		repoObj.Namespace = imageRepoName.Namespace
-		Expect(k8sClient.Create(context.Background(), &repoObj)).To(Succeed())
-
-		// wait until the controller has done something with the object
-		var newImgObj imagev1.ImageRepository
-		Eventually(func() bool {
-			err := k8sClient.Get(context.Background(), imageRepoName, &newImgObj)
-			return err == nil && len(newImgObj.Status.Conditions) > 0
-		}, 10*time.Second, time.Second).Should(BeTrue())
-		cond := newImgObj.Status.Conditions[0]
-		Expect(cond.Type).To(Equal(meta.ReadyCondition))
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		// double check that it found the tag
-		Expect(newImgObj.Status.LastScanResult.TagCount).To(Equal(1))
-	})
-})
+	// Wait until the controller has done something with the object.
+	var newImgObj imagev1.ImageRepository
+	g.Eventually(func() bool {
+		err := testEnv.Get(ctx, imageRepoName, &newImgObj)
+		return err == nil && len(newImgObj.Status.Conditions) > 0
+	}, 10*time.Second, time.Second).Should(BeTrue())
+	cond := newImgObj.Status.Conditions[0]
+	g.Expect(cond.Type).To(Equal(meta.ReadyCondition))
+	g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+	// Double check that it found the tag.
+	g.Expect(newImgObj.Status.LastScanResult.TagCount).To(Equal(1))
+}
 
 // These two taken verbatim from https://ericchiang.github.io/post/go-tls/
 
@@ -248,3 +197,76 @@ func createCert(template, parent *x509.Certificate, pub interface{}, parentPriv 
 }
 
 // ----
+
+func createTLSServer() (*httptest.Server, []byte, []byte, []byte, tls.Certificate, error) {
+	var clientTLSCert tls.Certificate
+	var rootCertPEM, clientCertPEM, clientKeyPEM []byte
+
+	reg := &tagListHandler{
+		registryHandler: registry.New(),
+		imagetags:       map[string][]string{},
+	}
+	srv := httptest.NewUnstartedServer(reg)
+
+	// Create a self-signed cert to use as the CA and server cert.
+	rootKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+	rootCertTmpl, err := certTemplate()
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+	rootCertTmpl.IsCA = true
+	rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
+	rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
+	rootCertTmpl.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+	var rootCert *x509.Certificate
+	rootCert, rootCertPEM, err = createCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+
+	rootKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rootKey),
+	})
+
+	// Create a TLS cert using the private key and certificate.
+	rootTLSCert, err := tls.X509KeyPair(rootCertPEM, rootKeyPEM)
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+
+	// To trust a client certificate, the server must be given a
+	// CA cert pool.
+	pool := x509.NewCertPool()
+	pool.AddCert(rootCert)
+
+	srv.TLS = &tls.Config{
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{rootTLSCert},
+		ClientCAs:    pool,
+	}
+
+	// Create a client cert, signed by the "CA".
+	clientKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+	clientCertTmpl, err := certTemplate()
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+	clientCertTmpl.KeyUsage = x509.KeyUsageDigitalSignature
+	clientCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
+	_, clientCertPEM, err = createCert(clientCertTmpl, rootCert, &clientKey.PublicKey, rootKey)
+	if err != nil {
+		return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+	}
+	// Encode and load the cert and private key for the client.
+	clientKeyPEM = pem.EncodeToMemory(&pem.Block{
+		Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(clientKey),
+	})
+	clientTLSCert, err = tls.X509KeyPair(clientCertPEM, clientKeyPEM)
+	return srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err
+}
