@@ -113,6 +113,72 @@ var _ = Describe("ImagePolicy controller", func() {
 			})
 		})
 
+		When("Using SemVerPolicy with invalid range", func() {
+			It("fails with invalid policy error", func() {
+				versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
+				imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+
+				repo := imagev1.ImageRepository{
+					Spec: imagev1.ImageRepositorySpec{
+						Interval: metav1.Duration{Duration: reconciliationInterval},
+						Image:    imgRepo,
+					},
+				}
+				imageObjectName := types.NamespacedName{
+					Name:      "polimage-" + randStringRunes(5),
+					Namespace: "default",
+				}
+				repo.Name = imageObjectName.Name
+				repo.Namespace = imageObjectName.Namespace
+
+				ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
+
+				r := imageRepoReconciler
+				Expect(r.Create(ctx, &repo)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, imageObjectName, &repo)
+					return err == nil && repo.Status.LastScanResult != nil
+				}, timeout, interval).Should(BeTrue())
+				Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+				Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+				polName := types.NamespacedName{
+					Name:      "random-pol-" + randStringRunes(5),
+					Namespace: imageObjectName.Namespace,
+				}
+				pol := imagev1.ImagePolicy{
+					Spec: imagev1.ImagePolicySpec{
+						ImageRepositoryRef: meta.NamespacedObjectReference{
+							Name: imageObjectName.Name,
+						},
+						Policy: imagev1.ImagePolicyChoice{
+							SemVer: &imagev1.SemVerPolicy{
+								Range: "*-*",
+							},
+						},
+					},
+				}
+				pol.Namespace = polName.Namespace
+				pol.Name = polName.Name
+
+				ctx, cancel = context.WithTimeout(context.Background(), contextTimeout)
+				defer cancel()
+
+				Expect(r.Create(ctx, &pol)).To(Succeed())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, polName, &pol)
+					return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
+				}, timeout, interval).Should(BeTrue())
+				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
+				Expect(ready.Message).To(ContainSubstring("invalid policy"))
+
+				Expect(r.Delete(ctx, &pol)).To(Succeed())
+			})
+		})
+
 		When("Usign AlphabeticalPolicy", func() {
 			It("calculates an image from a repository's tags", func() {
 				versions := []string{"xenial", "yakkety", "zesty", "artful", "bionic"}
