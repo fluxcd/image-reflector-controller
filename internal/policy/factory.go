@@ -38,5 +38,8 @@ func PolicerFromSpec(choice imagev1.ImagePolicyChoice) (Policer, error) {
 		return nil, fmt.Errorf("given ImagePolicyChoice object is invalid")
 	}
 
-	return p, err
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }

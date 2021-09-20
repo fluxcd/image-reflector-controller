@@ -40,4 +40,13 @@ func TestFactory_PolicerFromSpec(t *testing.T) {
 	if err != nil {
 		t.Error("should not return error")
 	}
+
+	// A nil checkable Policer for invalid policy.
+	p, err := PolicerFromSpec(imagev1.ImagePolicyChoice{SemVer: &imagev1.SemVerPolicy{Range: "*-*"}})
+	if err == nil {
+		t.Error("should return error")
+	}
+	if p != nil {
+		t.Error("should be nil")
+	}
 }
