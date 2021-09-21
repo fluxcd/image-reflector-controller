@@ -146,8 +146,21 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	var err error
 	policer, err := policy.PolicerFromSpec(pol.Spec.Policy)
+	if err != nil {
+		msg := fmt.Sprintf("invalid policy: %s", err.Error())
+		imagev1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			"InvalidPolicy",
+			msg,
+		)
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		log.Error(err, "invalid policy")
+		return ctrl.Result{}, nil
+	}
 
 	var latest string
 	if policer != nil {
