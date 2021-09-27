@@ -9,15 +9,14 @@ require (
 	github.com/dgraph-io/badger/v3 v3.2103.1
 	github.com/fluxcd/image-reflector-controller/api v0.11.1
 	github.com/fluxcd/pkg/apis/meta v0.11.0-rc.1
-	github.com/fluxcd/pkg/runtime v0.13.0-rc.2
+	github.com/fluxcd/pkg/runtime v0.13.0-rc.5
 	github.com/fluxcd/pkg/version v0.1.0
 	github.com/go-logr/logr v0.4.0
 	github.com/google/go-containerregistry v0.4.0
-	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.14.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.21.3
 	k8s.io/apimachinery v0.21.3
 	k8s.io/client-go v0.21.3
-	sigs.k8s.io/controller-runtime v0.9.5
+	sigs.k8s.io/controller-runtime v0.9.6
 )

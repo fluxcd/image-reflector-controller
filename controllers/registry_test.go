@@ -22,31 +22,31 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"testing"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Context("Registry handler", func() {
+func TestRegistryHandler(t *testing.T) {
+	g := NewWithT(t)
 
-	It("serves a tag list", func() {
-		srv := newRegistryServer()
-		defer srv.Close()
+	srv := newRegistryServer()
+	defer srv.Close()
 
-		uploadedTags := []string{"tag1", "tag2"}
-		repoString := loadImages(srv, "testimage", uploadedTags)
-		repo, _ := name.NewRepository(repoString)
+	uploadedTags := []string{"tag1", "tag2"}
+	repoString, err := loadImages(srv, "testimage", uploadedTags)
+	g.Expect(err).ToNot(HaveOccurred())
+	repo, _ := name.NewRepository(repoString)
 
-		tags, err := remote.List(repo)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(tags).To(Equal(uploadedTags))
-	})
-})
+	tags, err := remote.List(repo)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(tags).To(Equal(uploadedTags))
+}
 
 // ---
 
@@ -95,16 +95,22 @@ func registryName(srv *httptest.Server) string {
 // image repo
 // name. https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
 // has an example of loading a test registry with a random image.
-func loadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) string {
+func loadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) (string, error) {
 	imgRepo := registryName(srv) + "/" + imageName
 	for _, tag := range versions {
 		imgRef, err := name.NewTag(imgRepo + ":" + tag)
-		Expect(err).ToNot(HaveOccurred())
+		if err != nil {
+			return imgRepo, err
+		}
 		img, err := random.Image(512, 1)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(remote.Write(imgRef, img, options...)).To(Succeed())
+		if err != nil {
+			return imgRepo, err
+		}
+		if err := remote.Write(imgRef, img, options...); err != nil {
+			return imgRepo, err
+		}
 	}
-	return imgRepo
+	return imgRepo, nil
 }
 
 // the go-containerregistry test registry implementation does not
@@ -134,7 +140,9 @@ func (h *tagListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Name: repo,
 				Tags: tags,
 			}
-			Expect(json.NewEncoder(w).Encode(result)).To(Succeed())
+			if err := json.NewEncoder(w).Encode(result); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			println("Requested tags", repo, strings.Join(tags, ", "))
 			return
 		}
@@ -200,36 +208,50 @@ func (h *authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.registryHandler.ServeHTTP(w, r)
 }
 
-var _ = Context("Authentication handler", func() {
+func TestAuthenticationHandler(t *testing.T) {
+	username, password := "user", "password1"
 
-	var registryServer *httptest.Server
-	var username, password string
+	tests := []struct {
+		name     string
+		authInfo *authn.Basic
+		wantErr  bool
+	}{
+		{
+			name:     "without auth info",
+			authInfo: nil,
+			wantErr:  true,
+		},
+		{
+			name: "with auth info",
+			authInfo: &authn.Basic{
+				Username: username,
+				Password: password,
+			},
+			wantErr: false,
+		},
+	}
 
-	BeforeEach(func() {
-		username = "user"
-		password = "password1"
-		registryServer = newAuthenticatedRegistryServer(username, password)
-	})
+	registryServer := newAuthenticatedRegistryServer(username, password)
+	defer registryServer.Close()
 
-	AfterEach(func() {
-		registryServer.Close()
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			repo, err := name.NewRepository(registryName(registryServer) + "/convenient")
+			g.Expect(err).ToNot(HaveOccurred())
 
-	It("rejects requests without authentication", func() {
-		repo, err := name.NewRepository(registryName(registryServer) + "/convenient")
-		Expect(err).ToNot(HaveOccurred())
-		_, err = remote.List(repo)
-		Expect(err).To(HaveOccurred())
-	})
+			var listErr error
+			if tt.authInfo != nil {
+				_, listErr = remote.List(repo, remote.WithAuth(tt.authInfo))
+			} else {
+				_, listErr = remote.List(repo)
+			}
 
-	It("accepts requests with correct authentication", func() {
-		repo, err := name.NewRepository(registryName(registryServer) + "/convenient")
-		Expect(err).ToNot(HaveOccurred())
-		auth := &authn.Basic{
-			Username: username,
-			Password: password,
-		}
-		_, err = remote.List(repo, remote.WithAuth(auth))
-		Expect(err).ToNot(HaveOccurred())
-	})
-})
+			if tt.wantErr {
+				g.Expect(listErr).To(HaveOccurred())
+			} else {
+				g.Expect(listErr).ToNot(HaveOccurred())
+			}
+		})
+	}
+}
