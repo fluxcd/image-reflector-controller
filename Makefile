@@ -123,14 +123,14 @@ endif
 # Find or download setup-envtest
 setup-envtest:
 ifeq (, $(shell which setup-envtest))
-        @{ \
-        set -e ;\
-        SETUP_ENVTEST_TMP_DIR=$$(mktemp -d) ;\
-        cd $$SETUP_ENVTEST_TMP_DIR ;\
-        go mod init tmp ;\
-        go get sigs.k8s.io/controller-runtime/tools/setup-envtest@latest ;\
-        rm -rf $$SETUP_ENVTEST_TMP_DIR ;\
-        }
+	@{ \
+	set -e ;\
+	SETUP_ENVTEST_TMP_DIR=$$(mktemp -d) ;\
+	cd $$SETUP_ENVTEST_TMP_DIR ;\
+	go mod init tmp ;\
+	go get sigs.k8s.io/controller-runtime/tools/setup-envtest@latest ;\
+	rm -rf $$SETUP_ENVTEST_TMP_DIR ;\
+	}
 SETUP_ENVTEST=$(GOBIN)/setup-envtest
 else
 SETUP_ENVTEST=$(shell which setup-envtest)
