@@ -191,37 +191,40 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: when}, nil
 }
 
-func parseAwsImageURL(imageUrl string) (accountId, awsEcrRegion string, err error) {
-	err = nil
-	registryUrlPartRe := regexp.MustCompile(`([0-9+]*).dkr.ecr.([^/.]*)\.(amazonaws\.com[.cn]*)/([^:]+):?(.*)`)
-	registryUrlParts := registryUrlPartRe.FindAllStringSubmatch(imageUrl, -1)
-	if len(registryUrlParts) < 1 {
-		err = errors.New("imageUrl does not match AWS elastic container registry URL pattern")
-		return
+// parseAwsImage returns the AWS account ID and region and `true` if
+// the image repository is hosted in AWS's Elastic Container Registry,
+// otherwise empty strings and `false`.
+func parseAwsImage(image string) (accountId, awsEcrRegion string, ok bool) {
+	registryPartRe := regexp.MustCompile(`([0-9+]*).dkr.ecr.([^/.]*)\.(amazonaws\.com[.cn]*)/([^:]+):?(.*)`)
+	registryParts := registryPartRe.FindAllStringSubmatch(image, -1)
+	if len(registryParts) < 1 {
+		return "", "", false
 	}
-	accountId = registryUrlParts[0][1]
-	awsEcrRegion = registryUrlParts[0][2]
-	return
+	return registryParts[0][1], registryParts[0][2], true
 }
 
-// TODO: Still missing from Flux 1:
-// Caching of tokens (one per account/region pair), this fetches a fresh token every time
-// handling of expiry
-// Back-Off in case of errors
-// Possibly: special behaviour for non-global partitions (China, GovCloud)
-func getAwsECRLoginAuth(accountId, awsEcrRegion string) (authConfig authn.AuthConfig, err error) {
+// getAwsEcrLoginAuth obtains authentication for ECR given the account
+// ID and region (from the image), assuming it is available via
+func getAwsECRLoginAuth(accountId, awsEcrRegion string) (authn.AuthConfig, error) {
+	// TODO: Still missing from Flux 1:
+	//  - Caching of tokens (one per account/region pair), this fetches a fresh token every time
+	//  - handling of expiry
+	//  - Back-Off in case of errors
+	//  - Possibly: special behaviour for non-global partitions (China, GovCloud)
+	var authConfig authn.AuthConfig
+
 	accountIDs := []string{accountId}
 	ecrService := ecr.New(session.Must(session.NewSession(&aws.Config{Region: aws.String(awsEcrRegion)})))
 	ecrToken, err := ecrService.GetAuthorizationToken(&ecr.GetAuthorizationTokenInput{
 		RegistryIds: aws.StringSlice(accountIDs),
 	})
 	if err != nil {
-		return
+		return authConfig, err
 	}
 
 	token, err := base64.StdEncoding.DecodeString(*ecrToken.AuthorizationData[0].AuthorizationToken)
 	if err != nil {
-		return
+		return authConfig, err
 	}
 
 	tokenSplit := strings.Split(string(token), ":")
@@ -229,7 +232,7 @@ func getAwsECRLoginAuth(accountId, awsEcrRegion string) (authConfig authn.AuthCo
 		Username: tokenSplit[0],
 		Password: tokenSplit[1],
 	}
-	return
+	return authConfig, nil
 }
 
 func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1.ImageRepository, ref name.Reference) error {
@@ -263,9 +266,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			return err
 		}
 		options = append(options, remote.WithAuth(auth))
+
 	}
 
-	if accountId, awsEcrRegion, err := parseAwsImageURL(imageRepo.Spec.Image); err == nil {
+	if accountId, awsEcrRegion, ok := parseAwsImage(imageRepo.Spec.Image); ok {
 		if r.UseAwsEcr {
 			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
 
