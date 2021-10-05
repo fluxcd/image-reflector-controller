@@ -80,7 +80,8 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
-	UseAwsEcr bool
+
+	AwsAutoLogin bool // automatically attempt to get credentials for images in ECR
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -267,7 +268,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		}
 		options = append(options, remote.WithAuth(auth))
 	} else if accountId, awsEcrRegion, ok := parseAwsImage(imageRepo.Spec.Image); ok {
-		if r.UseAwsEcr {
+		if r.AwsAutoLogin {
 			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
 
 			authConfig, err := getAwsECRLoginAuth(accountId, awsEcrRegion)
@@ -284,7 +285,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			auth := authn.FromConfig(authConfig)
 			options = append(options, remote.WithAuth(auth))
 		} else {
-			logr.FromContext(ctx).Info("AWS ECR authentication is not enabled, to enable, set USE_ECR environment variable")
+			logr.FromContext(ctx).Info("No image credentials secret referenced, and ECR authentication is not enabled. To enable, set the controller flag --aws-autologin-for-ecr")
 		}
 	}
 

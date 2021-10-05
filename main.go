@@ -69,7 +69,7 @@ func main() {
 		storagePath             string
 		storageValueLogFileSize int64
 		concurrent              int
-		useAwsEcr               bool
+		awsAutoLogin            bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -80,7 +80,7 @@ func main() {
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
-	flag.BoolVar(&useAwsEcr, "use-aws-ecr", false, "Log in to AWS Elastic Container Registry with IAM")
+	flag.BoolVar(&awsAutoLogin, "aws-autologin-for-ecr", false, "(AWS) Attempt to get credentials for images in Elastic Container Registry, when no secret is referenced")
 
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
@@ -147,7 +147,7 @@ func main() {
 		ExternalEventRecorder: eventRecorder,
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
-		UseAwsEcr:             useAwsEcr,
+		AwsAutoLogin:          awsAutoLogin,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
