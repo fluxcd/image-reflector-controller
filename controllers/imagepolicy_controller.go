@@ -48,6 +48,7 @@ import (
 const (
 	ImageRepositoryNotReadyReason = "ImageRepositoryNotReady"
 	AccessDeniedReason            = "AccessDenied"
+	ImagePolicyInvalidReason      = "InvalidPolicy"
 )
 
 const (
@@ -159,7 +160,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		conditions.MarkFalse(
 			&pol,
 			meta.ReadyCondition,
-			"InvalidPolicy",
+			ImagePolicyInvalidReason,
 			msg,
 		)
 		log.Error(err, "invalid policy")

@@ -40,6 +40,7 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 		versions     []string
 		policy       imagev1.ImagePolicyChoice
 		wantImageTag string
+		wantFailure  bool
 	}{
 		{
 			name:     "using SemVerPolicy",
@@ -50,6 +51,16 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 				},
 			},
 			wantImageTag: ":1.0.2",
+		},
+		{
+			name:     "using SemVerPolicy with invalid range",
+			versions: []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"},
+			policy: imagev1.ImagePolicyChoice{
+				SemVer: &imagev1.SemVerPolicy{
+					Range: "*-*",
+				},
+			},
+			wantFailure: true,
 		},
 		{
 			name:     "using AlphabeticalPolicy",
@@ -113,11 +124,20 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 
 			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 
-			g.Eventually(func() bool {
-				err := testEnv.Get(ctx, polName, &pol)
-				return err == nil && pol.Status.LatestImage != ""
-			}, timeout, interval).Should(BeTrue())
-			g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + tt.wantImageTag))
+			if !tt.wantFailure {
+				g.Eventually(func() bool {
+					err := testEnv.Get(ctx, polName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
+				}, timeout, interval).Should(BeTrue())
+				g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + tt.wantImageTag))
+			} else {
+				g.Eventually(func() bool {
+					err := testEnv.Get(ctx, polName, &pol)
+					return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
+				}, timeout, interval).Should(BeTrue())
+				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
+				g.Expect(ready.Message).To(ContainSubstring("invalid policy"))
+			}
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
 	}
