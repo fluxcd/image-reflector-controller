@@ -205,13 +205,17 @@ func parseAwsImage(image string) (accountId, awsEcrRegion string, ok bool) {
 }
 
 // getAwsEcrLoginAuth obtains authentication for ECR given the account
-// ID and region (from the image), assuming it is available via
+// ID and region (taken from the image). This assumes that the pod has
+// IAM permissions to get an authentication token, which will usually
+// be the case if it's running in EKS, and may need additional setup
+// otherwise (visit
+// https://docs.aws.amazon.com/sdk-for-go/api/aws/session/ as a
+// starting point).
 func getAwsECRLoginAuth(accountId, awsEcrRegion string) (authn.AuthConfig, error) {
-	// TODO: Still missing from Flux 1:
-	//  - Caching of tokens (one per account/region pair), this fetches a fresh token every time
-	//  - handling of expiry
-	//  - Back-Off in case of errors
-	//  - Possibly: special behaviour for non-global partitions (China, GovCloud)
+	// No caching of tokens is attempted; the quota for getting an
+	// auth token is high enough that getting a token every time you
+	// scan an image is viable for O(1000) images per region. See
+	// https://docs.aws.amazon.com/general/latest/gr/ecr.html.
 	var authConfig authn.AuthConfig
 
 	accountIDs := []string{accountId}
