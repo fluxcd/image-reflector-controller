@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.0
+
+**Release date:** 2021-10-08
+
+This prerelease comes with an (experimental) introduction of ACLs for allowing cross-namespace
+access to `ImageRepository` resources. You can read more about how they work in the
+[pull request](https://github.com/fluxcd/image-reflector-controller/pull/162) that
+introduced them.
+
+In addition, a bug has been fixed that caused the controller to segfault when a malformed
+SemVer was defined.
+
+Improvements:
+* [RFC] Add ACL support for allowing cross-namespace access to image repository
+  [#162](https://github.com/fluxcd/image-reflector-controller/pull/162)
+
+Fixes:
+* policy: Handle failure due to invalid semver range 
+  [#172](https://github.com/fluxcd/image-reflector-controller/pull/172)
+
 ## 0.11.1
 
 **Release date:** 2021-08-05
