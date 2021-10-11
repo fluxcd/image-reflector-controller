@@ -6,6 +6,11 @@ CRD_OPTIONS ?= crd:crdVersions=v1
 ENVTEST_BIN_VERSION?=1.22.0
 KUBEBUILDER_ASSETS?=$(shell $(SETUP_ENVTEST) use -i $(ENVTEST_BIN_VERSION) -p path)
 
+# Allows for defining additional Docker buildx arguments, e.g. '--push'.
+BUILD_ARGS ?=
+# Architectures to build images for.
+BUILD_PLATFORMS ?= linux/amd64
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -77,7 +82,11 @@ generate: controller-gen
 
 # Build the docker image
 docker-build: test
-	docker build . -t ${IMG}
+	docker buildx build \
+	--platform=$(BUILD_PLATFORMS) \
+	-t ${IMG} \
+	--load \
+	${BUILD_ARGS} .
 
 # Push the docker image
 docker-push:
