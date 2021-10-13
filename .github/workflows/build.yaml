@@ -26,6 +26,14 @@ jobs:
         key: ${{ runner.os }}-go-${{ hashFiles('go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      id: cache
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-ghcache-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-ghcache-
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
@@ -37,6 +45,15 @@ jobs:
       env:
         KUBEBUILDER_ASSETS: ${{ github.workspace }}/kubebuilder/bin
     - name: Build container image
-      run: make docker-build IMG=ghcr.io/fluxcd/${{ github.event.repository.name }}:latest
-      env:
-        KUBEBUILDER_ASSETS: ${{ github.workspace }}/kubebuilder/bin
+      run: |
+        make docker-build IMG=ghcr.io/fluxcd/${{ github.event.repository.name }}:latest \
+          BUILD_PLATFORMS=linux/amd64 \
+          BUILD_ARGS="--cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max"
+    - # Temp fix
+      # https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      name: Move cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
