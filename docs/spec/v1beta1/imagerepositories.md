@@ -63,7 +63,7 @@ type ImageRepositorySpec struct {
 The `Suspend` field can be set to `true` to stop the controller scanning the image repository
 specified; remove the field value or set to `false` to resume scanning.
 
-### Authentication 
+### Authentication
 
 The `secretRef` names a secret in the same namespace that holds credentials for accessing the image
 repository. This secret is expected to be in the same format as for
@@ -71,11 +71,22 @@ repository. This secret is expected to be in the same format as for
 
     kubectl create secret docker-registry ...
 
-If you are running on a platform (e.g., AWS) that links service permissions (e.g., access to ECR) to
-service accounts, you may need to create the secret using tooling for that platform instead. There
-is advice specific to some platforms [in the image automation guide][image-auto-provider-secrets].
+For a publicly accessible image repository, you will not need to provide a `secretRef`.
 
-For a publicly accessible image repository, you don't need to provide a `secretRef`.
+#### ECR and EKS
+
+When running in [<abbr title="Elastic Kubernetes Service">EKS</abbr>][EKS] and using [<abbr
+title="Elastic Container Registry">ECR</abbr>][ECR] to store images, you should be able to rely on
+the controller retrieving credentials automatically. The controller must be run with the flag
+`--aws-autologin-for-ecr` set for this to work. The advice under "Other platforms" below will also
+work for ECR.
+
+#### Other platforms
+
+If you are running on another platform that links service permissions to service accounts, you will
+need to create the secret using tooling for that platform, rather than directly with `kubectl create
+secret`. There is advice specific to some platforms [in the image automation
+guide][image-auto-provider-secrets].
 
 ### TLS Certificates
 
@@ -248,3 +259,5 @@ and reference it under `secretRef`.
 [image-auto-provider-secrets]: https://toolkit.fluxcd.io/guides/image-update/#imagerepository-cloud-providers-authentication
 [pem-encoding]: https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail
 [sops-guide]: https://toolkit.fluxcd.io/guides/mozilla-sops/
+[EKS]: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+[ECR]: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
