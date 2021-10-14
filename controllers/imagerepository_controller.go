@@ -21,11 +21,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -44,6 +46,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ecr"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
@@ -74,6 +80,8 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+
+	AwsAutoLogin bool // automatically attempt to get credentials for images in ECR
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -184,6 +192,54 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{RequeueAfter: when}, nil
 }
 
+// parseAwsImage returns the AWS account ID and region and `true` if
+// the image repository is hosted in AWS's Elastic Container Registry,
+// otherwise empty strings and `false`.
+func parseAwsImage(image string) (accountId, awsEcrRegion string, ok bool) {
+	registryPartRe := regexp.MustCompile(`([0-9+]*).dkr.ecr.([^/.]*)\.(amazonaws\.com[.cn]*)/([^:]+):?(.*)`)
+	registryParts := registryPartRe.FindAllStringSubmatch(image, -1)
+	if len(registryParts) < 1 {
+		return "", "", false
+	}
+	return registryParts[0][1], registryParts[0][2], true
+}
+
+// getAwsEcrLoginAuth obtains authentication for ECR given the account
+// ID and region (taken from the image). This assumes that the pod has
+// IAM permissions to get an authentication token, which will usually
+// be the case if it's running in EKS, and may need additional setup
+// otherwise (visit
+// https://docs.aws.amazon.com/sdk-for-go/api/aws/session/ as a
+// starting point).
+func getAwsECRLoginAuth(accountId, awsEcrRegion string) (authn.AuthConfig, error) {
+	// No caching of tokens is attempted; the quota for getting an
+	// auth token is high enough that getting a token every time you
+	// scan an image is viable for O(1000) images per region. See
+	// https://docs.aws.amazon.com/general/latest/gr/ecr.html.
+	var authConfig authn.AuthConfig
+
+	accountIDs := []string{accountId}
+	ecrService := ecr.New(session.Must(session.NewSession(&aws.Config{Region: aws.String(awsEcrRegion)})))
+	ecrToken, err := ecrService.GetAuthorizationToken(&ecr.GetAuthorizationTokenInput{
+		RegistryIds: aws.StringSlice(accountIDs),
+	})
+	if err != nil {
+		return authConfig, err
+	}
+
+	token, err := base64.StdEncoding.DecodeString(*ecrToken.AuthorizationData[0].AuthorizationToken)
+	if err != nil {
+		return authConfig, err
+	}
+
+	tokenSplit := strings.Split(string(token), ":")
+	authConfig = authn.AuthConfig{
+		Username: tokenSplit[0],
+		Password: tokenSplit[1],
+	}
+	return authConfig, nil
+}
+
 func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1.ImageRepository, ref name.Reference) error {
 	timeout := imageRepo.GetTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -215,6 +271,26 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			return err
 		}
 		options = append(options, remote.WithAuth(auth))
+	} else if accountId, awsEcrRegion, ok := parseAwsImage(imageRepo.Spec.Image); ok {
+		if r.AwsAutoLogin {
+			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
+
+			authConfig, err := getAwsECRLoginAuth(accountId, awsEcrRegion)
+			if err != nil {
+				imagev1.SetImageRepositoryReadiness(
+					imageRepo,
+					metav1.ConditionFalse,
+					meta.ReconciliationFailedReason,
+					err.Error(),
+				)
+				return err
+			}
+
+			auth := authn.FromConfig(authConfig)
+			options = append(options, remote.WithAuth(auth))
+		} else {
+			logr.FromContext(ctx).Info("No image credentials secret referenced, and ECR authentication is not enabled. To enable, set the controller flag --aws-autologin-for-ecr")
+		}
 	}
 
 	if imageRepo.Spec.CertSecretRef != nil {
