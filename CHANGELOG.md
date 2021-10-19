@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0
+
+**Release date**: 2021-10-19
+
+This prerelease adds experimental support for automatically getting
+credentials from AWS when scanning an image in [Elastic Container
+Registry
+(ECR)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html).
+
+Improvements:
+* Get credentials from AWS ECR when needed
+  [#174](https://github.com/fluxcd/image-reflector-controller/pull/174)
+
 ## 0.12.0
 
 **Release date:** 2021-10-08
@@ -17,7 +30,7 @@ Improvements:
   [#162](https://github.com/fluxcd/image-reflector-controller/pull/162)
 
 Fixes:
-* policy: Handle failure due to invalid semver range 
+* policy: Handle failure due to invalid semver range
   [#172](https://github.com/fluxcd/image-reflector-controller/pull/172)
 
 ## 0.11.1
