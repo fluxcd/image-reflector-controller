@@ -141,7 +141,14 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
 
-	ref, err := name.ParseReference(imageRepo.Spec.Image)
+	var err error
+	var ref name.Reference
+	if u, _ := url.Parse(imageRepo.Spec.Image); u != nil && u.Scheme != "" {
+		err = fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", u.Scheme)
+	} else {
+		ref, err = name.ParseReference(imageRepo.Spec.Image)
+	}
+
 	if err != nil {
 		imagev1.SetImageRepositoryReadiness(
 			&imageRepo,

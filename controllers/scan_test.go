@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -275,6 +276,40 @@ var _ = Describe("ImageRepository controller", func() {
 			Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 			Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
 		})
+	})
 
+	Context("ImageRepository image attribute is invalid", func() {
+		It("fails with an error when prefixed with a scheme", func() {
+			imgRepo := "https://" + loadImages(registryServer, "test-fetch", []string{"1.0.0"})
+
+			repo = imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
+				},
+			}
+			objectName := types.NamespacedName{
+				Name:      "random",
+				Namespace: "default",
+			}
+
+			repo.Name = objectName.Name
+			repo.Namespace = objectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+
+			r := imageRepoReconciler
+			err := r.Create(ctx, &repo)
+			Expect(err).ToNot(HaveOccurred())
+
+			var ready *metav1.Condition
+			Eventually(func() bool {
+				_ = r.Get(ctx, objectName, &repo)
+				ready = apimeta.FindStatusCondition(*repo.GetStatusConditions(), meta.ReadyCondition)
+				return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
+			}, timeout, interval).Should(BeTrue())
+			Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
+		})
 	})
 })
