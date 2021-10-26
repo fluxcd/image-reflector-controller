@@ -16,7 +16,6 @@ limitations under the License.
 package database
 
 import (
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -82,7 +81,7 @@ func TestGetOnlyFetchesForRepo(t *testing.T) {
 
 func createBadgerDatabase(t *testing.T) *BadgerDatabase {
 	t.Helper()
-	dir, err := ioutil.TempDir(os.TempDir(), "badger")
+	dir, err := os.MkdirTemp(os.TempDir(), "badger")
 	if err != nil {
 		t.Fatal(err)
 	}
