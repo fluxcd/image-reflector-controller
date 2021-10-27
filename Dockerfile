@@ -1,6 +1,16 @@
-# Build the manager binary
-FROM golang:1.16-alpine as builder
+ARG XX_VERSION=1.0.0-rc.2
 
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
+
+# Build the manager binary
+FROM --platform=$BUILDPLATFORM golang:1.16-alpine AS builder
+
+# Copy the build utilities.
+COPY --from=xx / /
+
+ARG TARGETPLATFORM
+
+# Configure workspace.
 WORKDIR /workspace
 
 # copy modules manifests
@@ -20,7 +30,8 @@ COPY controllers/ controllers/
 COPY internal/ internal/
 
 # build without giving the arch, so that it gets it from the machine
-RUN CGO_ENABLED=0 go build -a -o image-reflector-controller main.go
+ENV CGO_ENABLED=0
+RUN xx-go build -a -o image-reflector-controller main.go
 
 FROM alpine:3.13
 

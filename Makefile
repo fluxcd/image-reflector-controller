@@ -3,6 +3,11 @@ IMG ?= fluxcd/image-reflector-controller
 # Produce CRDs that work back to Kubernetes 1.16
 CRD_OPTIONS ?= crd:crdVersions=v1
 
+# Allows for defining additional Docker buildx arguments, e.g. '--push'.
+BUILD_ARGS ?=
+# Architectures to build images for.
+BUILD_PLATFORMS ?= linux/amd64
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -73,8 +78,12 @@ generate: controller-gen
 	cd api; $(CONTROLLER_GEN) object:headerFile="../hack/boilerplate.go.txt" paths="./..."
 
 # Build the docker image
-docker-build: test
-	docker build . -t ${IMG}
+docker-build:
+	docker buildx build \
+	--platform=$(BUILD_PLATFORMS) \
+	-t ${IMG} \
+	--load \
+	${BUILD_ARGS} .
 
 # Push the docker image
 docker-push:
