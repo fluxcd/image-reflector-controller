@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -95,7 +94,7 @@ var _ = BeforeSuite(func(done Done) {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	badgerDir, err = ioutil.TempDir(os.TempDir(), "badger")
+	badgerDir, err = os.MkdirTemp(os.TempDir(), "badger")
 	Expect(err).ToNot(HaveOccurred())
 	badgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
 	Expect(err).ToNot(HaveOccurred())

@@ -18,7 +18,7 @@ package controllers
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -29,7 +29,7 @@ func TestExtractAuthn(t *testing.T) {
 	// the secret in testdata/secret.json was created with kubectl
 	// create secret docker-registry. Test that it can be decoded to
 	// get an authentication value.
-	b, err := ioutil.ReadFile("testdata/secret.json")
+	b, err := os.ReadFile("testdata/secret.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestExtractAuthForURLs(t *testing.T) {
 	}
 
 	for _, test := range testFiles {
-		b, err := ioutil.ReadFile("testdata/" + test.secretFile)
+		b, err := os.ReadFile("testdata/" + test.secretFile)
 		if err != nil {
 			t.Fatal(err)
 		}
