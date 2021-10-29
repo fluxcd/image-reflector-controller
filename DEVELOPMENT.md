@@ -4,6 +4,13 @@
 > to find out about how to contribute to Flux and how to interact with the
 > Flux Development team.
 
+## Installing required dependencies
+There are a number of dependencies required to be able to run image-reflector-controller and its test-suite locally. 
+* [Install Go](https://golang.org/doc/install)
+* [Install Kustomize](https://kubectl.docs.kubernetes.io/installation/kustomize/)
+* [Install Docker](https://docs.docker.com/engine/install/)
+* [Install Kubebuilder](https://book.kubebuilder.io/quick-start.html)
+
 ## How to run the test suite
 
 Prerequisites:
@@ -15,4 +22,31 @@ You can run the unit tests by simply doing
 
 ```bash
 make test
+```
+
+## How to install the controller
+
+You can install the CRDs and the controller by simply doing
+
+```bash
+# Install CRDs into a cluster
+make install
+# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
+make deploy
+```
+
+## How to run the controller locally
+
+You can run the controller on your host by
+
+```bash
+make run
+```
+
+## How to generate and update CRDs API reference documentation
+
+You can update CRDs API reference doc by
+
+```bash
+make gen-crd-api-reference-docs
 ```
