@@ -221,7 +221,7 @@ type ImageRepositoryStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// CanonicalName is the name of the image repository with all the
+	// CanonicalImageName is the name of the image repository with all the
 	// implied bits made explicit; e.g., `docker.io/library/alpine`
 	// rather than `alpine`.
 	// +optional
