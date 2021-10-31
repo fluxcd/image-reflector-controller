@@ -98,19 +98,19 @@ patches:
         value: --aws-autologin-for-ecr
 ```
 
-Alternatively, the advice under ["Other platforms"](https://github.com/fluxcd/image-reflector-controller/blob/main/docs/spec/v1beta1/imagerepositories.md#other-platforms) below will also work for ECR.
+Alternatively, the advice under [Other platforms][other platforms] below will also work for ECR.
 
-> You need to upgrade to Flux version 2 release [v0.19](https://github.com/fluxcd/flux2/releases/tag/v0.19.0) that contains the image-reflector-controller release [v0.13.0](https://github.com/fluxcd/image-reflector-controller/blob/main/CHANGELOG.md#0130).
+> You need to upgrade to Flux version 2 release [v0.19][Flux v0.19.0] that contains the image-reflector-controller release [v0.13.0][image-reflector-controller v0.13.0].
 
-> [**Release date**: 2021-10-19](https://github.com/fluxcd/image-reflector-controller/blob/main/CHANGELOG.md#0130)
+> [**Release date**: 2021-10-19][image-reflector-controller v0.13.0]
 >
 > This prerelease adds experimental support for automatically getting
 credentials from AWS when scanning an image in [Elastic Container Registry
-(ECR)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html).
+(ECR)][ECR].
 >
 > Improvements:
 > * Get credentials from AWS ECR when needed
->  [#174](https://github.com/fluxcd/image-reflector-controller/pull/174)
+>  [#174][image-reflector-controller#174]
 
 #### Other platforms
 
@@ -293,3 +293,7 @@ and reference it under `secretRef`.
 [EKS]: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
 [ECR]: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
 [customize Flux manifests]: https://fluxcd.io/docs/installation/#customize-flux-manifests
+[other platforms]: https://fluxcd.io/docs/components/image/imagerepositories/#other-platforms
+[Flux v0.19.0]: https://github.com/fluxcd/flux2/releases/tag/v0.19.0
+[image-reflector-controller v0.13.0]: https://github.com/fluxcd/image-reflector-controller/blob/main/CHANGELOG.md#0130
+[image-reflector-controller#174]: https://github.com/fluxcd/image-reflector-controller/pull/174
