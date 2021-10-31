@@ -61,7 +61,7 @@ type ImageRepositorySpec struct {
 ```
 
 The `Suspend` field can be set to `true` to stop the controller scanning the image repository
-specified; remove the field value or set to `false` to resume scanning.
+specified; remove the field value or set it to `false` to resume scanning.
 
 ### Authentication
 
@@ -98,7 +98,19 @@ patches:
         value: --aws-autologin-for-ecr
 ```
 
-Alternatively, the advice under "Other platforms" below will also work for ECR.
+Alternatively, the advice under ["Other platforms"](https://github.com/fluxcd/image-reflector-controller/blob/main/docs/spec/v1beta1/imagerepositories.md#other-platforms) below will also work for ECR.
+
+> You need to upgrade to Flux version 2 release [v0.19](https://github.com/fluxcd/flux2/releases/tag/v0.19.0) that contains the image-reflector-controller release [v0.13.0](https://github.com/fluxcd/image-reflector-controller/blob/main/CHANGELOG.md#0130).
+
+> [**Release date**: 2021-10-19](https://github.com/fluxcd/image-reflector-controller/blob/main/CHANGELOG.md#0130)
+>
+> This prerelease adds experimental support for automatically getting
+credentials from AWS when scanning an image in [Elastic Container Registry
+(ECR)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html).
+>
+> Improvements:
+> * Get credentials from AWS ECR when needed
+>  [#174](https://github.com/fluxcd/image-reflector-controller/pull/174)
 
 #### Other platforms
 
@@ -209,7 +221,7 @@ type ImageRepositoryStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// CannonicalName is the name of the image repository with all the
+	// CanonicalName is the name of the image repository with all the
 	// implied bits made explicit; e.g., `docker.io/library/alpine`
 	// rather than `alpine`.
 	// +optional
