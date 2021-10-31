@@ -77,9 +77,28 @@ For a publicly accessible image repository, you will not need to provide a `secr
 
 When running in [<abbr title="Elastic Kubernetes Service">EKS</abbr>][EKS] and using [<abbr
 title="Elastic Container Registry">ECR</abbr>][ECR] to store images, you should be able to rely on
-the controller retrieving credentials automatically. The controller must be run with the flag
-`--aws-autologin-for-ecr` set for this to work. The advice under "Other platforms" below will also
-work for ECR.
+the controller retrieving credentials automatically.
+
+The `image-reflector-controller` must be run with the flag `--aws-autologin-for-ecr` set for this to work.
+
+This flag can be added by including a patch in the `kustomization.yaml` overlay file in your `flux-system`,
+similar to the process described in [customize Flux manifests][]:
+
+```
+patches:
+  - target:
+      version: v1
+      group: apps
+      kind: Deployment
+      name: image-reflector-controller
+      namespace: flux-system
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: --aws-autologin-for-ecr
+```
+
+Alternatively, the advice under "Other platforms" below will also work for ECR.
 
 #### Other platforms
 
@@ -261,3 +280,4 @@ and reference it under `secretRef`.
 [sops-guide]: https://toolkit.fluxcd.io/guides/mozilla-sops/
 [EKS]: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
 [ECR]: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
+[customize Flux manifests]: https://fluxcd.io/docs/installation/#customize-flux-manifests
