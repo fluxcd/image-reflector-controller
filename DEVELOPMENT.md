@@ -9,20 +9,22 @@ There are a number of dependencies required to be able to run image-reflector-co
 * [Install Go](https://golang.org/doc/install)
 * [Install Kustomize](https://kubectl.docs.kubernetes.io/installation/kustomize/)
 * [Install Docker](https://docs.docker.com/engine/install/)
-* [Install Kubebuilder](https://book.kubebuilder.io/quick-start.html)
+* (Optional) [Install Kubebuilder](https://book.kubebuilder.io/quick-start.html)
 
 ## How to run the test suite
 
 Prerequisites:
 * go >= 1.16
-* kubebuilder >= 2.3
 * kustomize >= 3.1
 
-You can run the unit tests by simply doing
+Prior committing any changes, especially when API changes are made, please run unit tests. You can run them by simply doing
 
 ```bash
 make test
 ```
+
+> **Note:** Please refer to the Makefile to see all make targets and what they do.
+
 
 ## How to install the controller
 
@@ -45,8 +47,8 @@ make run
 
 ## How to generate and update CRDs API reference documentation
 
-You can update CRDs API reference doc by
+If you made any changes to CRDs API, you can update CRDs API reference doc by
 
 ```bash
-make gen-crd-api-reference-docs
+make api-docs
 ```
