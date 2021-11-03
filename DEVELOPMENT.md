@@ -17,14 +17,15 @@ Prerequisites:
 * go >= 1.16
 * kustomize >= 3.1
 
-Prior committing any changes, especially when API changes are made, please run unit tests. You can run them by simply doing
+You can run them by simply doing
 
 ```bash
 make test
 ```
 
-> **Note:** Please refer to the Makefile to see all make targets and what they do.
+> **Note:** Since this will also trigger generating some files such as manifests, it is advised to run this prior to committing your changes, especially when making API changes.
 
+> Please refer to the Makefile to see all make targets and what they do.
 
 ## How to install the controller
 
