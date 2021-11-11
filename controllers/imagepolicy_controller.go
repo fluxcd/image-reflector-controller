@@ -259,8 +259,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []reconcile.Request {
 	ctx := context.Background()
 	var policies imagev1.ImagePolicyList
-	if err := r.List(ctx, &policies, client.InNamespace(obj.GetNamespace()),
-		client.MatchingFields{imageRepoKey: obj.GetName()}); err != nil {
+	if err := r.List(ctx, &policies, client.MatchingFields{imageRepoKey: obj.GetName()}); err != nil {
 		return nil
 	}
 	reqs := make([]reconcile.Request, len(policies.Items))
