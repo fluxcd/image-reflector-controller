@@ -237,9 +237,14 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 	// it's easy to list those out when an image repo changes.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
 		pol := obj.(*imagev1.ImagePolicy)
+
+		namespace := pol.Spec.ImageRepositoryRef.Namespace
+		if namespace == "" {
+			namespace = obj.GetNamespace()
+		}
 		namespacedName := types.NamespacedName{
 			Name:      pol.Spec.ImageRepositoryRef.Name,
-			Namespace: pol.Spec.ImageRepositoryRef.Namespace,
+			Namespace: namespace,
 		}
 		return []string{namespacedName.String()}
 	}); err != nil {
