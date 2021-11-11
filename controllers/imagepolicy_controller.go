@@ -48,7 +48,7 @@ import (
 // this is used as the key for the index of policy->repository; the
 // string is arbitrary and acts as a reminder where the value comes
 // from.
-const imageRepoKey = ".spec.imageRepository.name"
+const imageRepoKey = ".spec.imageRepository"
 
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
@@ -237,7 +237,11 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 	// it's easy to list those out when an image repo changes.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
 		pol := obj.(*imagev1.ImagePolicy)
-		return []string{pol.Spec.ImageRepositoryRef.Name}
+		namespacedName := types.NamespacedName{
+			Name:      pol.Spec.ImageRepositoryRef.Name,
+			Namespace: pol.Spec.ImageRepositoryRef.Namespace,
+		}
+		return []string{namespacedName.String()}
 	}); err != nil {
 		return err
 	}
@@ -259,7 +263,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []reconcile.Request {
 	ctx := context.Background()
 	var policies imagev1.ImagePolicyList
-	if err := r.List(ctx, &policies, client.MatchingFields{imageRepoKey: obj.GetName()}); err != nil {
+	if err := r.List(ctx, &policies, client.MatchingFields{imageRepoKey: client.ObjectKeyFromObject(obj).String()}); err != nil {
 		return nil
 	}
 	reqs := make([]reconcile.Request, len(policies.Items))
