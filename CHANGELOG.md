@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.2
+
+**Release date**: 2021-11-12
+
+This prerelease comes with a regression bug fix for when policies reference repositories in the same namespace.
+
+Fixes:
+* Fix watched same-ns image repos trigger reconcile
+  [#199](https://github.com/fluxcd/image-reflector-controller/pull/199)
+
 ## 0.13.1
 
 **Release date**: 2021-11-11
