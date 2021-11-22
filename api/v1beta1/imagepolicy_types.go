@@ -131,7 +131,8 @@ type ImagePolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ImagePolicySpec   `json:"spec,omitempty"`
+	Spec ImagePolicySpec `json:"spec,omitempty"`
+	// +kubebuilder:default={"observedGeneration":-1}
 	Status ImagePolicyStatus `json:"status,omitempty"`
 }
 
