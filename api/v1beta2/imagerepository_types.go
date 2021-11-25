@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	"time"
@@ -132,6 +132,7 @@ func (in ImageRepository) GetTimeout() time.Duration {
 	return duration
 }
 
+// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Last scan",type=string,JSONPath=`.status.lastScanResult.scanTime`

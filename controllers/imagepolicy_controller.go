@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -41,7 +42,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
 
@@ -162,7 +163,20 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
+	if pol.Spec.FilterTags == nil || pol.Spec.FilterTags.Discriminator == "" {
+		return r.nonDiscriminated(ctx, req, policer, repo, pol)
+	}else{
+		return r.discriminated(ctx, req, policer, repo, pol)
+	}
+}
+
+func (r *ImagePolicyReconciler) nonDiscriminated(ctx context.Context, req ctrl.Request, policer policy.Policer, repo imagev1.ImageRepository, pol imagev1.ImagePolicy) (ctrl.Result, error) {
 	var latest string
+	var err error
+
+	pol.Status.Distribution = nil
+	pol.Status.NbDistribution = 0
+
 	if policer != nil {
 		var tags []string
 		tags, err = r.Database.Tags(repo.Status.CanonicalImageName)
@@ -231,6 +245,106 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	return ctrl.Result{}, err
 }
+
+func (r *ImagePolicyReconciler) discriminated(ctx context.Context, req ctrl.Request, policer policy.Policer, repo imagev1.ImageRepository, pol imagev1.ImagePolicy) (ctrl.Result, error) {
+	distribution := map[string]imagev1.ImageAndAttributes{}
+	latest := ""
+	var err error
+
+	listAttributes := []string{ pol.Spec.FilterTags.Discriminator, pol.Spec.FilterTags.Extract }
+	if len(pol.Spec.FilterTags.Attributes) > 0 {
+		listAttributes = append(listAttributes, pol.Spec.FilterTags.Attributes...)
+	}
+
+	if policer != nil {
+		var tags []string
+		tags, err = r.Database.Tags(repo.Status.CanonicalImageName)
+		if err == nil {
+			var filter *policy.RegexExtractor
+			filter, err = policy.NewRegexExtractor(pol.Spec.FilterTags.Pattern, listAttributes)
+			if err == nil {
+				filter.Apply(tags)
+				reduced, err := filter.Reduce(pol.Spec.FilterTags.Discriminator, pol.Spec.FilterTags.Extract, policer)
+
+				if err == nil {
+					distribByExtracted := map[string]string{}
+					var extractedList []string
+
+					for k, v := range reduced {
+						distribution[k] = imagev1.ImageAndAttributes{
+							Image:      repo.Spec.Image,
+							Tag:        v.Tag,
+							Attributes: v.Attributes,
+						}
+						distribByExtracted[v.Extracted] = k
+						extractedList = append(extractedList, v.Extracted)
+					}
+
+					newer, err := policer.Latest(extractedList)
+
+					if err == nil {
+						img := distribution[distribByExtracted[newer]]
+						latest = img.Tag
+					}
+				}
+			}
+		}
+	}
+
+
+	if err != nil {
+		imagev1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			meta.ReconciliationFailedReason,
+			err.Error(),
+		)
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		r.event(ctx, pol, events.EventSeverityError, err.Error())
+		return ctrl.Result{}, err
+	}
+
+	if len(distribution) == 0 || latest == "" {
+		msg := fmt.Sprintf("Cannot determine latest tag for policy: %s", pol.Name)
+		pol.Status.LatestImage = ""
+		pol.Status.Distribution = nil
+		pol.Status.NbDistribution = 0
+		imagev1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			meta.ReconciliationFailedReason,
+			msg,
+		)
+
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+			return ctrl.Result{}, err
+		}
+		r.event(ctx, pol, events.EventSeverityError, msg)
+		return ctrl.Result{}, nil
+	}
+
+	distribStr, _ := json.Marshal(distribution)
+	msg := fmt.Sprintf("Distribution of image for '%s' resolved to: %s", repo.Spec.Image, string(distribStr))
+	pol.Status.Distribution = distribution
+	pol.Status.NbDistribution = len(distribution)
+	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+	imagev1.SetImagePolicyReadiness(
+		&pol,
+		metav1.ConditionTrue,
+		meta.ReconciliationSucceededReason,
+		msg,
+	)
+
+	if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.event(ctx, pol, events.EventSeverityInfo, msg)
+
+	return ctrl.Result{}, err
+}
+
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
 	// index the policies by which image repo they point at, so that

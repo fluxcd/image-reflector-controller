@@ -37,7 +37,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	// +kubebuilder:scaffold:imports
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"

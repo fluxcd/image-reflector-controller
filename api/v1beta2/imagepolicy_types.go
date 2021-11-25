@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,6 +97,14 @@ type TagFilter struct {
 	// expression pattern, useful before tag evaluation.
 	// +optional
 	Extract string `json:"extract"`
+	// Discriminator allows to split the tags in multiple groups and execute the
+	// policy against each of those groups. This value if present is a capture
+	// group to be extracted from the regular expression pattern.
+	// +optional
+	Discriminator string `json:"discriminator,omitempty"`
+	// Additional attributes we want to extract from the tag.
+	// +optional
+	Attributes []string `json:"attributes,omitempty"`
 }
 
 // ImagePolicyStatus defines the observed state of ImagePolicy
@@ -106,9 +114,19 @@ type ImagePolicyStatus struct {
 	// the policy.
 	LatestImage string `json:"latestImage,omitempty"`
 	// +optional
+	Distribution map[string]ImageAndAttributes `json:"distribution,omitempty"`
+	NbDistribution int `json:"nbDistribution,omitempty"`
+	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+type ImageAndAttributes struct {
+	Image string `json:"image"`
+	Tag string `json:"tag"`
+	// +optional
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
 func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
@@ -121,9 +139,11 @@ func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reas
 	meta.SetResourceCondition(p, meta.ReadyCondition, status, reason, message)
 }
 
+// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`
+// +kubebuilder:printcolumn:name="Nb distribution",type=string,JSONPath=`.status.nbDistribution`
 
 // ImagePolicy is the Schema for the imagepolicies API
 type ImagePolicy struct {
