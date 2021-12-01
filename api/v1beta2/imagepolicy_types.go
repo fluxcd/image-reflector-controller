@@ -113,8 +113,13 @@ type ImagePolicyStatus struct {
 	// the image repository, when filtered and ordered according to
 	// the policy.
 	LatestImage string `json:"latestImage,omitempty"`
+	// Distribution of tags scanned by the image repository
 	// +optional
 	Distribution map[string]ImageAndAttributes `json:"distribution,omitempty"`
+	// Discriminator of the latest image.
+	// +optional
+	LatestDiscriminator string  `json:"latestDiscriminator,omitempty"`
+	// len of the distribution map. Statistics only.
 	NbDistribution int `json:"nbDistribution,omitempty"`
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`

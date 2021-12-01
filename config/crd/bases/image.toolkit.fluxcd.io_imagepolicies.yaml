@@ -584,11 +584,16 @@ spec:
                   - image
                   - tag
                   type: object
+                description: Distribution of tags scanned by the image repository
                 type: object
+              latestDiscriminator:
+                description: Discriminator of the latest image.
+                type: string
               latestImage:
                 description: LatestImage gives the first in the list of images scanned by the image repository, when filtered and ordered according to the policy.
                 type: string
               nbDistribution:
+                description: len of the distribution map. Statistics only.
                 type: integer
               observedGeneration:
                 format: int64

@@ -176,6 +176,7 @@ func (r *ImagePolicyReconciler) nonDiscriminated(ctx context.Context, req ctrl.R
 
 	pol.Status.Distribution = nil
 	pol.Status.NbDistribution = 0
+	pol.Status.LatestDiscriminator = ""
 
 	if policer != nil {
 		var tags []string
@@ -249,6 +250,7 @@ func (r *ImagePolicyReconciler) nonDiscriminated(ctx context.Context, req ctrl.R
 func (r *ImagePolicyReconciler) discriminated(ctx context.Context, req ctrl.Request, policer policy.Policer, repo imagev1.ImageRepository, pol imagev1.ImagePolicy) (ctrl.Result, error) {
 	distribution := map[string]imagev1.ImageAndAttributes{}
 	latest := ""
+	latestDiscriminator := ""
 	var err error
 
 	listAttributes := []string{ pol.Spec.FilterTags.Discriminator, pol.Spec.FilterTags.Extract }
@@ -283,8 +285,8 @@ func (r *ImagePolicyReconciler) discriminated(ctx context.Context, req ctrl.Requ
 					newer, err := policer.Latest(extractedList)
 
 					if err == nil {
-						img := distribution[distribByExtracted[newer]]
-						latest = img.Tag
+						latestDiscriminator = distribByExtracted[newer]
+						latest = distribution[latestDiscriminator].Tag
 					}
 				}
 			}
@@ -330,6 +332,7 @@ func (r *ImagePolicyReconciler) discriminated(ctx context.Context, req ctrl.Requ
 	pol.Status.Distribution = distribution
 	pol.Status.NbDistribution = len(distribution)
 	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
+	pol.Status.LatestDiscriminator = latestDiscriminator
 	imagev1.SetImagePolicyReadiness(
 		&pol,
 		metav1.ConditionTrue,
