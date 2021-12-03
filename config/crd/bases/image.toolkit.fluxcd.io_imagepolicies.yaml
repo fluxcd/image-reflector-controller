@@ -95,8 +95,6 @@ spec:
             - policy
             type: object
           status:
-            default:
-              observedGeneration: -1
             description: ImagePolicyStatus defines the observed state of ImagePolicy
             properties:
               conditions:
@@ -146,7 +144,6 @@ spec:
                 description: LatestImage gives the first in the list of images scanned by the image repository, when filtered and ordered according to the policy.
                 type: string
               observedGeneration:
-                description: ObservedGeneration is the last reconciled generation.
                 format: int64
                 type: integer
             type: object
@@ -373,6 +370,8 @@ spec:
             - policy
             type: object
           status:
+            default:
+              observedGeneration: -1
             description: ImagePolicyStatus defines the observed state of ImagePolicy
             properties:
               conditions:
