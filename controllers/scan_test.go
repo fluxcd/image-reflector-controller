@@ -27,6 +27,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -263,4 +264,34 @@ func TestImageRepositoryReconciler_authRegistry(t *testing.T) {
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+}
+
+func TestImageRepositoryReconciler_invalidImage(t *testing.T) {
+	g := NewWithT(t)
+
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "https://example.com/repository/foo/bar:1.0.0",
+		},
+	}
+	objectName := types.NamespacedName{
+		Name:      "random",
+		Namespace: "default",
+	}
+
+	repo.Name = objectName.Name
+	repo.Namespace = objectName.Namespace
+
+	ctx, cancel := context.WithTimeout(context.TODO(), contextTimeout)
+	defer cancel()
+
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+	var ready *metav1.Condition
+	g.Eventually(func() bool {
+		_ = testEnv.Get(ctx, objectName, &repo)
+		ready = apimeta.FindStatusCondition(*repo.GetStatusConditions(), meta.ReadyCondition)
+		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
 }
