@@ -386,7 +386,8 @@ var _ = Describe("ImagePolicy controller", func() {
 		When("is in same namespace", func() {
 			It("grants access", func() {
 				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo := loadImages(registryServer, "test-acl-"+randStringRunes(5), versions)
+				imageName := "test-acl-" + randStringRunes(5)
+				imgRepo := loadImages(registryServer, imageName, versions)
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -443,6 +444,19 @@ var _ = Describe("ImagePolicy controller", func() {
 					return err == nil && pol.Status.LatestImage != ""
 				}, timeout, interval).Should(BeTrue())
 				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
+
+				// Updating the image should reconcile the cross-namespace policy
+				imgRepo = loadImages(registryServer, imageName, []string{"1.0.2"})
+				Eventually(func() bool {
+					err := r.Get(ctx, imageObjectName, &repo)
+					return err == nil && repo.Status.LastScanResult.TagCount == len(versions)+1
+				}, timeout, interval).Should(BeTrue())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, polName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
+				}, timeout, interval).Should(BeTrue())
+				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
 
 				Expect(r.Delete(ctx, &pol)).To(Succeed())
 			})
@@ -615,7 +629,8 @@ var _ = Describe("ImagePolicy controller", func() {
 				defer k8sClient.Delete(context.Background(), policyNamespace)
 
 				versions := []string{"1.0.0", "1.0.1"}
-				imgRepo := loadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+				imageName := "acl-image-" + randStringRunes(5)
+				imgRepo := loadImages(registryServer, imageName, versions)
 
 				repo := imagev1.ImageRepository{
 					Spec: imagev1.ImageRepositorySpec{
@@ -686,6 +701,19 @@ var _ = Describe("ImagePolicy controller", func() {
 					return err == nil && pol.Status.LatestImage != ""
 				}, timeout, interval).Should(BeTrue())
 				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
+
+				// Updating the image should reconcile the cross-namespace policy
+				imgRepo = loadImages(registryServer, imageName, []string{"1.0.2"})
+				Eventually(func() bool {
+					err := r.Get(ctx, repoObjectName, &repo)
+					return err == nil && repo.Status.LastScanResult.TagCount == len(versions)+1
+				}, timeout, interval).Should(BeTrue())
+
+				Eventually(func() bool {
+					err := r.Get(ctx, polObjectName, &pol)
+					return err == nil && pol.Status.LatestImage != ""
+				}, timeout, interval).Should(BeTrue())
+				Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.2"))
 
 				Expect(r.Delete(ctx, &pol)).To(Succeed())
 			})

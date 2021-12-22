@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.14.0
+
+**Release date:** 2021-11-23
+
+This prerelease updates Alpine to v3.14, and several dependencies to their latest
+version. Solving an issue with `rest_client_request_latency_seconds_.*` high
+cardinality metrics.
+
+To enhance the experience of consumers observing the `ImagePolicy` and `ImageRepository`
+objects using `kstatus`, a default of `-1` is now configured for the `observedGeneration`
+to ensure it does not report a false positive in the time the controller has not marked
+the resource with a `Ready` condition yet.
+
+Improvements:
+- Set default observedGeneration to -1
+  [#189](https://github.com/fluxcd/image-reflector-controller/pull/189)
+- Update Alpine to v3.14
+  [#203](https://github.com/fluxcd/image-reflector-controller/pull/203)
+- Update dependencies
+  [#204](https://github.com/fluxcd/image-reflector-controller/pull/204)
+- Update github.com/opencontainers/image-spec to v1.0.2
+  [#205](https://github.com/fluxcd/image-reflector-controller/pull/205)
+
+## 0.13.2
+
+**Release date**: 2021-11-12
+
+This prerelease comes with a regression bug fix for when policies reference repositories in the same namespace.
+
+Fixes:
+* Fix watched same-ns image repos trigger reconcile
+  [#199](https://github.com/fluxcd/image-reflector-controller/pull/199)
+
+## 0.13.1
+
+**Release date**: 2021-11-11
+
+This prerelease comes with a bug fix for when policies reference repositories across namespaces.
+
+Fixes:
+* Watched cross-ns image repos trigger reconcile
+  [#196](https://github.com/fluxcd/image-reflector-controller/pull/196)
+
 ## 0.13.0
 
 **Release date**: 2021-10-19

@@ -370,6 +370,8 @@ spec:
             - policy
             type: object
           status:
+            default:
+              observedGeneration: -1
             description: ImagePolicyStatus defines the observed state of ImagePolicy
             properties:
               conditions:
