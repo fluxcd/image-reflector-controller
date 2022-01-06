@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,7 +77,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	log := logr.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	// record reconciliation duration
 	if r.MetricsRecorder != nil {
@@ -290,7 +289,7 @@ func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1.ImageP
 			err = r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg)
 		}
 		if err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
+			ctrl.LoggerFrom(ctx).Error(err, "unable to send event")
 			return
 		}
 	}
@@ -303,7 +302,7 @@ func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, polic
 
 	objRef, err := reference.GetReference(r.Scheme, policy)
 	if err != nil {
-		logr.FromContext(ctx).Error(err, "unable to record readiness metric")
+		ctrl.LoggerFrom(ctx).Error(err, "unable to record readiness metric")
 		return
 	}
 	if rc := apimeta.FindStatusCondition(policy.Status.Conditions, meta.ReadyCondition); rc != nil {

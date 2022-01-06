@@ -31,7 +31,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -112,7 +111,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	defer r.recordSuspension(ctx, imageRepo)
 
-	log := logr.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
@@ -280,7 +279,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		options = append(options, remote.WithAuth(auth))
 	} else if accountId, awsEcrRegion, ok := parseAwsImage(imageRepo.Spec.Image); ok {
 		if r.AwsAutoLogin {
-			logr.FromContext(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
+			ctrl.LoggerFrom(ctx).Info("Logging in to AWS ECR for " + imageRepo.Spec.Image)
 
 			authConfig, err := getAwsECRLoginAuth(accountId, awsEcrRegion)
 			if err != nil {
@@ -296,7 +295,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			auth := authn.FromConfig(authConfig)
 			options = append(options, remote.WithAuth(auth))
 		} else {
-			logr.FromContext(ctx).Info("No image credentials secret referenced, and ECR authentication is not enabled. To enable, set the controller flag --aws-autologin-for-ecr")
+			ctrl.LoggerFrom(ctx).Info("No image credentials secret referenced, and ECR authentication is not enabled. To enable, set the controller flag --aws-autologin-for-ecr")
 		}
 	}
 
@@ -487,12 +486,12 @@ func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.Imag
 	if r.ExternalEventRecorder != nil {
 		objRef, err := reference.GetReference(r.Scheme, &repo)
 		if err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
+			ctrl.LoggerFrom(ctx).Error(err, "unable to send event")
 			return
 		}
 
 		if err := r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg); err != nil {
-			logr.FromContext(ctx).Error(err, "unable to send event")
+			ctrl.LoggerFrom(ctx).Error(err, "unable to send event")
 			return
 		}
 	}
@@ -505,7 +504,7 @@ func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, r
 
 	objRef, err := reference.GetReference(r.Scheme, repo)
 	if err != nil {
-		logr.FromContext(ctx).Error(err, "unable to record readiness metric")
+		ctrl.LoggerFrom(ctx).Error(err, "unable to record readiness metric")
 		return
 	}
 	if rc := apimeta.FindStatusCondition(repo.Status.Conditions, meta.ReadyCondition); rc != nil {
@@ -522,7 +521,7 @@ func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageR
 	if r.MetricsRecorder == nil {
 		return
 	}
-	log := logr.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	objRef, err := reference.GetReference(r.Scheme, &imageRepo)
 	if err != nil {
