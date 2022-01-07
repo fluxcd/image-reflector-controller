@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.15.0
+
+**Release date:** 2022-01-07
+
+This prerelease comes with an update to the Kubernetes and controller-runtime dependencies
+to align them with the Kubernetes 1.23 release.
+
+In addition, the controller is now built with Go 1.17 and Alpine 3.15.
+
+Improvements:
+- Update Go to v1.17
+  [#190](https://github.com/fluxcd/image-reflector-controller/pull/190)
+- Add various instructions on development documentation
+  [#215](https://github.com/fluxcd/image-reflector-controller/pull/215)
+
 ## 0.14.0
 
 **Release date:** 2021-11-23
