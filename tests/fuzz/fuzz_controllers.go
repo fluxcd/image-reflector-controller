@@ -21,14 +21,14 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
+	"embed"
+	"fmt"
+	"io/fs"
 	"io/ioutil"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -38,7 +38,7 @@ import (
 	. "github.com/onsi/ginkgo"
 
 	//. "github.com/onsi/gomega"
-	"github.com/google/go-containerregistry/pkg/registry"
+
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -72,35 +72,87 @@ var badgerDir string
 var badgerDB *badger.DB
 var initter sync.Once
 
-// createKUBEBUILDER_ASSETS runs "setup-envtest use"
-// and returns the path of the 3 binaries
-func createKUBEBUILDER_ASSETS() string {
-	out, err := exec.Command("setup-envtest", "use").Output()
-	if err != nil {
-		panic(err)
-	}
+const defaultBinVersion = "1.23"
 
-	// split the output to get the path:
-	splitString := strings.Split(string(out), " ")
-	binPath := strings.TrimSuffix(splitString[len(splitString)-1], "\n")
-	if err != nil {
-		panic(err)
+func envtestBinVersion() string {
+	if binVersion := os.Getenv("ENVTEST_KUBERNETES_VERSION"); binVersion != "" {
+		return binVersion
 	}
-	return binPath
+	return defaultBinVersion
 }
 
-// initFunc is an init function that is invoked by
-// way of sync.Do.
+//go:embed testdata/crd/*.yaml
+var testFiles embed.FS
+
+// ensureDependencies ensure that:
+// a) setup-envtest is installed and a specific version of envtest is deployed.
+// b) the embedded crd files are exported onto the "runner container".
+//
+// The steps above are important as the fuzzers tend to be built in an
+// environment (or container) and executed in other.
+func ensureDependencies() error {
+	// only install dependencies when running inside a container
+	if _, err := os.Stat("/.dockerenv"); os.IsNotExist(err) {
+		return nil
+	}
+
+	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
+		binVersion := envtestBinVersion()
+		cmd := exec.Command("/usr/bin/bash", "-c", fmt.Sprintf(`go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest && \
+		/root/go/bin/setup-envtest use -p path %s`, binVersion))
+
+		cmd.Env = append(os.Environ(), "GOPATH=/root/go")
+		assetsPath, err := cmd.Output()
+		if err != nil {
+			return err
+		}
+		os.Setenv("KUBEBUILDER_ASSETS", string(assetsPath))
+	}
+
+	// Output all embedded testdata files to disk.
+	embedDirs := []string{"testdata/crd"}
+	for _, dir := range embedDirs {
+		err := os.MkdirAll(dir, 0o755)
+		if err != nil {
+			return fmt.Errorf("mkdir %s: %v", dir, err)
+		}
+
+		templates, err := fs.ReadDir(testFiles, dir)
+		if err != nil {
+			return fmt.Errorf("reading embedded dir: %v", err)
+		}
+
+		for _, template := range templates {
+			fileName := fmt.Sprintf("%s/%s", dir, template.Name())
+			fmt.Println(fileName)
+
+			data, err := testFiles.ReadFile(fileName)
+			if err != nil {
+				return fmt.Errorf("reading embedded file %s: %v", fileName, err)
+			}
+
+			os.WriteFile(fileName, data, 0o644)
+			if err != nil {
+				return fmt.Errorf("writing %s: %v", fileName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// initFunc is an init function that is invoked by way of sync.Do.
 func initFunc() {
-	kubebuilder_assets := createKUBEBUILDER_ASSETS()
-	os.Setenv("KUBEBUILDER_ASSETS", kubebuilder_assets)
+	if err := ensureDependencies(); err != nil {
+		panic(fmt.Sprintf("Failed to ensure dependencies: %v", err))
+	}
 
 	ctrl.SetLogger(
 		zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true), zap.Level(zapcore.PanicLevel)),
 	)
 
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{filepath.Join("testdata", "crd")},
 	}
 
 	var err error
@@ -168,15 +220,9 @@ func initFunc() {
 	}
 }
 
-func registryName(srv *httptest.Server) string {
-	if strings.HasPrefix(srv.URL, "https://") {
-		return strings.TrimPrefix(srv.URL, "https://")
-	} // else assume HTTP
-	return strings.TrimPrefix(srv.URL, "http://")
-}
-
-// Fuzz implements a fuzzer that creates pseudo-random objects.
-func Fuzz(data []byte) int {
+// Fuzz implements a fuzzer that creates pseudo-random objects
+// for the ImageRepositoryController to reconcile.
+func FuzzImageRepositoryController(data []byte) int {
 	initter.Do(initFunc)
 	registryServer = newRegistryServer()
 	defer registryServer.Close()
@@ -206,7 +252,7 @@ func Fuzz(data []byte) int {
 
 	r := imageRepoReconciler
 	if r == nil {
-		panic("r is nil")
+		return 0
 	}
 	err = r.Create(ctx, &repo)
 	if err != nil {
@@ -215,7 +261,7 @@ func Fuzz(data []byte) int {
 	time.Sleep(30 * time.Millisecond)
 	err = r.Get(ctx, imageObjectName, &repo)
 	if err != nil || repo.Status.LastScanResult != nil {
-		panic("Failed1")
+		return 0
 	}
 
 	polNs, err := f.GetStringFrom("abcdefghijklmnopqrstuvwxyz123456789", 59)
@@ -246,71 +292,7 @@ func Fuzz(data []byte) int {
 	time.Sleep(time.Millisecond * 30)
 	err = r.Get(ctx, polName, &pol)
 	if err != nil {
-		panic(err)
+		return 0
 	}
 	return 1
-}
-
-// Taken from here: https://github.com/fluxcd/image-reflector-controller/blob/main/controllers/registry_test.go#L62
-func newRegistryServer() *httptest.Server {
-	regHandler := registry.New()
-	srv := httptest.NewServer(&tagListHandler{
-		registryHandler: regHandler,
-		imagetags:       convenientTags,
-	})
-	return srv
-}
-
-// tje tagListHandler is taken from here:
-// https://github.com/fluxcd/image-reflector-controller/blob/main/controllers/registry_test.go#L62
-
-type tagListHandler struct {
-	registryHandler http.Handler
-	imagetags       map[string][]string
-}
-
-type tagListResult struct {
-	Name string   `json:"name"`
-	Tags []string `json:"tags"`
-}
-
-// Take from here: https://github.com/fluxcd/image-reflector-controller/blob/main/controllers/registry_test.go#L126
-// and modified to not include any of the BDD APIs
-func (h *tagListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if withoutTagsList := strings.TrimSuffix(r.URL.Path, "/tags/list"); r.Method == "GET" && withoutTagsList != r.URL.Path {
-		repo := strings.TrimPrefix(withoutTagsList, "/v2/")
-		if tags, ok := h.imagetags[repo]; ok {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			result := tagListResult{
-				Name: repo,
-				Tags: tags,
-			}
-			err := json.NewEncoder(w).Encode(result)
-			if err != nil {
-				panic(err)
-			}
-			println("Requested tags", repo, strings.Join(tags, ", "))
-			return
-		}
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	// record the fact of a PUT to a tag; the path looks like: /v2/<repo>/manifests/<tag>
-	h.registryHandler.ServeHTTP(w, r)
-	if r.Method == "PUT" {
-		pathElements := strings.Split(r.URL.Path, "/")
-		if len(pathElements) == 5 && pathElements[1] == "v2" && pathElements[3] == "manifests" {
-			repo, tag := pathElements[2], pathElements[4]
-			println("Recording tag", repo, tag)
-			h.imagetags[repo] = append(h.imagetags[repo], tag)
-		}
-	}
-}
-
-var convenientTags = map[string][]string{
-	"convenient": []string{
-		"tag1", "tag2",
-	},
 }
