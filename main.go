@@ -70,6 +70,8 @@ func main() {
 		storageValueLogFileSize int64
 		concurrent              int
 		awsAutoLogin            bool
+		gcpAutoLogin            bool
+		azureAutoLogin          bool
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -81,6 +83,8 @@ func main() {
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
 	flag.BoolVar(&awsAutoLogin, "aws-autologin-for-ecr", false, "(AWS) Attempt to get credentials for images in Elastic Container Registry, when no secret is referenced")
+	flag.BoolVar(&gcpAutoLogin, "gcp-autologin-for-gcr", false, "(GCP) Attempt to get credentials for images in Google Container Registry, when no secret is referenced")
+	flag.BoolVar(&azureAutoLogin, "azure-autologin-for-acr", false, "(Azure) Attempt to get credentials for images in Azure Container Registry, when no secret is referenced")
 
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
@@ -148,6 +152,8 @@ func main() {
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
 		AwsAutoLogin:          awsAutoLogin,
+		GcpAutoLogin:          gcpAutoLogin,
+		AzureAutoLogin:        azureAutoLogin,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {

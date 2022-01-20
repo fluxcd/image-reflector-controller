@@ -73,13 +73,18 @@ repository. This secret is expected to be in the same format as for
 
 For a publicly accessible image repository, you will not need to provide a `secretRef`.
 
-#### ECR and EKS
+#### Automatic Authentication
 
-When running in [<abbr title="Elastic Kubernetes Service">EKS</abbr>][EKS] and using [<abbr
-title="Elastic Container Registry">ECR</abbr>][ECR] to store images, you should be able to rely on
-the controller retrieving credentials automatically. The controller must be run with the flag
-`--aws-autologin-for-ecr` set for this to work. The advice under "Other platforms" below will also
-work for ECR.
+When running on any of the three major cloud providers and using their container registry to store images,
+you should be able to rely on the controller retrieving credentials automatically. The controllers must be run
+with the corresponding flag for each provider.
+
+For  [<abbr title="Elastic Kubernetes Service">EKS</abbr>][EKS] and [<abbr title="Elastic Container Registry">ECR</abbr>][ECR], 
+the flag is `--aws-autologin-for-ecr`.
+For [<abbr title="Google Kubernetes Engine">GKE</abbr>][GKE] and [<abbr title="Google Container Registry">GCR</abbr>][GCR],
+the flag is `--gcp-autologin-for-gcr`.
+For [<abbr title="Azure Kubernetes Service">AKS</abbr>][AKS] and [<abbr title="Azure Container Registry">ACR</abbr>][ACR],
+the flag is  `--azure-autologin-for-acr`.
 
 #### Other platforms
 
@@ -261,3 +266,7 @@ and reference it under `secretRef`.
 [sops-guide]: https://toolkit.fluxcd.io/guides/mozilla-sops/
 [EKS]: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
 [ECR]: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
+[GKE]: https://cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+[GCR]: https://cloud.google.com/container-registry/docs/overview
+[AKS]: https://docs.microsoft.com/en-us/azure/aks/intro-kubernetes
+[ACR]: https://docs.microsoft.com/en-us/azure/container-registry/container-registry-intro
