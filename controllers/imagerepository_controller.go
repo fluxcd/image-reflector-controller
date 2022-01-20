@@ -280,6 +280,8 @@ func getGCRLoginAuth(ctx context.Context) (authn.AuthConfig, error) {
 	if err != nil {
 		return authConfig, err
 	}
+	defer io.Copy(io.Discard, response.Body)
+	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
 		return authConfig, fmt.Errorf("unexpected status from metadata service: %s", response.Status)
@@ -288,14 +290,6 @@ func getGCRLoginAuth(ctx context.Context) (authn.AuthConfig, error) {
 	var accessToken gceToken
 	decoder := json.NewDecoder(response.Body)
 	if err := decoder.Decode(&accessToken); err != nil {
-		return authConfig, err
-	}
-
-	if _, err := io.Copy(io.Discard, response.Body); err != nil {
-		return authConfig, err
-	}
-
-	if err := response.Body.Close(); err != nil {
 		return authConfig, err
 	}
 
