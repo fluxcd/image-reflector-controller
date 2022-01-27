@@ -21,6 +21,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
 )
 
@@ -71,15 +72,7 @@ type ImageRepositorySpec struct {
 	// AccessFrom defines an ACL for allowing cross-namespace references
 	// to the ImageRepository object based on the caller's namespace labels.
 	// +optional
-	AccessFrom *AccessFrom `json:"accessFrom,omitempty"`
-}
-
-type AccessFrom struct {
-	NamespaceSelectors []NamespaceSelector `json:"namespaceSelectors,omitempty"`
-}
-
-type NamespaceSelector struct {
-	MatchLabels map[string]string `json:"matchLabels,omitempty"`
+	AccessFrom *acl.AccessFrom `json:"accessFrom,omitempty"`
 }
 
 type ScanResult struct {

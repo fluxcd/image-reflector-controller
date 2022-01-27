@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/fluxcd/pkg/apis/acl"
+
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
@@ -480,7 +482,7 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval:   metav1.Duration{Duration: reconciliationInterval},
 						Image:      imgRepo,
-						AccessFrom: &imagev1.AccessFrom{},
+						AccessFrom: nil,
 					},
 				}
 				repoObjectName := types.NamespacedName{
@@ -532,7 +534,7 @@ var _ = Describe("ImagePolicy controller", func() {
 					_ = r.Get(ctx, polObjectName, &pol)
 					return apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
 				}, timeout, interval).Should(BeTrue())
-				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal("AccessDenied"))
+				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal(acl.AccessDeniedReason))
 
 				Expect(r.Delete(ctx, &pol)).To(Succeed())
 			})
@@ -553,8 +555,8 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
+						AccessFrom: &acl.AccessFrom{
+							NamespaceSelectors: []acl.NamespaceSelector{
 								{
 									MatchLabels: make(map[string]string),
 								},
@@ -636,8 +638,8 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
+						AccessFrom: &acl.AccessFrom{
+							NamespaceSelectors: []acl.NamespaceSelector{
 								{
 									MatchLabels: policyNamespace.Labels,
 								},
@@ -737,8 +739,8 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
+						AccessFrom: &acl.AccessFrom{
+							NamespaceSelectors: []acl.NamespaceSelector{
 								{
 									MatchLabels: map[string]string{
 										"tenant": "b",
