@@ -57,6 +57,7 @@ type ImagePolicyReconciler struct {
 	ExternalEventRecorder *events.Recorder
 	MetricsRecorder       *metrics.Recorder
 	Database              DatabaseReader
+	ACLOptions            acl.Options
 }
 
 type ImagePolicyReconcilerOptions struct {
@@ -97,6 +98,23 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if pol.Spec.ImageRepositoryRef.Namespace != "" {
 		repoNamespacedName.Namespace = pol.Spec.ImageRepositoryRef.Namespace
 	}
+
+	// check if we're allowed to reference across namespaces, before trying to fetch it
+	if r.ACLOptions.NoCrossNamespaceRefs && repoNamespacedName.Namespace != pol.GetNamespace() {
+		err := fmt.Errorf("cannot access '%s/%s', cross-namespace references have been blocked", imagev1.ImageRepositoryKind, repoNamespacedName)
+		imagev1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			aclapi.AccessDeniedReason,
+			err.Error(),
+		)
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		log.Error(err, "access denied to cross-namespace ImageRepository")
+		return ctrl.Result{}, nil // this cannot proceed until the spec changes, so no need to requeue explicitly
+	}
+
 	if err := r.Get(ctx, repoNamespacedName, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
 			imagev1.SetImagePolicyReadiness(

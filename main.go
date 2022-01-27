@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
+	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/leaderelection"
@@ -72,6 +73,7 @@ func main() {
 		awsAutoLogin            bool
 		gcpAutoLogin            bool
 		azureAutoLogin          bool
+		aclOptions              acl.Options
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -89,6 +91,7 @@ func main() {
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
 	leaderElectionOptions.BindFlags(flag.CommandLine)
+	aclOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	log := logger.NewLogger(logOptions)
@@ -167,6 +170,7 @@ func main() {
 		ExternalEventRecorder: eventRecorder,
 		MetricsRecorder:       metricsRecorder,
 		Database:              db,
+		ACLOptions:            aclOptions,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
