@@ -12,38 +12,6 @@ OCI image repositories into a cluster, so they can be consulted for
 e.g., automation.</p>
 Resource Types:
 <ul class="simple"></ul>
-<h3 id="image.toolkit.fluxcd.io/v1beta1.AccessFrom">AccessFrom
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta1.ImageRepositorySpec">ImageRepositorySpec</a>)
-</p>
-<div class="md-typeset__scrollwrap">
-<div class="md-typeset__table">
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>namespaceSelectors</code><br>
-<em>
-<a href="#image.toolkit.fluxcd.io/v1beta1.NamespaceSelector">
-[]NamespaceSelector
-</a>
-</em>
-</td>
-<td>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
 <h3 id="image.toolkit.fluxcd.io/v1beta1.AlphabeticalPolicy">AlphabeticalPolicy
 </h3>
 <p>
@@ -509,9 +477,7 @@ It does not apply to already started scans. Defaults to false.</p>
 <td>
 <code>accessFrom</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta1.AccessFrom">
-AccessFrom
-</a>
+github.com/fluxcd/pkg/apis/acl.AccessFrom
 </em>
 </td>
 <td>
@@ -655,9 +621,7 @@ It does not apply to already started scans. Defaults to false.</p>
 <td>
 <code>accessFrom</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta1.AccessFrom">
-AccessFrom
-</a>
+github.com/fluxcd/pkg/apis/acl.AccessFrom
 </em>
 </td>
 <td>
@@ -753,36 +717,6 @@ github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
 <p>
 (Members of <code>ReconcileRequestStatus</code> are embedded into this type.)
 </p>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-<h3 id="image.toolkit.fluxcd.io/v1beta1.NamespaceSelector">NamespaceSelector
-</h3>
-<p>
-(<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta1.AccessFrom">AccessFrom</a>)
-</p>
-<div class="md-typeset__scrollwrap">
-<div class="md-typeset__table">
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>
-<code>matchLabels</code><br>
-<em>
-map[string]string
-</em>
-</td>
-<td>
 </td>
 </tr>
 </tbody>

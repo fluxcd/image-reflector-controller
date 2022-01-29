@@ -21,10 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kuberecorder "k8s.io/client-go/tools/record"
@@ -36,7 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	aclapi "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 
@@ -57,6 +57,7 @@ type ImagePolicyReconciler struct {
 	ExternalEventRecorder *events.Recorder
 	MetricsRecorder       *metrics.Recorder
 	Database              DatabaseReader
+	ACLOptions            acl.Options
 }
 
 type ImagePolicyReconcilerOptions struct {
@@ -97,6 +98,23 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if pol.Spec.ImageRepositoryRef.Namespace != "" {
 		repoNamespacedName.Namespace = pol.Spec.ImageRepositoryRef.Namespace
 	}
+
+	// check if we're allowed to reference across namespaces, before trying to fetch it
+	if r.ACLOptions.NoCrossNamespaceRefs && repoNamespacedName.Namespace != pol.GetNamespace() {
+		err := fmt.Errorf("cannot access '%s/%s', cross-namespace references have been blocked", imagev1.ImageRepositoryKind, repoNamespacedName)
+		imagev1.SetImagePolicyReadiness(
+			&pol,
+			metav1.ConditionFalse,
+			aclapi.AccessDeniedReason,
+			err.Error(),
+		)
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		log.Error(err, "access denied to cross-namespace ImageRepository")
+		return ctrl.Result{}, nil // this cannot proceed until the spec changes, so no need to requeue explicitly
+	}
+
 	if err := r.Get(ctx, repoNamespacedName, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
 			imagev1.SetImagePolicyReadiness(
@@ -115,11 +133,13 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// check if we are allowed to use the referenced ImageRepository
-	if _, err := r.hasAccessToRepository(ctx, req, pol.Spec.ImageRepositoryRef, repo.Spec.AccessFrom); err != nil {
+
+	aclAuth := acl.NewAuthorization(r.Client)
+	if err := aclAuth.HasAccessToRef(ctx, &pol, repoNamespacedName, repo.Spec.AccessFrom); err != nil {
 		imagev1.SetImagePolicyReadiness(
 			&pol,
 			metav1.ConditionFalse,
-			"AccessDenied",
+			aclapi.AccessDeniedReason,
 			err.Error(),
 		)
 		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
@@ -326,38 +346,4 @@ func (r *ImagePolicyReconciler) patchStatus(ctx context.Context, req ctrl.Reques
 	res.Status = newStatus
 
 	return r.Status().Patch(ctx, &res, patch)
-}
-
-func (r *ImagePolicyReconciler) hasAccessToRepository(ctx context.Context, policy ctrl.Request, repo meta.NamespacedObjectReference, acl *imagev1.AccessFrom) (bool, error) {
-	// grant access if the policy is in the same namespace as the repository
-	if repo.Namespace == "" || policy.Namespace == repo.Namespace {
-		return true, nil
-	}
-
-	// deny access if the repository has no ACL defined
-	if acl == nil {
-		return false, fmt.Errorf("ImageRepository '%s/%s' can't be accessed due to missing access list",
-			repo.Namespace, repo.Name)
-	}
-
-	// get the policy namespace labels
-	var policyNamespace v1.Namespace
-	if err := r.Get(ctx, types.NamespacedName{Name: policy.Namespace}, &policyNamespace); err != nil {
-		return false, err
-	}
-	policyLabels := policyNamespace.GetLabels()
-
-	// check if the policy namespace labels match any ACL
-	for _, selector := range acl.NamespaceSelectors {
-		sel, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: selector.MatchLabels})
-		if err != nil {
-			return false, err
-		}
-		if sel.Matches(labels.Set(policyLabels)) {
-			return true, nil
-		}
-	}
-
-	return false, fmt.Errorf("ImageRepository '%s/%s' can't be accessed due to labels mismatch on namespace '%s'",
-		repo.Namespace, repo.Name, policy.Namespace)
 }

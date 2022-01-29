@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	aclapi "github.com/fluxcd/pkg/apis/acl"
+
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
@@ -45,6 +47,72 @@ var _ = Describe("ImagePolicy controller", func() {
 
 	AfterEach(func() {
 		registryServer.Close()
+	})
+
+	When("cross-namespace refs disallowed", func() {
+		BeforeEach(func() {
+			imagePolicyReconciler.ACLOptions.NoCrossNamespaceRefs = true
+		})
+
+		AfterEach(func() {
+			imagePolicyReconciler.ACLOptions.NoCrossNamespaceRefs = false
+		})
+
+		It("fails to reconcile an ImagePolicy with a cross-ns ref", func() {
+			// a bona fide image repo is needed so that it _would_ succeed if not for the disallowed cross-ns ref.
+			versions := []string{"1.0.1", "1.0.2", "1.1.0-alpha"}
+			imgRepo := loadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+
+			repo := imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
+				},
+			}
+			imageObjectName := types.NamespacedName{
+				Name:      "polimage-" + randStringRunes(5),
+				Namespace: "default",
+			}
+			repo.Name = imageObjectName.Name
+			repo.Namespace = imageObjectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+			Expect(k8sClient.Create(ctx, &repo)).To(Succeed())
+
+			ns := corev1.Namespace{}
+			ns.Name = "cross-ns-test-" + randStringRunes(5)
+			Expect(k8sClient.Create(ctx, &ns)).To(Succeed())
+
+			imagePolicyName := types.NamespacedName{
+				Namespace: ns.Name,
+				Name:      "policy-test-" + randStringRunes(5),
+			}
+			imagePolicy := imagev1.ImagePolicy{
+				Spec: imagev1.ImagePolicySpec{
+					ImageRepositoryRef: meta.NamespacedObjectReference{
+						Namespace: repo.Namespace,
+						Name:      repo.Name,
+					},
+					Policy: imagev1.ImagePolicyChoice{
+						SemVer: &imagev1.SemVerPolicy{
+							Range: "1.x",
+						},
+					},
+				},
+			}
+			imagePolicy.Namespace = imagePolicyName.Namespace
+			imagePolicy.Name = imagePolicyName.Name
+			Expect(k8sClient.Create(ctx, &imagePolicy)).To(Succeed())
+
+			var pol imagev1.ImagePolicy
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, imagePolicyName, &pol)
+				return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
+			}, timeout, interval).Should(BeTrue())
+			ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
+			Expect(ready.Reason).To(Equal(aclapi.AccessDeniedReason))
+		})
 	})
 
 	Context("Calculates an image from a repository's tags", func() {
@@ -480,7 +548,7 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval:   metav1.Duration{Duration: reconciliationInterval},
 						Image:      imgRepo,
-						AccessFrom: &imagev1.AccessFrom{},
+						AccessFrom: nil,
 					},
 				}
 				repoObjectName := types.NamespacedName{
@@ -532,7 +600,7 @@ var _ = Describe("ImagePolicy controller", func() {
 					_ = r.Get(ctx, polObjectName, &pol)
 					return apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
 				}, timeout, interval).Should(BeTrue())
-				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal("AccessDenied"))
+				Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal(aclapi.AccessDeniedReason))
 
 				Expect(r.Delete(ctx, &pol)).To(Succeed())
 			})
@@ -553,8 +621,8 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
+						AccessFrom: &aclapi.AccessFrom{
+							NamespaceSelectors: []aclapi.NamespaceSelector{
 								{
 									MatchLabels: make(map[string]string),
 								},
@@ -636,8 +704,8 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
+						AccessFrom: &aclapi.AccessFrom{
+							NamespaceSelectors: []aclapi.NamespaceSelector{
 								{
 									MatchLabels: policyNamespace.Labels,
 								},
@@ -737,8 +805,8 @@ var _ = Describe("ImagePolicy controller", func() {
 					Spec: imagev1.ImageRepositorySpec{
 						Interval: metav1.Duration{Duration: reconciliationInterval},
 						Image:    imgRepo,
-						AccessFrom: &imagev1.AccessFrom{
-							NamespaceSelectors: []imagev1.NamespaceSelector{
+						AccessFrom: &aclapi.AccessFrom{
+							NamespaceSelectors: []aclapi.NamespaceSelector{
 								{
 									MatchLabels: map[string]string{
 										"tenant": "b",
