@@ -86,6 +86,14 @@ the flag is `--gcp-autologin-for-gcr`.
 For [<abbr title="Azure Kubernetes Service">AKS</abbr>][AKS] and [<abbr title="Azure Container Registry">ACR</abbr>][ACR],
 the flag is  `--azure-autologin-for-acr`.
 
+These flags can be added by including a patch in the `kustomization.yaml` overlay file in your `flux-system`,
+as described in [cloud providers authentication guide][]. If there is no need for a security boundary on your
+cluster around container registries and you are not using Flux with so-called "soft multi-tenancy", then
+you will likely prefer to use the Auto-Login feature for the convenience and improved ease of use.
+
+Alternatively, the advice to use a cron job to refresh a secret token under [Other platforms][other platforms]
+below will also work with ECR, GCR, and ACR environments that require security boundaries and soft multi-tenancy.
+
 #### Other platforms
 
 If you are running on another platform that links service permissions to service accounts, you will
@@ -195,7 +203,7 @@ type ImageRepositoryStatus struct {
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	// CannonicalName is the name of the image repository with all the
+	// CanonicalImageName is the name of the image repository with all the
 	// implied bits made explicit; e.g., `docker.io/library/alpine`
 	// rather than `alpine`.
 	// +optional
@@ -209,7 +217,7 @@ type ImageRepositoryStatus struct {
 }
 ```
 
-The `CanonicalName` field gives the fully expanded image name, filling in any parts left implicit in
+The `CanonicalImageName` field gives the fully expanded image name, filling in any parts left implicit in
 the spec. For instance, `alpine` expands to `docker.io/library/alpine`.
 
 The `LastScanResult` field gives a summary of the most recent scan:
@@ -270,3 +278,5 @@ and reference it under `secretRef`.
 [GCR]: https://cloud.google.com/container-registry/docs/overview
 [AKS]: https://docs.microsoft.com/en-us/azure/aks/intro-kubernetes
 [ACR]: https://docs.microsoft.com/en-us/azure/container-registry/container-registry-intro
+[cloud providers authentication guide]: https://fluxcd.io/docs/guides/image-update/#imagerepository-cloud-providers-authentication
+[other platforms]: https://fluxcd.io/docs/components/image/imagerepositories/#other-platforms
