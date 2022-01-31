@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -310,6 +311,36 @@ var _ = Describe("ImageRepository controller", func() {
 				return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 			}, timeout, interval).Should(BeTrue())
 			Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
+		})
+		It("does not fail if using a hostname with a port number", func() {
+			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo = strings.ReplaceAll(imgRepo, "127.0.0.1", "localhost")
+
+			repo = imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval: metav1.Duration{Duration: reconciliationInterval},
+					Image:    imgRepo,
+				},
+			}
+			objectName := types.NamespacedName{
+				Name:      "random",
+				Namespace: "default",
+			}
+
+			repo.Name = objectName.Name
+			repo.Namespace = objectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+
+			r := imageRepoReconciler
+			Expect(r.Create(ctx, &repo)).To(Succeed())
+
+			Eventually(func() bool {
+				err := r.Get(context.Background(), objectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
+			}, timeout, interval).Should(BeTrue())
+			Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 		})
 	})
 })
