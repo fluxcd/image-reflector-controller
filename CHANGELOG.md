@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.16.0
+
+**Release date:** 2022-01-31
+
+This prerelease comes with support for automatically getting
+credentials from Azure and Google Cloud when scanning images in ACR and GCR.
+To configure autologin for ACR, ECR or GCR please see the
+[cloud providers authentication guide](https://fluxcd.io/docs/guides/image-update/#imagerepository-cloud-providers-authentication).
+
+Platform admins can disable cross-namespace references with the
+`--no-cross-namespace-refs=true` flag. When this flag is set,
+image policies can only refer to image repositories in the same namespace
+as the policy object, preventing tenants from accessing another tenant's repositories.
+
+Starting with this version, the controller deployment conforms to the
+Kubernetes [restricted pod security standard](https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted):
+- all Linux capabilities were dropped
+- the root filesystem was set to read-only
+- the seccomp profile was set to the runtime default
+- run as non-root was enabled
+- the user and group ID was set to 65534
+
+**Breaking changes**:
+- The use of new seccomp API requires Kubernetes 1.19.
+- The controller container is now executed under 65534:65534 (userid:groupid).
+  This change may break deployments that hard-coded the user ID of 'controller' in their PodSecurityPolicy.
+
+Features:
+- Get credentials from GCP/Azure when needed
+  [#194](https://github.com/fluxcd/image-reflector-controller/pull/194)
+- Allow disabling cross-namespace references to image repositories
+  [#228](https://github.com/fluxcd/image-reflector-controller/pull/228)
+
+Improvements:
+- Publish SBOM and sign release artifacts
+  [#227](https://github.com/fluxcd/image-reflector-controller/pull/227)
+- Drop capabilities, enable seccomp and enforce runAsNonRoot
+  [#223](https://github.com/fluxcd/image-reflector-controller/pull/223)
+- Refactor Fuzz implementation
+  [#221](https://github.com/fluxcd/image-reflector-controller/pull/221)
+- Clarifications for auto-login feature
+  [#219](https://github.com/fluxcd/image-reflector-controller/pull/219)
+
+Fixes:
+- Fix scheme validation check when using host:port
+  [#222](https://github.com/fluxcd/image-reflector-controller/pull/222)
+- Fix makefile envtest and controller-gen usage
+  [#218](https://github.com/fluxcd/image-reflector-controller/pull/218)
+
 ## 0.15.0
 
 **Release date:** 2022-01-07
