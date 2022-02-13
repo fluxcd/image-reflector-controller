@@ -687,7 +687,7 @@ func getAzureLoginAuth(ctx context.Context, ref name.Reference) (authn.AuthConfi
 		return authConfig, err
 	}
 	armToken, err := cred.GetToken(ctx, policy.TokenRequestOptions{
-		Scopes: []string{string(arm.AzurePublicCloud)},
+		Scopes: []string{string(arm.AzurePublicCloud) + ".default"},
 	})
 	if err != nil {
 		return authConfig, err
