@@ -242,7 +242,7 @@ var _ = Describe("ImagePolicy controller", func() {
 					return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
 				}, timeout, interval).Should(BeTrue())
 				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
-				Expect(ready.Message).To(ContainSubstring("invalid policy"))
+				Expect(ready.Reason).To(ContainSubstring("InvalidPolicy"))
 
 				Expect(r.Delete(ctx, &pol)).To(Succeed())
 			})

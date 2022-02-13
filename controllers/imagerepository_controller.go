@@ -171,7 +171,8 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
 			return ctrl.Result{Requeue: true}, err
 		}
-		log.Error(err, "Unable to parse image name", "imageName", imageRepo.Spec.Image)
+		err := fmt.Errorf("Unable to parse image name: %s: %w", imageRepo.Spec.Image, err)
+		r.event(ctx, imageRepo, events.EventSeverityError, err.Error())
 		return ctrl.Result{Requeue: true}, err
 	}
 
