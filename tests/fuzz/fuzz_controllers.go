@@ -17,7 +17,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package fuzz
 
 import (
 	"context"
@@ -37,8 +37,6 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	. "github.com/onsi/ginkgo"
 
-	//. "github.com/onsi/gomega"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -50,14 +48,9 @@ import (
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
-)
-
-const (
-	timeout                = time.Second * 30
-	contextTimeout         = time.Second * 10
-	interval               = time.Second * 1
-	reconciliationInterval = time.Second * 2
+	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
 var registryServer *httptest.Server
@@ -65,8 +58,8 @@ var cfg *rest.Config
 var k8sClient client.Client
 var k8sMgr ctrl.Manager
 var stopManager func()
-var imageRepoReconciler *ImageRepositoryReconciler
-var imagePolicyReconciler *ImagePolicyReconciler
+var imageRepoReconciler *controllers.ImageRepositoryReconciler
+var imagePolicyReconciler *controllers.ImagePolicyReconciler
 var testEnv *envtest.Environment
 var badgerDir string
 var badgerDB *badger.DB
@@ -185,22 +178,22 @@ func initFunc() {
 		panic(err)
 	}
 
-	imageRepoReconciler = &ImageRepositoryReconciler{
+	imageRepoReconciler = &controllers.ImageRepositoryReconciler{
 		Client:   k8sMgr.GetClient(),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	err = imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})
+	err = imageRepoReconciler.SetupWithManager(k8sMgr, controllers.ImageRepositoryReconcilerOptions{})
 	if err != nil {
 		panic(err)
 	}
 
-	imagePolicyReconciler = &ImagePolicyReconciler{
+	imagePolicyReconciler = &controllers.ImagePolicyReconciler{
 		Client:   k8sMgr.GetClient(),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	err = imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})
+	err = imagePolicyReconciler.SetupWithManager(k8sMgr, controllers.ImagePolicyReconcilerOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -224,11 +217,11 @@ func initFunc() {
 // for the ImageRepositoryController to reconcile.
 func FuzzImageRepositoryController(data []byte) int {
 	initter.Do(initFunc)
-	registryServer = newRegistryServer()
+	registryServer = test.NewRegistryServer()
 	defer registryServer.Close()
 	f := fuzz.NewConsumer(data)
 
-	imgRepo := registryName(registryServer)
+	imgRepo := test.RegistryName(registryServer)
 	repo := imagev1.ImageRepository{}
 	err := f.GenerateStruct(&repo)
 	if err != nil {

@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	"github.com/fluxcd/image-reflector-controller/internal/test"
 	"github.com/fluxcd/pkg/apis/meta"
 )
 
@@ -56,9 +57,9 @@ var _ = Context("using TLS certificates", func() {
 	var clientTLSCert tls.Certificate
 
 	BeforeEach(func() {
-		reg := &tagListHandler{
-			registryHandler: registry.New(),
-			imagetags:       map[string][]string{},
+		reg := &test.TagListHandler{
+			RegistryHandler: registry.New(),
+			Imagetags:       map[string][]string{},
 		}
 		srv = httptest.NewUnstartedServer(reg)
 
@@ -161,7 +162,7 @@ var _ = Context("using TLS certificates", func() {
 		pool.AddCert(srv.Certificate())
 		transport.TLSClientConfig.RootCAs = pool
 		transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-		imgRepo := loadImages(srv, "image", []string{"1.0.0"}, remote.WithTransport(transport))
+		imgRepo := test.LoadImages(srv, "image", []string{"1.0.0"}, remote.WithTransport(transport))
 
 		secretName := "tls-secret"
 		tlsSecret := corev1.Secret{
