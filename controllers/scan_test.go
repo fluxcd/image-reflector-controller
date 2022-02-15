@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	"github.com/fluxcd/image-reflector-controller/internal/test"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -43,7 +44,7 @@ var _ = Describe("ImageRepository controller", func() {
 	var registryServer *httptest.Server
 
 	BeforeEach(func() {
-		registryServer = newRegistryServer()
+		registryServer = test.NewRegistryServer()
 	})
 
 	AfterEach(func() {
@@ -87,7 +88,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	It("fetches the tags for an image", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := loadImages(registryServer, "test-fetch", versions)
+		imgRepo := test.LoadImages(registryServer, "test-fetch", versions)
 
 		repo = imagev1.ImageRepository{
 			Spec: imagev1.ImageRepositorySpec{
@@ -157,7 +158,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("when the ImageRepository gets a 'reconcile at' annotation", func() {
 		It("scans right away", func() {
-			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
 
 			repo = imagev1.ImageRepository{
 				Spec: imagev1.ImageRepositorySpec{
@@ -212,7 +213,7 @@ var _ = Describe("ImageRepository controller", func() {
 			username, password = "authuser", "authpass"
 			// a little clumsy -- replace the registry server
 			registryServer.Close()
-			registryServer = newAuthenticatedRegistryServer(username, password)
+			registryServer = test.NewAuthenticatedRegistryServer(username, password)
 			// this mimics what you get if you use
 			//     docker create secret docker-registry ...
 			secret = &corev1.Secret{
@@ -227,7 +228,7 @@ var _ = Describe("ImageRepository controller", func() {
     }
   }
 }
-`, registryName(registryServer), username, password),
+`, test.RegistryName(registryServer), username, password),
 				},
 			}
 			secret.Namespace = "default"
@@ -242,7 +243,7 @@ var _ = Describe("ImageRepository controller", func() {
 		It("can scan the registry", func() {
 			versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
 			// this, as a side-effect, verifies that the username and password work with the registry
-			imgRepo := loadImages(registryServer, "test-auth", versions, remote.WithAuth(&authn.Basic{
+			imgRepo := test.LoadImages(registryServer, "test-auth", versions, remote.WithAuth(&authn.Basic{
 				Username: username,
 				Password: password,
 			}))
@@ -281,7 +282,7 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("ImageRepository image attribute is invalid", func() {
 		It("fails with an error when prefixed with a scheme", func() {
-			imgRepo := "https://" + loadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo := "https://" + test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
 
 			repo = imagev1.ImageRepository{
 				Spec: imagev1.ImageRepositorySpec{
@@ -313,7 +314,7 @@ var _ = Describe("ImageRepository controller", func() {
 			Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
 		})
 		It("does not fail if using a hostname with a port number", func() {
-			imgRepo := loadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
 			imgRepo = strings.ReplaceAll(imgRepo, "127.0.0.1", "localhost")
 
 			repo = imagev1.ImageRepository{
