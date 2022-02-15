@@ -43,7 +43,7 @@ import (
 // for Eventually
 const (
 	timeout                = time.Second * 30
-	contextTimeout         = time.Second * 10
+	contextTimeout         = time.Second * 20
 	interval               = time.Second * 1
 	reconciliationInterval = time.Second * 2
 )

@@ -99,35 +99,30 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		repoNamespacedName.Namespace = pol.Spec.ImageRepositoryRef.Namespace
 	}
 
+	recordError := func(err error, reason string) (ctrl.Result, error) {
+		r.event(ctx, pol, events.EventSeverityError, err.Error())
+		imagev1.SetImagePolicyReadiness(&pol, metav1.ConditionFalse, reason, err.Error())
+		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
+			err = fmt.Errorf("failed to patch ImagePolicy: %s.%s status: %w", pol.GetName(), pol.GetNamespace(), err)
+			return ctrl.Result{Requeue: true}, err
+		}
+		return ctrl.Result{}, nil
+	}
+	recordErrorAndLog := func(err error, errorMsg, reason string) (ctrl.Result, error) {
+		log.Error(err, errorMsg)
+		return recordError(err, reason)
+	}
+
 	// check if we're allowed to reference across namespaces, before trying to fetch it
 	if r.ACLOptions.NoCrossNamespaceRefs && repoNamespacedName.Namespace != pol.GetNamespace() {
 		err := fmt.Errorf("cannot access '%s/%s', cross-namespace references have been blocked", imagev1.ImageRepositoryKind, repoNamespacedName)
-		imagev1.SetImagePolicyReadiness(
-			&pol,
-			metav1.ConditionFalse,
-			aclapi.AccessDeniedReason,
-			err.Error(),
-		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Error(err, "access denied to cross-namespace ImageRepository")
-		return ctrl.Result{}, nil // this cannot proceed until the spec changes, so no need to requeue explicitly
+		// this cannot proceed until the spec changes, so no need to requeue explicitly
+		return recordErrorAndLog(err, "access denied to cross-namespace ImageRepository", aclapi.AccessDeniedReason)
 	}
 
 	if err := r.Get(ctx, repoNamespacedName, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			imagev1.SetImagePolicyReadiness(
-				&pol,
-				metav1.ConditionFalse,
-				meta.DependencyNotReadyReason,
-				err.Error(),
-			)
-			if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-				return ctrl.Result{Requeue: true}, err
-			}
-			log.Error(err, "referenced ImageRepository does not exist")
-			return ctrl.Result{}, nil
+			return recordErrorAndLog(err, "referenced ImageRepository does not exist", meta.DependencyNotReadyReason)
 		}
 		return ctrl.Result{}, err
 	}
@@ -136,17 +131,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	aclAuth := acl.NewAuthorization(r.Client)
 	if err := aclAuth.HasAccessToRef(ctx, &pol, repoNamespacedName, repo.Spec.AccessFrom); err != nil {
-		imagev1.SetImagePolicyReadiness(
-			&pol,
-			metav1.ConditionFalse,
-			aclapi.AccessDeniedReason,
-			err.Error(),
-		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Error(err, "access denied")
-		return ctrl.Result{}, nil
+		return recordErrorAndLog(err, "access denied", aclapi.AccessDeniedReason)
 	}
 
 	// if the image repo hasn't been scanned, don't bother
@@ -167,18 +152,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	policer, err := policy.PolicerFromSpec(pol.Spec.Policy)
 	if err != nil {
-		msg := fmt.Sprintf("invalid policy: %s", err.Error())
-		imagev1.SetImagePolicyReadiness(
-			&pol,
-			metav1.ConditionFalse,
-			"InvalidPolicy",
-			msg,
-		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Error(err, "invalid policy")
-		return ctrl.Result{}, nil
+		return recordErrorAndLog(err, "invalid policy", "InvalidPolicy")
 	}
 
 	var latest string
@@ -203,35 +177,20 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	if err != nil {
-		imagev1.SetImagePolicyReadiness(
-			&pol,
-			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
-			err.Error(),
-		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		r.event(ctx, pol, events.EventSeverityError, err.Error())
-		return ctrl.Result{}, err
-	}
-
-	if latest == "" {
-		msg := fmt.Sprintf("Cannot determine latest tag for policy: %s", err.Error())
+	if err != nil || latest == "" {
 		pol.Status.LatestImage = ""
-		imagev1.SetImagePolicyReadiness(
-			&pol,
-			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
-			msg,
-		)
-
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{}, err
+		if err == nil {
+			err = fmt.Errorf("Cannot determine latest tag for policy")
+		} else {
+			err = fmt.Errorf("Cannot determine latest tag for policy: %w", err)
 		}
-		r.event(ctx, pol, events.EventSeverityError, msg)
-		return ctrl.Result{}, nil
+		res, recErr := recordError(err, meta.ReconciliationFailedReason)
+		if recErr != nil {
+			// log the actual error since we are returning the error related to patching status
+			log.Error(err, "")
+			return res, recErr
+		}
+		return ctrl.Result{}, err
 	}
 
 	msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
