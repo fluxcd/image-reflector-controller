@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -118,7 +119,13 @@ func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
 func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reason, message string) {
 	p.Status.ObservedGeneration = p.ObjectMeta.Generation
-	meta.SetResourceCondition(p, meta.ReadyCondition, status, reason, message)
+	newCondition := metav1.Condition{
+		Type:    meta.ReadyCondition,
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	}
+	apimeta.SetStatusCondition(p.GetStatusConditions(), newCondition)
 }
 
 // +kubebuilder:object:root=true

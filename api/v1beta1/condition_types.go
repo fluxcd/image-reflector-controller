@@ -19,4 +19,16 @@ package v1beta1
 const (
 	// ImageURLInvalidReason represents the fact that a given repository has an invalid image URL.
 	ImageURLInvalidReason string = "ImageURLInvalid"
+
+	// DependencyNotReadyReason represents the fact that
+	// one of the dependencies is not ready.
+	DependencyNotReadyReason string = "DependencyNotReady"
+
+	// ReconciliationSucceededReason represents the fact that
+	// the reconciliation succeeded.
+	ReconciliationSucceededReason string = "ReconciliationSucceeded"
+
+	// ReconciliationFailedReason represents the fact that
+	// the reconciliation failed.
+	ReconciliationFailedReason string = "ReconciliationFailed"
 )
