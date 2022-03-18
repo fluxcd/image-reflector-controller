@@ -52,12 +52,11 @@ const imageRepoKey = ".spec.imageRepository"
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              DatabaseReader
-	ACLOptions            acl.Options
+	Scheme          *runtime.Scheme
+	EventRecorder   kuberecorder.EventRecorder
+	MetricsRecorder *metrics.Recorder
+	Database        DatabaseReader
+	ACLOptions      acl.Options
 }
 
 type ImagePolicyReconcilerOptions struct {
@@ -122,7 +121,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	if err := r.Get(ctx, repoNamespacedName, &repo); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			return recordErrorAndLog(err, "referenced ImageRepository does not exist", meta.DependencyNotReadyReason)
+			return recordErrorAndLog(err, "referenced ImageRepository does not exist", imagev1.DependencyNotReadyReason)
 		}
 		return ctrl.Result{}, err
 	}
@@ -140,7 +139,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		imagev1.SetImagePolicyReadiness(
 			&pol,
 			metav1.ConditionFalse,
-			meta.DependencyNotReadyReason,
+			imagev1.DependencyNotReadyReason,
 			msg,
 		)
 		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
@@ -184,7 +183,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		} else {
 			err = fmt.Errorf("Cannot determine latest tag for policy: %w", err)
 		}
-		res, recErr := recordError(err, meta.ReconciliationFailedReason)
+		res, recErr := recordError(err, imagev1.ReconciliationFailedReason)
 		if recErr != nil {
 			// log the actual error since we are returning the error related to patching status
 			log.Error(err, "")
@@ -198,7 +197,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	imagev1.SetImagePolicyReadiness(
 		&pol,
 		metav1.ConditionTrue,
-		meta.ReconciliationSucceededReason,
+		imagev1.ReconciliationSucceededReason,
 		msg,
 	)
 
@@ -259,19 +258,11 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []
 
 // event emits a Kubernetes event and forwards the event to notification controller if configured
 func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1.ImagePolicy, severity, msg string) {
-	if r.EventRecorder != nil {
-		r.EventRecorder.Event(&policy, "Normal", severity, msg)
+	eventtype := "Normal"
+	if severity == events.EventSeverityError {
+		eventtype = "Warning"
 	}
-	if r.ExternalEventRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &policy)
-		if err == nil {
-			err = r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg)
-		}
-		if err != nil {
-			ctrl.LoggerFrom(ctx).Error(err, "unable to send event")
-			return
-		}
-	}
+	r.EventRecorder.Eventf(&policy, eventtype, severity, msg)
 }
 
 func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, policy *imagev1.ImagePolicy) {

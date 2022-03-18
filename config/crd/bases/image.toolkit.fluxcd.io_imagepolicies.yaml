@@ -61,7 +61,7 @@ spec:
                   image being scanned
                 properties:
                   name:
-                    description: Name of the referent
+                    description: Name of the referent.
                     type: string
                 required:
                 - name
@@ -247,7 +247,7 @@ spec:
                   image being scanned
                 properties:
                   name:
-                    description: Name of the referent
+                    description: Name of the referent.
                     type: string
                 required:
                 - name
@@ -433,11 +433,11 @@ spec:
                   image being scanned
                 properties:
                   name:
-                    description: Name of the referent
+                    description: Name of the referent.
                     type: string
                   namespace:
                     description: Namespace of the referent, when not specified it
-                      acts as LocalObjectReference
+                      acts as LocalObjectReference.
                     type: string
                 required:
                 - name

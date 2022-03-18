@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"time"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -99,7 +100,13 @@ type ImageRepositoryStatus struct {
 // SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
 func SetImageRepositoryReadiness(ir *ImageRepository, status metav1.ConditionStatus, reason, message string) {
 	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
-	meta.SetResourceCondition(ir, meta.ReadyCondition, status, reason, message)
+	newCondition := metav1.Condition{
+		Type:    meta.ReadyCondition,
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	}
+	apimeta.SetStatusCondition(ir.GetStatusConditions(), newCondition)
 }
 
 // GetStatusConditions returns a pointer to the Status.Conditions slice

@@ -99,17 +99,20 @@ var _ = BeforeSuite(func(done Done) {
 	badgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
 	Expect(err).ToNot(HaveOccurred())
 
+	controllerName := "image-reflector-controller"
 	imageRepoReconciler = &ImageRepositoryReconciler{
-		Client:   k8sMgr.GetClient(),
-		Scheme:   scheme.Scheme,
-		Database: database.NewBadgerDatabase(badgerDB),
+		Client:        k8sMgr.GetClient(),
+		Scheme:        scheme.Scheme,
+		Database:      database.NewBadgerDatabase(badgerDB),
+		EventRecorder: k8sMgr.GetEventRecorderFor(controllerName),
 	}
 	Expect(imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})).To(Succeed())
 
 	imagePolicyReconciler = &ImagePolicyReconciler{
-		Client:   k8sMgr.GetClient(),
-		Scheme:   scheme.Scheme,
-		Database: database.NewBadgerDatabase(badgerDB),
+		Client:        k8sMgr.GetClient(),
+		Scheme:        scheme.Scheme,
+		Database:      database.NewBadgerDatabase(badgerDB),
+		EventRecorder: k8sMgr.GetEventRecorderFor(controllerName),
 	}
 	Expect(imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})).To(Succeed())
 

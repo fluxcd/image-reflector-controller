@@ -199,7 +199,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{Requeue: true}, reconcileErr
 		}
 		// emit successful scan event
-		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, meta.ReconciliationSucceededReason); rc != nil {
+		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, imagev1.ReconciliationSucceededReason); rc != nil {
 			r.event(ctx, imageRepo, events.EventSeverityInfo, rc.Message)
 		}
 	}
@@ -316,7 +316,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			imagev1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
-				meta.ReconciliationFailedReason,
+				imagev1.ReconciliationFailedReason,
 				err.Error(),
 			)
 			return err
@@ -326,7 +326,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			imagev1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
-				meta.ReconciliationFailedReason,
+				imagev1.ReconciliationFailedReason,
 				err.Error(),
 			)
 			return err
@@ -341,7 +341,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				imagev1.SetImageRepositoryReadiness(
 					imageRepo,
 					metav1.ConditionFalse,
-					meta.ReconciliationFailedReason,
+					imagev1.ReconciliationFailedReason,
 					err.Error(),
 				)
 				return err
@@ -361,7 +361,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				imagev1.SetImageRepositoryReadiness(
 					imageRepo,
 					metav1.ConditionFalse,
-					meta.ReconciliationFailedReason,
+					imagev1.ReconciliationFailedReason,
 					err.Error(),
 				)
 				return err
@@ -381,7 +381,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				imagev1.SetImageRepositoryReadiness(
 					imageRepo,
 					metav1.ConditionFalse,
-					meta.ReconciliationFailedReason,
+					imagev1.ReconciliationFailedReason,
 					err.Error(),
 				)
 				return err
@@ -406,7 +406,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 				imagev1.SetImageRepositoryReadiness(
 					imageRepo,
 					metav1.ConditionFalse,
-					meta.ReconciliationFailedReason,
+					imagev1.ReconciliationFailedReason,
 					err.Error(),
 				)
 				return err
@@ -425,7 +425,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		imagev1.SetImageRepositoryReadiness(
 			imageRepo,
 			metav1.ConditionFalse,
-			meta.ReconciliationFailedReason,
+			imagev1.ReconciliationFailedReason,
 			err.Error(),
 		)
 		return err
@@ -452,7 +452,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 	imagev1.SetImageRepositoryReadiness(
 		imageRepo,
 		metav1.ConditionTrue,
-		meta.ReconciliationSucceededReason,
+		imagev1.ReconciliationSucceededReason,
 		fmt.Sprintf("successful scan, found %v tags", len(tags)),
 	)
 
@@ -575,21 +575,11 @@ func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticat
 
 // event emits a Kubernetes event and forwards the event to notification controller if configured
 func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.ImageRepository, severity, msg string) {
-	if r.EventRecorder != nil {
-		r.EventRecorder.Eventf(&repo, "Normal", severity, msg)
+	eventtype := "Normal"
+	if severity == events.EventSeverityError {
+		eventtype = "Warning"
 	}
-	if r.ExternalEventRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &repo)
-		if err != nil {
-			ctrl.LoggerFrom(ctx).Error(err, "unable to send event")
-			return
-		}
-
-		if err := r.ExternalEventRecorder.Eventf(*objRef, nil, severity, severity, msg); err != nil {
-			ctrl.LoggerFrom(ctx).Error(err, "unable to send event")
-			return
-		}
-	}
+	r.EventRecorder.Eventf(&repo, eventtype, severity, msg)
 }
 
 func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1.ImageRepository) {

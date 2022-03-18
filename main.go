@@ -107,16 +107,6 @@ func main() {
 	defer badgerDB.Close()
 	db := database.NewBadgerDatabase(badgerDB)
 
-	var eventRecorder *events.Recorder
-	if eventsAddr != "" {
-		if er, err := events.NewRecorder(eventsAddr, controllerName); err != nil {
-			setupLog.Error(err, "unable to create event recorder")
-			os.Exit(1)
-		} else {
-			eventRecorder = er
-		}
-	}
-
 	metricsRecorder := metrics.NewRecorder()
 	crtlmetrics.Registry.MustRegister(metricsRecorder.Collectors()...)
 
@@ -147,16 +137,21 @@ func main() {
 	probes.SetupChecks(mgr, setupLog)
 	pprof.SetupHandlers(mgr, setupLog)
 
+	var eventRecorder *events.Recorder
+	if eventRecorder, err = events.NewRecorder(mgr, ctrl.Log, eventsAddr, controllerName); err != nil {
+		setupLog.Error(err, "unable to create event recorder")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:                mgr.GetClient(),
-		Scheme:                mgr.GetScheme(),
-		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
-		MetricsRecorder:       metricsRecorder,
-		Database:              db,
-		AwsAutoLogin:          awsAutoLogin,
-		GcpAutoLogin:          gcpAutoLogin,
-		AzureAutoLogin:        azureAutoLogin,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		EventRecorder:   eventRecorder,
+		MetricsRecorder: metricsRecorder,
+		Database:        db,
+		AwsAutoLogin:    awsAutoLogin,
+		GcpAutoLogin:    gcpAutoLogin,
+		AzureAutoLogin:  azureAutoLogin,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
@@ -164,13 +159,12 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.ImagePolicyReconciler{
-		Client:                mgr.GetClient(),
-		Scheme:                mgr.GetScheme(),
-		EventRecorder:         mgr.GetEventRecorderFor(controllerName),
-		ExternalEventRecorder: eventRecorder,
-		MetricsRecorder:       metricsRecorder,
-		Database:              db,
-		ACLOptions:            aclOptions,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		EventRecorder:   eventRecorder,
+		MetricsRecorder: metricsRecorder,
+		Database:        db,
+		ACLOptions:      aclOptions,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
