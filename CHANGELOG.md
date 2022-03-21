@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.17.0
+
+**Release date:** 2022-03-21
+
+This prerelease updates various dependencies to their latest versions, thereby
+eliminating at least 13 OSVs, and preparing the code base for more standardized
+controller runtime operations.
+
+In addition, the Azure Scope has been fixed to work correctly with Azure
+Environment Credentials.
+
+Improvements:
+- Refactor logging to be more consistent
+  [#232](https://github.com/fluxcd/image-reflector-controller/pull/232)
+- Update dependencies
+  [#234](https://github.com/fluxcd/image-reflector-controller/pull/234)
+  [#236](https://github.com/fluxcd/image-reflector-controller/pull/236)
+  [#238](https://github.com/fluxcd/image-reflector-controller/pull/238)
+- Update `pkg/runtime` and `apis/meta`
+  [#235](https://github.com/fluxcd/image-reflector-controller/pull/235)
+
+Fixes:
+- Invalid Azure Scope
+  [#231](https://github.com/fluxcd/image-reflector-controller/pull/231)
+- Refactor registry test code and fix fuzz integration
+  [#233](https://github.com/fluxcd/image-reflector-controller/pull/233)
+- Run tidy before Go test
+  [#240](https://github.com/fluxcd/image-reflector-controller/pull/240)
+
 ## 0.16.0
 
 **Release date:** 2022-01-31
