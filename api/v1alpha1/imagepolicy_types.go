@@ -112,11 +112,23 @@ type ImagePolicyStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+// GetConditions returns the status conditions of the object.
+func (p ImagePolicy) GetConditions() []metav1.Condition {
+	return p.Status.Conditions
+}
+
+// SetConditions sets the status conditions on the object.
+func (p *ImagePolicy) SetConditions(conditions []metav1.Condition) {
+	p.Status.Conditions = conditions
+}
+
+// GetStatusConditions returns a pointer to the Status.Conditions slice.
+// Deprecated: use GetConditions instead.
 func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
 	return &p.Status.Conditions
 }
 
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
+// SetImagePolicyReadiness sets the ready condition with the given status, reason and message.
 func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reason, message string) {
 	p.Status.ObservedGeneration = p.ObjectMeta.Generation
 	newCondition := metav1.Condition{
