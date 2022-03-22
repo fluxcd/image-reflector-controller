@@ -97,21 +97,10 @@ type ImageRepositoryStatus struct {
 	meta.ReconcileRequestStatus `json:",inline"`
 }
 
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImageRepositoryReadiness(ir *ImageRepository, status metav1.ConditionStatus, reason, message string) {
-	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
-	newCondition := metav1.Condition{
-		Type:    meta.ReadyCondition,
-		Status:  status,
-		Reason:  reason,
-		Message: message,
-	}
-	apimeta.SetStatusCondition(ir.GetStatusConditions(), newCondition)
-}
-
-// GetStatusConditions returns a pointer to the Status.Conditions slice
-func (in *ImageRepository) GetStatusConditions() *[]metav1.Condition {
-	return &in.Status.Conditions
+// GetRequeueAfter returns the duration after which the ImageRepository must be
+// reconciled again.
+func (in ImageRepository) GetRequeueAfter() time.Duration {
+	return in.Spec.Interval.Duration
 }
 
 // GetTimeout returns the timeout with default.
@@ -124,6 +113,34 @@ func (in ImageRepository) GetTimeout() time.Duration {
 		return time.Second
 	}
 	return duration
+}
+
+// GetConditions returns the status conditions of the object.
+func (in ImageRepository) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
+}
+
+// SetConditions sets the status conditions on the object.
+func (in *ImageRepository) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
+}
+
+// GetStatusConditions returns a pointer to the Status.Conditions slice.
+// Deprecated: use GetConditions instead.
+func (in *ImageRepository) GetStatusConditions() *[]metav1.Condition {
+	return &in.Status.Conditions
+}
+
+// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
+func SetImageRepositoryReadiness(ir *ImageRepository, status metav1.ConditionStatus, reason, message string) {
+	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
+	newCondition := metav1.Condition{
+		Type:    meta.ReadyCondition,
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	}
+	apimeta.SetStatusCondition(ir.GetStatusConditions(), newCondition)
 }
 
 // +kubebuilder:object:root=true
