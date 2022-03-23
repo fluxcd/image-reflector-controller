@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.1
+
+**Release date:** 2022-03-23
+
+This prerelease ensures the API objects fully adhere to newly introduced
+interfaces, allowing them to work in combination with e.g. the
+[`conditions`](https://pkg.go.dev/github.com/fluxcd/pkg/runtime@v0.13.2/conditions)
+package.
+
+Improvements:
+- Implement `meta.ObjectWithConditions` interfaces
+  [#241](https://github.com/fluxcd/image-reflector-controller/pull/241)
+
 ## 0.17.0
 
 **Release date:** 2022-03-21
