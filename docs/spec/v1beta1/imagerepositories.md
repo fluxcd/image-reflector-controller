@@ -269,9 +269,9 @@ as the `ImageRepository` with `kubectl create secret docker-registry`,
 and reference it under `secretRef`.
 
 [image-pull-secrets]: https://kubernetes.io/docs/concepts/containers/images/#specifying-imagepullsecrets-on-a-pod
-[image-auto-provider-secrets]: https://toolkit.fluxcd.io/guides/image-update/#imagerepository-cloud-providers-authentication
+[image-auto-provider-secrets]: https://fluxcd.io/docs/guides/image-update/#imagerepository-cloud-providers-authentication
 [pem-encoding]: https://en.wikipedia.org/wiki/Privacy-Enhanced_Mail
-[sops-guide]: https://toolkit.fluxcd.io/guides/mozilla-sops/
+[sops-guide]: https://fluxcd.io/docs/guides/mozilla-sops/
 [EKS]: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
 [ECR]: https://docs.aws.amazon.com/AmazonECR/latest/userguide/what-is-ecr.html
 [GKE]: https://cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
