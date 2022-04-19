@@ -11,7 +11,6 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	. "github.com/onsi/gomega"
 )
 
 // pre-populated db of tags, so it's not necessary to upload images to
@@ -55,20 +54,26 @@ func RegistryName(srv *httptest.Server) string {
 	return strings.TrimPrefix(srv.URL, "http://")
 }
 
-// loadImages uploads images to the local registry, and returns the
+// LoadImages uploads images to the local registry, and returns the
 // image repo
 // name. https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
 // has an example of loading a test registry with a random image.
-func LoadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) string {
+func LoadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) (string, error) {
 	imgRepo := RegistryName(srv) + "/" + imageName
 	for _, tag := range versions {
 		imgRef, err := name.NewTag(imgRepo + ":" + tag)
-		Expect(err).ToNot(HaveOccurred())
+		if err != nil {
+			return imgRepo, err
+		}
 		img, err := random.Image(512, 1)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(remote.Write(imgRef, img, options...)).To(Succeed())
+		if err != nil {
+			return imgRepo, err
+		}
+		if err := remote.Write(imgRef, img, options...); err != nil {
+			return imgRepo, err
+		}
 	}
-	return imgRepo
+	return imgRepo, nil
 }
 
 // the go-containerregistry test registry implementation does not
@@ -98,7 +103,9 @@ func (h *TagListHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Name: repo,
 				Tags: tags,
 			}
-			Expect(json.NewEncoder(w).Encode(result)).To(Succeed())
+			if err := json.NewEncoder(w).Encode(result); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			println("Requested tags", repo, strings.Join(tags, ", "))
 			return
 		}

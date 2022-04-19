@@ -35,7 +35,8 @@ var _ = Context("Registry handler", func() {
 		defer srv.Close()
 
 		uploadedTags := []string{"tag1", "tag2"}
-		repoString := test.LoadImages(srv, "testimage", uploadedTags)
+		repoString, err := test.LoadImages(srv, "testimage", uploadedTags)
+		Expect(err).ToNot(HaveOccurred())
 		repo, _ := name.NewRepository(repoString)
 
 		tags, err := remote.List(repo)

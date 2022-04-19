@@ -88,7 +88,8 @@ var _ = Describe("ImageRepository controller", func() {
 
 	It("fetches the tags for an image", func() {
 		versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-		imgRepo := test.LoadImages(registryServer, "test-fetch", versions)
+		imgRepo, err := test.LoadImages(registryServer, "test-fetch", versions)
+		Expect(err).ToNot(HaveOccurred())
 
 		repo = imagev1.ImageRepository{
 			Spec: imagev1.ImageRepositorySpec{
@@ -158,7 +159,8 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("when the ImageRepository gets a 'reconcile at' annotation", func() {
 		It("scans right away", func() {
-			imgRepo := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			Expect(err).ToNot(HaveOccurred())
 
 			repo = imagev1.ImageRepository{
 				Spec: imagev1.ImageRepositorySpec{
@@ -178,7 +180,7 @@ var _ = Describe("ImageRepository controller", func() {
 			defer cancel()
 
 			r := imageRepoReconciler
-			err := r.Create(ctx, &repo)
+			err = r.Create(ctx, &repo)
 			Expect(err).ToNot(HaveOccurred())
 
 			// It'll get scanned on creation
@@ -243,10 +245,11 @@ var _ = Describe("ImageRepository controller", func() {
 		It("can scan the registry", func() {
 			versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
 			// this, as a side-effect, verifies that the username and password work with the registry
-			imgRepo := test.LoadImages(registryServer, "test-auth", versions, remote.WithAuth(&authn.Basic{
+			imgRepo, err := test.LoadImages(registryServer, "test-auth", versions, remote.WithAuth(&authn.Basic{
 				Username: username,
 				Password: password,
 			}))
+			Expect(err).ToNot(HaveOccurred())
 
 			repo = imagev1.ImageRepository{
 				Spec: imagev1.ImageRepositorySpec{
@@ -282,7 +285,9 @@ var _ = Describe("ImageRepository controller", func() {
 
 	Context("ImageRepository image attribute is invalid", func() {
 		It("fails with an error when prefixed with a scheme", func() {
-			imgRepo := "https://" + test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			Expect(err).ToNot(HaveOccurred())
+			imgRepo = "https://" + imgRepo
 
 			repo = imagev1.ImageRepository{
 				Spec: imagev1.ImageRepositorySpec{
@@ -302,7 +307,7 @@ var _ = Describe("ImageRepository controller", func() {
 			defer cancel()
 
 			r := imageRepoReconciler
-			err := r.Create(ctx, &repo)
+			err = r.Create(ctx, &repo)
 			Expect(err).ToNot(HaveOccurred())
 
 			var ready *metav1.Condition
@@ -314,7 +319,8 @@ var _ = Describe("ImageRepository controller", func() {
 			Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
 		})
 		It("does not fail if using a hostname with a port number", func() {
-			imgRepo := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+			Expect(err).ToNot(HaveOccurred())
 			imgRepo = strings.ReplaceAll(imgRepo, "127.0.0.1", "localhost")
 
 			repo = imagev1.ImageRepository{
