@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.17.2
+
+**Release date:** 2022-04-19
+
+This prerelease updates dependencies to their latest versions.
+
+Improvements:
+- Update dependencies
+  [#247](https://github.com/fluxcd/image-reflector-controller/pull/247)
+
+Fixes:
+- Align version of dependencies when Fuzzing
+  [#243](https://github.com/fluxcd/image-reflector-controller/pull/243)
+
 ## 0.17.1
 
 **Release date:** 2022-03-23
