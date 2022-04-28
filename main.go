@@ -42,6 +42,7 @@ import (
 	// +kubebuilder:scaffold:imports
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
+	"github.com/fluxcd/image-reflector-controller/internal/registry/login"
 )
 
 const controllerName = "image-reflector-controller"
@@ -149,9 +150,11 @@ func main() {
 		EventRecorder:   eventRecorder,
 		MetricsRecorder: metricsRecorder,
 		Database:        db,
-		AwsAutoLogin:    awsAutoLogin,
-		GcpAutoLogin:    gcpAutoLogin,
-		AzureAutoLogin:  azureAutoLogin,
+		ProviderOptions: login.ProviderOptions{
+			AwsAutoLogin:   awsAutoLogin,
+			GcpAutoLogin:   gcpAutoLogin,
+			AzureAutoLogin: azureAutoLogin,
+		},
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 	}); err != nil {
