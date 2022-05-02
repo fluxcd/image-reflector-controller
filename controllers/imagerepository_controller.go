@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/authn/k8schain"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
@@ -108,7 +109,7 @@ type gceToken struct {
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch
 func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileStart := time.Now()
 
@@ -418,6 +419,54 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			return err
 		}
 		options = append(options, remote.WithTransport(tr))
+	}
+
+	if imageRepo.Spec.ServiceAccountName != "" {
+
+		serviceAccount := corev1.ServiceAccount{}
+		// lookup service account
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: imageRepo.GetNamespace(),
+			Name:      imageRepo.Spec.ServiceAccountName,
+		}, &serviceAccount); err != nil {
+			imagev1.SetImageRepositoryReadiness(
+				imageRepo,
+				metav1.ConditionFalse,
+				imagev1.ReconciliationFailedReason,
+				err.Error(),
+			)
+			return err
+		}
+
+		if len(serviceAccount.ImagePullSecrets) > 0 {
+			imagePullSecrets := make([]corev1.Secret, len(serviceAccount.ImagePullSecrets))
+
+			for i, ips := range serviceAccount.ImagePullSecrets {
+				var saAuthSecret corev1.Secret
+
+				if err := r.Get(ctx, types.NamespacedName{
+					Namespace: imageRepo.GetNamespace(),
+					Name:      ips.Name,
+				}, &saAuthSecret); err != nil {
+					imagev1.SetImageRepositoryReadiness(
+						imageRepo,
+						metav1.ConditionFalse,
+						imagev1.ReconciliationFailedReason,
+						err.Error(),
+					)
+					return err
+				}
+
+				imagePullSecrets[i] = saAuthSecret
+			}
+
+			keychain, err := k8schain.NewFromPullSecrets(ctx, imagePullSecrets)
+			if err != nil {
+				return err
+			}
+
+			options = append(options, remote.WithAuthFromKeychain(keychain))
+		}
 	}
 
 	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)

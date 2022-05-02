@@ -350,3 +350,79 @@ func TestImageRepositoryReconciler_imageAttribute_hostPort(t *testing.T) {
 	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
+
+func TestImageRepositoryReconciler_authRegistryWithServiceAccount(t *testing.T) {
+	g := NewWithT(t)
+
+	username, password := "authuser", "authpass"
+	registryServer := test.NewAuthenticatedRegistryServer(username, password)
+	defer registryServer.Close()
+
+	// this mimics what you get if you use
+	//     kubectl create secret docker-registry ...
+	secret := &corev1.Secret{
+		Type: "kubernetes.io/dockerconfigjson",
+		StringData: map[string]string{
+			".dockerconfigjson": fmt.Sprintf(`
+{
+  "auths": {
+    %q: {
+      "username": %q,
+      "password": %q
+    }
+  }
+}
+`, test.RegistryName(registryServer), username, password),
+		},
+	}
+	secret.Namespace = "default"
+	secret.Name = "docker"
+
+	serviceAccount := &corev1.ServiceAccount{
+		ImagePullSecrets: []corev1.LocalObjectReference{{Name: "docker"}},
+	}
+	serviceAccount.Name = "test-sa"
+	serviceAccount.Namespace = "default"
+	g.Expect(testEnv.Create(context.Background(), secret)).To(Succeed())
+	g.Expect(testEnv.Create(context.Background(), serviceAccount)).To(Succeed())
+	defer func() {
+		g.Expect(testEnv.Delete(context.Background(), secret)).To(Succeed())
+		g.Expect(testEnv.Delete(context.Background(), serviceAccount)).To(Succeed())
+	}()
+
+	versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
+	imgRepo, err := test.LoadImages(registryServer, "test-authn-"+randStringRunes(5),
+		versions, remote.WithAuth(&authn.Basic{
+			Username: username,
+			Password: password,
+		}))
+	g.Expect(err).ToNot(HaveOccurred())
+
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval:           metav1.Duration{Duration: reconciliationInterval},
+			Image:              imgRepo,
+			ServiceAccountName: "test-sa",
+		},
+	}
+	objectName := types.NamespacedName{
+		Name:      "test-auth-reg-" + randStringRunes(5),
+		Namespace: "default",
+	}
+
+	repo.Name = objectName.Name
+	repo.Namespace = objectName.Namespace
+
+	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+	defer cancel()
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+	g.Eventually(func() bool {
+		err := testEnv.Get(ctx, objectName, &repo)
+		return err == nil && repo.Status.LastScanResult != nil
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+	// Cleanup.
+	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
+}

@@ -51,6 +51,11 @@ type ImageRepositorySpec struct {
 	// +optional
 	SecretRef *meta.LocalObjectReference `json:"secretRef,omitempty"`
 
+	// ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
+	// the image pull if the service account has attached pull secrets.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
 	// CertSecretRef can be given the name of a secret containing
 	// either or both of
 	//
