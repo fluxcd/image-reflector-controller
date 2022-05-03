@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.18.0
+
+**Release date:** 2022-05-03
+
+This prerelease adds support for defining a `.spec.serviceAccountName` in
+`ImageRepository` objects. When specified, the image pull secrets attached to
+the ServiceAccount are used to authenticate towards the registry.
+
+Improvements:
+- Add ServiceAccountName to ImageRepository API
+  [#252](https://github.com/fluxcd/image-reflector-controller/pull/252)
+  [#253](https://github.com/fluxcd/image-reflector-controller/pull/253)
+- Update dependencies
+  [#254](https://github.com/fluxcd/image-reflector-controller/pull/254)
+
+Other notable changes:
+- Rewrite all the tests to testenv with gomega
+  [#249](https://github.com/fluxcd/image-reflector-controller/pull/249)
+
 ## 0.17.2
 
 **Release date:** 2022-04-19
