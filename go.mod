@@ -8,20 +8,20 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.13.2
 	github.com/Masterminds/semver/v3 v3.1.1
-	github.com/aws/aws-sdk-go v1.43.41
+	github.com/aws/aws-sdk-go v1.44.5
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/fluxcd/image-reflector-controller/api v0.17.2
 	github.com/fluxcd/pkg/apis/acl v0.0.3
-	github.com/fluxcd/pkg/apis/meta v0.12.2
-	github.com/fluxcd/pkg/runtime v0.14.1
+	github.com/fluxcd/pkg/apis/meta v0.13.0
+	github.com/fluxcd/pkg/runtime v0.14.2
 	github.com/fluxcd/pkg/version v0.1.0
 	github.com/google/go-containerregistry v0.8.0
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20220105220605-d9bfbcb99e52
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/gomega v1.19.0
 	github.com/spf13/pflag v1.0.5
-	k8s.io/api v0.23.5
-	k8s.io/apimachinery v0.23.5
-	k8s.io/client-go v0.23.5
+	k8s.io/api v0.23.6
+	k8s.io/apimachinery v0.23.6
+	k8s.io/client-go v0.23.6
 	sigs.k8s.io/controller-runtime v0.11.2
 )
 
