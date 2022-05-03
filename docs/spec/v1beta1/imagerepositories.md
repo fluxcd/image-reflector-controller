@@ -48,6 +48,12 @@ type ImageRepositorySpec struct {
 	// +optional
 	CertSecretRef *meta.LocalObjectReference `json:"certSecretRef,omitempty"`
 
+
+	// ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
+	// the image pull if the service account has attached pull secrets.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
 	// This flag tells the controller to suspend subsequent image scans.
 	// It does not apply to already started scans. Defaults to false.
 	// +optional
@@ -65,11 +71,14 @@ specified; remove the field value or set to `false` to resume scanning.
 
 ### Authentication
 
-The `secretRef` names a secret in the same namespace that holds credentials for accessing the image
+The `spec.secretRef` names a secret in the same namespace that holds credentials for accessing the image
 repository. This secret is expected to be in the same format as for
 [`imagePullSecrets`][image-pull-secrets]. The usual way to create such a secret is with
 
     kubectl create secret docker-registry ...
+
+For using image pull secrets attached to a service account, you can specify the account name
+with `spec.serviceAccountName`.
 
 For a publicly accessible image repository, you will not need to provide a `secretRef`.
 
