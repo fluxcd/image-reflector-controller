@@ -210,7 +210,8 @@ To grant access to all namespaces, an empty `matchLabels` must be provided:
 To exclude certain tags, the `spec.exclusionList` field can be used to specify a list of regex expressions.
 Any tags that match any of the regex expressions, will be excluded from the final tag list.
 If `spec.exclusionList` is empty, by default the regex `"^.*\\.sig$"` is used to exclude all tags ending with
-`.sig`, since these are [Cosign](https://github.com/sigstore/cosign) generated objects and not valid images.
+`.sig`, since these are [Cosign](https://github.com/sigstore/cosign) generated objects and not container images
+which can be deployed on a Kubernetes cluster. 
 
 ## Status
 

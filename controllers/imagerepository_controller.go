@@ -482,7 +482,6 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		)
 		return err
 	}
-	fmt.Printf("tags: %v", tags)
 
 	// If no exclusion list has been defined, we make sure to always skip tags ending with
 	// ".sig", since that tag does not point to a valid image.
@@ -502,7 +501,6 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 			}
 		}
 	}
-	fmt.Printf("filtered tags: %v", filteredTags)
 
 	canonicalName := ref.Context().String()
 	if err := r.Database.SetTags(canonicalName, filteredTags); err != nil {

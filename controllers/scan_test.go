@@ -81,37 +81,64 @@ func TestImageRepositoryReconciler_fetchImageTags(t *testing.T) {
 
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
-
-	versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-	imgRepo, err := test.LoadImages(registryServer, "test-fetch-"+randStringRunes(5), versions)
-	g.Expect(err).ToNot(HaveOccurred())
-
-	repo := imagev1.ImageRepository{
-		Spec: imagev1.ImageRepositorySpec{
-			Interval: metav1.Duration{Duration: reconciliationInterval},
-			Image:    imgRepo,
+	tests := []struct {
+		name          string
+		versions      []string
+		wantVersions  []string
+		exclusionList []string
+	}{
+		{
+			name:         "fetch image tags",
+			versions:     []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.1.0", "1.1.0-alpha"},
+			wantVersions: []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.1.0", "1.1.0-alpha"},
+		},
+		{
+			name:         "fetch image tags - .sig is excluded",
+			versions:     []string{"0.1.0", "0.1.1", "0.1.1.sig", "1.0.0-alpha", "1.0.0", "1.0.0.sig"},
+			wantVersions: []string{"0.1.0", "0.1.1", "1.0.0-alpha", "1.0.0"},
+		},
+		{
+			name:          "fetch image tags - tags in exclusionList are excluded",
+			versions:      []string{"0.1.0", "0.1.1-alpha", "0.1.1", "0.1.1.sig", "1.0.0-alpha", "1.0.0"},
+			wantVersions:  []string{"0.1.0", "0.1.1", "0.1.1.sig", "1.0.0"},
+			exclusionList: []string{"^.*\\-alpha$"},
 		},
 	}
-	objectName := types.NamespacedName{
-		Name:      "test-fetch-img-tags-" + randStringRunes(5),
-		Namespace: "default",
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			imgRepo, err := test.LoadImages(registryServer, "test-fetch-"+randStringRunes(5), tt.versions)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			repo := imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval:      metav1.Duration{Duration: reconciliationInterval},
+					Image:         imgRepo,
+					ExclusionList: tt.exclusionList,
+				},
+			}
+			objectName := types.NamespacedName{
+				Name:      "test-fetch-img-tags-" + randStringRunes(5),
+				Namespace: "default",
+			}
+
+			repo.Name = objectName.Name
+			repo.Namespace = objectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
+			defer cancel()
+			g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+			g.Eventually(func() bool {
+				err := testEnv.Get(context.Background(), objectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
+			}, timeout, interval).Should(BeTrue())
+			g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+			g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(tt.wantVersions)))
+			// Cleanup.
+			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
+		})
 	}
-
-	repo.Name = objectName.Name
-	repo.Namespace = objectName.Namespace
-
-	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-	defer cancel()
-	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
-
-	g.Eventually(func() bool {
-		err := testEnv.Get(context.Background(), objectName, &repo)
-		return err == nil && repo.Status.LastScanResult != nil
-	}, timeout, interval).Should(BeTrue())
-	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
-	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
-	// Cleanup.
-	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
 
 func TestImageRepositoryReconciler_repositorySuspended(t *testing.T) {
