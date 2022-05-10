@@ -63,6 +63,11 @@ type ImageRepositorySpec struct {
 	// to the ImageRepository object based on the caller's namespace labels.
 	// +optional
 	AccessFrom *AccessFrom `json:"accessFrom,omitempty"`
+
+	// ExclusionList is a list of regex strings used to exclude certain tags
+	// from being stored in the database.
+	// +optional
+	ExclusionList []string `json:"exclusionList,omitempty"`
 }
 ```
 
@@ -199,6 +204,13 @@ To grant access to all namespaces, an empty `matchLabels` must be provided:
     namespaceSelectors:
       - matchLabels: {}
 ```
+
+### Exclude Tags
+
+To exclude certain tags, the `spec.exclusionList` field can be used to specify a list of regex expressions.
+Any tags that match any of the regex expressions, will be excluded from the final tag list.
+If `spec.exclusionList` is empty, by default the regex `"^.*\\.sig$"` is used to exclude all tags ending with
+`.sig`, since these are [Cosign](https://github.com/sigstore/cosign) generated objects and not valid images.
 
 ## Status
 

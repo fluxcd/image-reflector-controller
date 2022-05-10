@@ -69,9 +69,10 @@ import (
 // for consistency (and perhaps this will have its own flux create
 // secret subcommand at some point).
 const (
-	ClientCert = "certFile"
-	ClientKey  = "keyFile"
-	CACert     = "caFile"
+	ClientCert        = "certFile"
+	ClientKey         = "keyFile"
+	CACert            = "caFile"
+	CosignObjectRegex = "^.*\\.sig$"
 )
 
 // ImageRepositoryReconciler reconciles a ImageRepository object
@@ -469,7 +470,9 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		}
 	}
 
-	tags, err := remote.ListWithContext(ctx, ref.Context(), options...)
+	options = append(options, remote.WithContext(ctx))
+
+	tags, err := remote.List(ref.Context(), options...)
 	if err != nil {
 		imagev1.SetImageRepositoryReadiness(
 			imageRepo,
@@ -479,15 +482,36 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		)
 		return err
 	}
+	fmt.Printf("tags: %v", tags)
+
+	// If no exclusion list has been defined, we make sure to always skip tags ending with
+	// ".sig", since that tag does not point to a valid image.
+	if len(imageRepo.Spec.ExclusionList) == 0 {
+		imageRepo.Spec.ExclusionList = append(imageRepo.Spec.ExclusionList, CosignObjectRegex)
+	}
+
+	filteredTags := []string{}
+	for _, regex := range imageRepo.Spec.ExclusionList {
+		r, err := regexp.Compile(regex)
+		if err != nil {
+			return fmt.Errorf("failed to compile regex %s: %w", regex, err)
+		}
+		for _, tag := range tags {
+			if !r.MatchString(tag) {
+				filteredTags = append(filteredTags, tag)
+			}
+		}
+	}
+	fmt.Printf("filtered tags: %v", filteredTags)
 
 	canonicalName := ref.Context().String()
-	if err := r.Database.SetTags(canonicalName, tags); err != nil {
+	if err := r.Database.SetTags(canonicalName, filteredTags); err != nil {
 		return fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
 	}
 
 	scanTime := metav1.Now()
 	imageRepo.Status.LastScanResult = &imagev1.ScanResult{
-		TagCount: len(tags),
+		TagCount: len(filteredTags),
 		ScanTime: scanTime,
 	}
 
@@ -502,7 +526,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		imageRepo,
 		metav1.ConditionTrue,
 		imagev1.ReconciliationSucceededReason,
-		fmt.Sprintf("successful scan, found %v tags", len(tags)),
+		fmt.Sprintf("successful scan, found %v tags", len(filteredTags)),
 	)
 
 	return nil
