@@ -30,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -88,6 +89,26 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
 	defer r.recordReadinessMetric(ctx, &pol)
+
+	// Add our finalizer if it does not exist.
+	if !controllerutil.ContainsFinalizer(&pol, imagev1.ImagePolicyFinalizer) {
+		patch := client.MergeFrom(pol.DeepCopy())
+		controllerutil.AddFinalizer(&pol, imagev1.ImagePolicyFinalizer)
+		if err := r.Patch(ctx, &pol, patch); err != nil {
+			log.Error(err, "unable to register finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
+	// If the object is under deletion, record the readiness, and remove our finalizer.
+	if !pol.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.recordReadinessMetric(ctx, &pol)
+		controllerutil.RemoveFinalizer(&pol, imagev1.ImagePolicyFinalizer)
+		if err := r.Update(ctx, &pol); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
 
 	var repo imagev1.ImageRepository
 	repoNamespacedName := types.NamespacedName{

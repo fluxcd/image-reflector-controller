@@ -46,6 +46,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
@@ -127,6 +128,26 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	defer r.recordSuspension(ctx, imageRepo)
 
 	log := ctrl.LoggerFrom(ctx)
+
+	// Add our finalizer if it does not exist.
+	if !controllerutil.ContainsFinalizer(&imageRepo, imagev1.ImageRepositoryFinalizer) {
+		patch := client.MergeFrom(imageRepo.DeepCopy())
+		controllerutil.AddFinalizer(&imageRepo, imagev1.ImageRepositoryFinalizer)
+		if err := r.Patch(ctx, &imageRepo, patch); err != nil {
+			log.Error(err, "unable to register finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
+	// If the object is under deletion, record the readiness, and remove our finalizer.
+	if !imageRepo.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.recordReadinessMetric(ctx, &imageRepo)
+		controllerutil.RemoveFinalizer(&imageRepo, imagev1.ImageRepositoryFinalizer)
+		if err := r.Update(ctx, &imageRepo); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
 
 	if imageRepo.Spec.Suspend {
 		msg := "ImageRepository is suspended, skipping reconciliation"
