@@ -79,6 +79,11 @@ type ImageRepositorySpec struct {
 	// to the ImageRepository object based on the caller's namespace labels.
 	// +optional
 	AccessFrom *acl.AccessFrom `json:"accessFrom,omitempty"`
+
+	// ExclusionList is a list of regex strings used to exclude certain tags
+	// from being stored in the database.
+	// +optional
+	ExclusionList []string `json:"exclusionList,omitempty"`
 }
 
 type ScanResult struct {

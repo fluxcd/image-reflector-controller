@@ -499,6 +499,19 @@ github.com/fluxcd/pkg/apis/acl.AccessFrom
 to the ImageRepository object based on the caller&rsquo;s namespace labels.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>exclusionList</code><br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ExclusionList is a list of regex strings used to exclude certain tags
+from being stored in the database.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -654,6 +667,19 @@ github.com/fluxcd/pkg/apis/acl.AccessFrom
 <em>(Optional)</em>
 <p>AccessFrom defines an ACL for allowing cross-namespace references
 to the ImageRepository object based on the caller&rsquo;s namespace labels.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>exclusionList</code><br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ExclusionList is a list of regex strings used to exclude certain tags
+from being stored in the database.</p>
 </td>
 </tr>
 </tbody>
