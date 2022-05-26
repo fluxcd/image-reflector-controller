@@ -8,12 +8,12 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v0.22.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v0.13.2
 	github.com/Masterminds/semver/v3 v3.1.1
-	github.com/aws/aws-sdk-go v1.44.11
+	github.com/aws/aws-sdk-go v1.44.23
 	github.com/dgraph-io/badger/v3 v3.2103.2
 	github.com/fluxcd/image-reflector-controller/api v0.18.0
 	github.com/fluxcd/pkg/apis/acl v0.0.3
-	github.com/fluxcd/pkg/apis/meta v0.14.0
-	github.com/fluxcd/pkg/runtime v0.16.0
+	github.com/fluxcd/pkg/apis/meta v0.14.1
+	github.com/fluxcd/pkg/runtime v0.16.1
 	github.com/fluxcd/pkg/version v0.1.0
 	github.com/google/go-containerregistry v0.8.0
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20220105220605-d9bfbcb99e52
@@ -24,6 +24,9 @@ require (
 	k8s.io/client-go v0.24.0
 	sigs.k8s.io/controller-runtime v0.11.2
 )
+
+// Fix CVE-2022-28948
+replace gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.0
 
 require (
 	cloud.google.com/go/compute v1.5.0 // indirect
