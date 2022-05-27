@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.19.0
+
+**Release date:** 2022-05-27
+
+This prerelease adds support for excluding certain tags when defining `ImageRepositories`.
+The `spec.exclusionList` field can be used to specify a list of regex expressions.
+If the exclusion list is empty, by default the regex `"^.*\\.sig$"` is used
+to exclude all tags ending with `.sig`, since these are
+[cosign](https://github.com/sigstore/cosign) OCI artifacts and not container
+images which can be deployed on a Kubernetes cluster.
+
+Features:
+- Add `exclusionList` to ImageRepository API
+  [#256](https://github.com/fluxcd/image-reflector-controller/pull/256)
+
+Improvements:
+- Update dependencies
+  [#258](https://github.com/fluxcd/image-reflector-controller/pull/258)
+  [#261](https://github.com/fluxcd/image-reflector-controller/pull/261)
+- Update Alpine to 3.16
+  [#262](https://github.com/fluxcd/image-reflector-controller/pull/262)
+
 ## 0.18.0
 
 **Release date:** 2022-05-03
@@ -8,10 +30,12 @@ This prerelease adds support for defining a `.spec.serviceAccountName` in
 `ImageRepository` objects. When specified, the image pull secrets attached to
 the ServiceAccount are used to authenticate towards the registry.
 
-Improvements:
-- Add ServiceAccountName to ImageRepository API
+Features:
+- Add `serviceAccountName` to ImageRepository API
   [#252](https://github.com/fluxcd/image-reflector-controller/pull/252)
   [#253](https://github.com/fluxcd/image-reflector-controller/pull/253)
+
+Improvements:
 - Update dependencies
   [#254](https://github.com/fluxcd/image-reflector-controller/pull/254)
 
