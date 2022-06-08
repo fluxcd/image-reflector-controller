@@ -490,7 +490,9 @@ It does not apply to already started scans. Defaults to false.</p>
 <td>
 <code>accessFrom</code><br>
 <em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/acl#AccessFrom">
 github.com/fluxcd/pkg/apis/acl.AccessFrom
+</a>
 </em>
 </td>
 <td>
@@ -660,7 +662,9 @@ It does not apply to already started scans. Defaults to false.</p>
 <td>
 <code>accessFrom</code><br>
 <em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/acl#AccessFrom">
 github.com/fluxcd/pkg/apis/acl.AccessFrom
+</a>
 </em>
 </td>
 <td>
