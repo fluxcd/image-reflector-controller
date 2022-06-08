@@ -342,6 +342,45 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
 
+func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
+	g := NewWithT(t)
+
+	registryServer := test.NewRegistryServer()
+	defer registryServer.Close()
+
+	imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+	g.Expect(err).ToNot(HaveOccurred())
+	imgRepo = imgRepo + ":1.0.0"
+
+	repo := imagev1.ImageRepository{
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: reconciliationInterval},
+			Image:    imgRepo,
+		},
+	}
+	objectName := types.NamespacedName{
+		Name:      "random",
+		Namespace: "default",
+	}
+
+	repo.Name = objectName.Name
+	repo.Namespace = objectName.Namespace
+
+	ctx, cancel := context.WithTimeout(context.TODO(), contextTimeout)
+	defer cancel()
+	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+	var ready *metav1.Condition
+	g.Eventually(func() bool {
+		_ = testEnv.Get(ctx, objectName, &repo)
+		ready = apimeta.FindStatusCondition(*repo.GetStatusConditions(), meta.ReadyCondition)
+		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
+	}, timeout, interval).Should(BeTrue())
+	g.Expect(ready.Message).To(ContainSubstring("should not contain a tag"))
+	// Cleanup.
+	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
+}
+
 func TestImageRepositoryReconciler_imageAttribute_hostPort(t *testing.T) {
 	g := NewWithT(t)
 

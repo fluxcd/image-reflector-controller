@@ -155,14 +155,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
 	}
 
-	var err error
-	var ref name.Reference
-	if s := strings.Split(imageRepo.Spec.Image, "://"); len(s) > 1 {
-		err = fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
-	} else {
-		ref, err = name.ParseReference(imageRepo.Spec.Image)
-	}
-
+	ref, err := parseImageReference(imageRepo.Spec.Image)
 	if err != nil {
 		imagev1.SetImageRepositoryReadiness(
 			&imageRepo,
@@ -212,6 +205,24 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	))
 
 	return ctrl.Result{RequeueAfter: when}, nil
+}
+
+func parseImageReference(url string) (name.Reference, error) {
+	if s := strings.Split(url, "://"); len(s) > 1 {
+		return nil, fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
+	}
+
+	ref, err := name.ParseReference(url)
+	if err != nil {
+		return nil, err
+	}
+
+	imageName := strings.TrimPrefix(url, ref.Context().RegistryStr())
+	if s := strings.Split(imageName, ":"); len(s) > 1 {
+		return nil, fmt.Errorf(".spec.image value should not contain a tag; remove ':%s'", s[1])
+	}
+
+	return ref, nil
 }
 
 // parseAwsImage returns the AWS account ID and region and `true` if
