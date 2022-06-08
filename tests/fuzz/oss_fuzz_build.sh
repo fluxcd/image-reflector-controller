@@ -26,6 +26,8 @@ pushd "${GO_SRC}/${PROJECT_PATH}"
 # in the main module.
 rm tests/fuzz/go.mod
 
+go mod download
+go mod tidy -go=1.16 && go mod tidy -go=1.17
 go get -d github.com/AdaLogics/go-fuzz-headers
 
 # Setup files to be embedded into controllers_fuzzer.go's testFiles variable.
