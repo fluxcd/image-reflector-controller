@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.19.1
+
+**Release date:** 2022-06-08
+
+This prerelease comes with improvements to the `ImageRepository` validation.
+
+In addition, the controller dependencies where update to Kubernetes v1.24.1.
+
+Improvements:
+- Validate that the image name does not contain tags
+  [#268](https://github.com/fluxcd/image-reflector-controller/pull/268)
+- Update dependencies
+  [#269](https://github.com/fluxcd/image-reflector-controller/pull/269)
+
 ## 0.19.0
 
 **Release date:** 2022-05-27
