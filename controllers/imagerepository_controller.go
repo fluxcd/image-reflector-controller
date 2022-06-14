@@ -294,8 +294,8 @@ func getGCRLoginAuth(ctx context.Context) (authn.AuthConfig, error) {
 	if err != nil {
 		return authConfig, err
 	}
-	defer io.Copy(io.Discard, response.Body)
 	defer response.Body.Close()
+	defer io.Copy(io.Discard, response.Body)
 
 	if response.StatusCode != http.StatusOK {
 		return authConfig, fmt.Errorf("unexpected status from metadata service: %s", response.Status)
