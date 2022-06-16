@@ -59,7 +59,7 @@ func RunCommand(ctx context.Context, dir, command string, opts RunCommandOptions
 	return nil
 }
 
-// RegistryLogin runs the comman
+// RegistryLogin runs the command provided for logging into a registry
 func RegistryLogin(ctx context.Context, registry string, cmd string) error {
 	return RunCommand(ctx, "./",
 		fmt.Sprintf(cmd, registry),
