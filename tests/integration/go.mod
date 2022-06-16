@@ -4,12 +4,9 @@ go 1.17
 
 replace github.com/fluxcd/image-reflector-controller/tests/tftestenv => ../tftestenv
 
-replace github.com/fluxcd/image-reflector-controller/tests/utils => ../utils
-
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.19.1
 	github.com/fluxcd/image-reflector-controller/tests/tftestenv v0.0.0-00010101000000-000000000000
-	github.com/fluxcd/image-reflector-controller/tests/utils v0.0.0-00010101000000-000000000000
 	github.com/google/go-containerregistry v0.9.0
 	github.com/hashicorp/terraform-json v0.14.0
 	github.com/onsi/gomega v1.19.0
