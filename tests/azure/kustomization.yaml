@@ -1,0 +1,18 @@
+# Use this kustomization to customize the flux installation.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- install.yaml
+
+patches:
+- target:
+    version: v1
+    group: apps
+    kind: Deployment
+    name: image-reflector-controller
+    namespace: flux-system
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --azure-autologin-for-acr
+      
