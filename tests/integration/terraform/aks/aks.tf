@@ -1,6 +1,6 @@
 resource "azurerm_resource_group" "default" {
-  name     = var.resource_group
-  location = "eastus"
+  name     = local.name
+  location = var.region
 }
 
 

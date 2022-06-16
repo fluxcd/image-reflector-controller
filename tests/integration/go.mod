@@ -4,12 +4,16 @@ go 1.17
 
 replace github.com/fluxcd/image-reflector-controller/tests/tftestenv => ../tftestenv
 
+replace github.com/fluxcd/image-reflector-controller/tests/utils => ../utils
+
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.19.1
 	github.com/fluxcd/image-reflector-controller/tests/tftestenv v0.0.0-00010101000000-000000000000
+	github.com/fluxcd/image-reflector-controller/tests/utils v0.0.0-00010101000000-000000000000
 	github.com/google/go-containerregistry v0.9.0
 	github.com/hashicorp/terraform-json v0.14.0
 	github.com/onsi/gomega v1.19.0
+	github.com/spf13/pflag v1.0.5
 	k8s.io/apimachinery v0.24.1
 )
 
@@ -53,7 +57,6 @@ require (
 	github.com/opencontainers/image-spec v1.0.3-0.20220114050600-8b9d41f48198 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/vbatts/tar-split v0.11.2 // indirect
 	github.com/zclconf/go-cty v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect

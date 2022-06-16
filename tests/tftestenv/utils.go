@@ -19,9 +19,15 @@ package tftestenv
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 // RunCommandOptions is used to configure the RunCommand execution.
@@ -51,4 +57,55 @@ func RunCommand(ctx context.Context, dir, command string, opts RunCommandOptions
 		return fmt.Errorf("failed to run command %s: %v", string(output), err)
 	}
 	return nil
+}
+
+// RegistryLogin runs the comman
+func RegistryLogin(ctx context.Context, registry string, cmd string) error {
+	return RunCommand(ctx, "./",
+		fmt.Sprintf(cmd, registry),
+		RunCommandOptions{})
+}
+
+// createAndPushImages randomly generates test images with the given tags and
+// pushes them to the given repository.
+func CreateAndPushImages(repo string, tags []string) error {
+	// TODO: Build and push concurrently.
+	for _, tag := range tags {
+		imgRef := repo + ":" + tag
+		ref, err := name.ParseReference(imgRef)
+		if err != nil {
+			return err
+		}
+
+		// Use the login credentials from the host docker/podman client config.
+		opts := []remote.Option{
+			remote.WithAuthFromKeychain(authn.DefaultKeychain),
+		}
+
+		// Create a random image.
+		img, err := random.Image(1024, 1)
+		if err != nil {
+			return err
+		}
+
+		log.Printf("pushing test image %s\n", ref.String())
+		if err := remote.Write(ref, img, opts...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func InstallFlux(ctx context.Context, kubeconfig, installManifest string) error {
+	return RunCommand(ctx, "./",
+		fmt.Sprintf("kubectl --kubeconfig=%s apply -f %s", kubeconfig, installManifest),
+		RunCommandOptions{},
+	)
+}
+
+func UninstallFlux(ctx context.Context, kubeconfig, installManifest string) error {
+	return RunCommand(ctx, "./",
+		fmt.Sprintf("kubectl --kubeconfig=%s delete -f %s", kubeconfig, installManifest),
+		RunCommandOptions{},
+	)
 }

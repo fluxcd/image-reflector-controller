@@ -1,5 +1,5 @@
 GO_TEST_PATH ?= ./...
-GO_TEST_ARGS ?=
+GO_TEST_ARGS ?= 
 TEST_TIMEOUT ?= 30m
 FLUX_MANIFEST_URL ?= https://github.com/fluxcd/flux2/releases/latest/download/install.yaml
 INSTALL_MANIFEST_PATH ?= build/flux/install.yaml

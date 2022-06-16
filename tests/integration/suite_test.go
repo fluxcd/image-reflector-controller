@@ -56,7 +56,7 @@ var (
 	// verbose
 	verbose = flag.Bool("verbose", true, "verbose output of the environment setup")
 
-	// the particular provider that test will run for
+	// the particular provider that test will run
 	provider = flag.String("provider", "", "verbose output of the environment setup")
 
 	// testRepoURL is the URL of the test repository.
