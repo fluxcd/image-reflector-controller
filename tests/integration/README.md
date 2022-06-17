@@ -1,19 +1,27 @@
-# AWS EKS E2E Tests
+# Cloud Provider E2E Tests
 
-## Requirements
+## General requirements
+- Docker CLI for registry login.
+- kubectl for applying certain install manifests.
+
+## Requirements for AWS EKS E2E Tests
 
 - AWS account with access key ID and secret access key with permissions to
     create EKS cluster and ECR repository.
 - AWS CLI, need not be configured with the AWS account.
-- Docker CLI for registry login.
-- kubectl for applying certain install manifests.
+
+# Requirements for azure EKS E2E Tests
+## Requirements
+
+- Azure Account
+- Azure CLI, configured with the Azure account
 
 ## Test setup
 
 Copy `.env.sample` to `.env`, put the AWS configurations in the environment
 variables and source it, `source .env`.
 
-Run the test with `make test`:
+Run the test and pass in the specific provider `make test --provider aws`. Only `aws` and `azure` are supported at the moment.
 
 ```console
 $ make test
@@ -63,9 +71,8 @@ existing terraform binary on the current `$PATH` and downloads a new binary in
 `build/terraform` if it couldn't find one locally.
 The terraform configurations are present in `terraform/` directory. All the
 terraform state created by the test run are written in `terraform/`
-directory. The test creates an EKS cluster and an ECR repository. The
-repository is populated with a few randomly generated test images. The registry
-login is performed using the AWS CLI and docker CLI. The credentials are
+directory. Depending on the `-provider` flag, The test creates either an EKS cluster and an ECR repository or an AKS cluster an ACR repository. The
+repository is populated with a few randomly generated test images. The registry login is performed using the AWS/Azure CLI and docker CLI. The credentials are
 written into the default docker client config file. Flux is then installed
 using the initial `build/flux.yaml` manifest.
 
@@ -74,7 +81,7 @@ tests end, the environment is destroyed automatically.
 
 **IMPORTANT**: In case the terraform infrastructure results in a bad state,
 maybe due to a crash during the apply, the whole infrastructure can be destroyed
-by running `terraform destroy` in `terraform/` directory.
+by running `terraform destroy` in `terraform/<provider>` directory.
 
 ## Debugging the tests
 

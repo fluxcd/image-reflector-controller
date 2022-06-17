@@ -1,4 +1,0 @@
-.env
-build
-.terraform*
-terraform.tfstate*

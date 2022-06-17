@@ -14,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tftestenv
+package test
 
 import (
 	"context"
 	"fmt"
 	"os"
 
+	"github.com/fluxcd/image-reflector-controller/tests/tftestenv"
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
@@ -53,9 +54,9 @@ func kubeconfigWithClusterAuthToken(token, caData, endpoint, user, clusterName s
 }
 
 func getClientToken(ctx context.Context, clusterName string) ([]byte, error) {
-	err := RunCommand(ctx, "build",
+	err := tftestenv.RunCommand(ctx, "build",
 		fmt.Sprintf("aws eks get-token --cluster-name %s | jq -r .status.token > token", clusterName),
-		RunCommandOptions{},
+		tftestenv.RunCommandOptions{},
 	)
 	if err != nil {
 		return nil, err
@@ -63,9 +64,9 @@ func getClientToken(ctx context.Context, clusterName string) ([]byte, error) {
 	return os.ReadFile("build/token")
 }
 
-// CreateEKSKubeconfig constructs kubeconfig for an EKS cluster from the terraform state output at the
+// createEKSKubeconfig constructs kubeconfig for an EKS cluster from the terraform state output at the
 // given kubeconfig path.
-func CreateEKSKubeconfig(ctx context.Context, state map[string]*tfjson.StateOutput, kcPath string) error {
+func createEKSKubeconfig(ctx context.Context, state map[string]*tfjson.StateOutput, kcPath string) error {
 	clusterName := state["eks_cluster_name"].Value.(string)
 	eksHost := state["eks_cluster_endpoint"].Value.(string)
 	eksClusterArn := state["eks_cluster_endpoint"].Value.(string)

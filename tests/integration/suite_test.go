@@ -48,13 +48,13 @@ const (
 
 var (
 	// retain flag to prevent destroy and retaining the created infrastructure.
-	retain = flag.Bool("retain", true, "retain the infrastructure for debugging purposes")
+	retain = flag.Bool("retain", false, "retain the infrastructure for debugging purposes")
 
 	// existing flag to use existing infrastructure terraform state.
-	existing = flag.Bool("existing", true, "use existing infrastructure state for debugging purposes")
+	existing = flag.Bool("existing", false, "use existing infrastructure state for debugging purposes")
 
 	// verbose
-	verbose = flag.Bool("verbose", true, "verbose output of the environment setup")
+	verbose = flag.Bool("verbose", false, "verbose output of the environment setup")
 
 	// the particular provider that test will run
 	provider = flag.String("provider", "", "verbose output of the environment setup")
@@ -69,8 +69,11 @@ var (
 
 // ProviderInfo contains the specific details needed to run the test for each provider
 type ProviderInfo struct {
-	terraformPath        string
-	loginCmd             string
+	// terraformPath is the path containing terraform files for spinning up infrastructure.
+	terraformPath string
+	// loginCmd is the command authenticate to with the image registry
+	loginCmd string
+	// the f
 	createKubeconfigFunc tftestenv.CreateKubeconfig
 }
 
@@ -126,22 +129,22 @@ func TestMain(m *testing.M) {
 	testRepoURL = testRepoURL + "/random"
 
 	// Registry login.
-	if err := tftestenv.RegistryLogin(ctx, testRepoURL, providerInfo.loginCmd); err != nil {
+	if err := registryLogin(ctx, testRepoURL, providerInfo.loginCmd); err != nil {
 		panic(fmt.Sprintf("Failed to log into the registry: %v", err))
 	}
 
 	// Create and push test images.
-	if err := tftestenv.CreateAndPushImages(testRepoURL, []string{"v0.1.0", "v0.1.2", "v0.1.3", "v0.1.4"}); err != nil {
+	if err := createAndPushImages(testRepoURL, []string{"v0.1.0", "v0.1.2", "v0.1.3", "v0.1.4"}); err != nil {
 		panic(fmt.Sprintf("Failed to create and push images: %v", err))
 	}
 
 	log.Println("Installing flux")
-	tftestenv.InstallFlux(ctx, kubeconfigPath, fluxInstallManifestPath)
+	installFlux(ctx, kubeconfigPath, fluxInstallManifestPath)
 
 	code := m.Run()
 
 	// log.Println("Uninstalling flux")
-	// utils.UninstallFlux(ctx, kubeconfigPath, fluxInstallManifestPath)
+	// uninstallFlux(ctx, kubeconfigPath, fluxInstallManifestPath)
 
 	testEnv.Stop(ctx)
 	os.Exit(code)
@@ -155,11 +158,11 @@ func getProviderInfo(ctx context.Context, provider string) (*ProviderInfo, error
 	switch provider {
 	case "aws":
 		terraformPath = "terraform/eks"
-		createKubeConfig = tftestenv.CreateEKSKubeconfig
+		createKubeConfig = createEKSKubeconfig
 		loginCmd = "aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin %s"
 	case "azure":
 		terraformPath = "terraform/aks"
-		createKubeConfig = tftestenv.CreateAKSKubeConfig
+		createKubeConfig = createAKSKubeConfig
 		loginCmd = "az acr login --name %s"
 	default:
 		return nil, errors.New(fmt.Sprintf("unable to get info for unknown provider '%s'", provider))

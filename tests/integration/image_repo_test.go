@@ -40,6 +40,7 @@ func TestImageRepositoryScan(t *testing.T) {
 			Image:    testRepoURL,
 		},
 	}
+	fmt.Println("[TEST REPO URL]", testRepoURL)
 	repoObjectKey := types.NamespacedName{
 		Name:      "test-repo-" + randStringRunes(5),
 		Namespace: "default",

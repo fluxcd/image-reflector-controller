@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package tftestenv
+package test
 
 import (
 	"context"
@@ -24,9 +24,9 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
-// CreateAKSKubeConfig constructs kubeconfig for an AKS cluster from the terraform state output at the
+// createAKSKubeConfig constructs kubeconfig for an AKS cluster from the terraform state output at the
 // given kubeconfig path.
-func CreateAKSKubeConfig(ctx context.Context, state map[string]*tfjson.StateOutput, kcPath string) error {
+func createAKSKubeConfig(ctx context.Context, state map[string]*tfjson.StateOutput, kcPath string) error {
 	kubeconfigYaml, ok := state["aks_kubeconfig"].Value.(string)
 	log.Println(kubeconfigYaml)
 	if !ok || kubeconfigYaml == "" {
