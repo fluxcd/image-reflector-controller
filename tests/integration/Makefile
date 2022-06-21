@@ -30,3 +30,6 @@ test-aws: test
 
 PROVIDER_ARG=-provider azure
 test-azure: test
+
+PROVIDER_ARG=-provider gcp
+test-gcp: test
