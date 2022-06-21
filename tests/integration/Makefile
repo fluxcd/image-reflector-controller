@@ -27,3 +27,6 @@ test: build-manifests
 
 test-aws:
 	$(MAKE) test PROVIDER_ARG="-provider aws"
+
+test-azure:
+	$(MAKE) test PROVIDER_ARG="-provider azure"
