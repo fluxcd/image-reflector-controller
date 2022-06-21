@@ -15,4 +15,3 @@ resource "google_artifact_registry_repository" "test-repo" {
   description = "example docker repository"
   format = "DOCKER"
 }
-
