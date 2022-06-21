@@ -27,3 +27,6 @@ test: build-manifests
 
 PROVIDER_ARG=-provider aws
 test-aws: test
+
+PROVIDER_ARG=-provider azure
+test-azure: test

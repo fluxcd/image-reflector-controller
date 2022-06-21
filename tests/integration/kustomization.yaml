@@ -15,3 +15,6 @@ patches:
     - op: add
       path: /spec/template/spec/containers/0/args/-
       value: --aws-autologin-for-ecr
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --azure-autologin-for-acr

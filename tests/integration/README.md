@@ -10,6 +10,15 @@
 - Docker CLI for registry login.
 - kubectl for applying certain install manifests.
 
+### Azure
+
+- Azure account with an active subscription to be able to create AKS and ACR,
+    and permission to assign roles. Role assignment is required for allowing AKS
+    workloads to access ECR.
+- Azure CLI, need to be logged in using `az login`.
+- Docker CLI for registry login.
+- kubectl for applying certain install manifests.
+
 ## Test setup
 
 Copy `.env.sample` to `.env`, put the respective provider configurations in the
