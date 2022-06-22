@@ -19,6 +19,20 @@
 - Docker CLI for registry login.
 - kubectl for applying certain install manifests.
 
+### Google Cloud Platform
+
+- GCP account with project and GKE, GCR and Artifact Registry services enabled
+    in the project.
+- gcloud CLI, need to be logged in using `gcloud auth login`.
+- Docker CLI for registry login.
+- kubectl for applying certain install manifests.
+
+**NOTE:** Unlike ECR, AKS and Google Artifact Registry, Google Container
+Registry tests don't create a new registry. It pushes to an existing registry
+host in a project, for example `gcr.io`. Due to this, the test images pushed to
+GCR aren't cleaned up automatically at the end of the test and have to be
+deleted manually.
+
 ## Test setup
 
 Copy `.env.sample` to `.env`, put the respective provider configurations in the

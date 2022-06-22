@@ -40,6 +40,9 @@ const (
 	// terraformPathAzure is the path to the terraform working directory
 	// containing the azure terraform configurations.
 	terraformPathAzure = "./terraform/azure"
+	// terraformPathGCP is the path to the terraform working directory
+	// containing the gcp terraform configurations.
+	terraformPathGCP = "./terraform/gcp"
 	// kubeconfigPath is the path where the cluster kubeconfig is written to and
 	// used from.
 	kubeconfigPath = "./build/kubeconfig"
@@ -52,7 +55,7 @@ const (
 
 var (
 	// supportedProviders are the providers supported by the test.
-	supportedProviders = []string{"aws", "azure"}
+	supportedProviders = []string{"aws", "azure", "gcp"}
 
 	// targetProvider is the name of the kubernetes provider to test against.
 	targetProvider = flag.String("provider", "", fmt.Sprintf("name of the provider %v", supportedProviders))
@@ -203,6 +206,12 @@ func getProviderConfig(provider string) *ProviderConfig {
 			terraformPath:    terraformPathAzure,
 			registryLogin:    registryLoginACR,
 			createKubeconfig: createKubeConfigAKS,
+		}
+	case "gcp":
+		return &ProviderConfig{
+			terraformPath:    terraformPathGCP,
+			registryLogin:    registryLoginGCR,
+			createKubeconfig: createKubeconfigGKE,
 		}
 	}
 	return nil

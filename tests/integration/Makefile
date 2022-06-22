@@ -30,3 +30,6 @@ test-aws:
 
 test-azure:
 	$(MAKE) test PROVIDER_ARG="-provider azure"
+
+test-gcp:
+	$(MAKE) test PROVIDER_ARG="-provider gcp"
