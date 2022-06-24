@@ -24,6 +24,7 @@ import (
 )
 
 const ImagePolicyKind = "ImagePolicy"
+const ImagePolicyFinalizer = "finalizers.fluxcd.io"
 
 // ImagePolicySpec defines the parameters for calculating the
 // ImagePolicy
