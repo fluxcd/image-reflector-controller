@@ -320,7 +320,7 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 		},
 	}
 	objectName := types.NamespacedName{
-		Name:      "random",
+		Name:      "schemeprefix" + randStringRunes(5),
 		Namespace: "default",
 	}
 
@@ -359,7 +359,7 @@ func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
 		},
 	}
 	objectName := types.NamespacedName{
-		Name:      "random",
+		Name:      "withtag" + randStringRunes(5),
 		Namespace: "default",
 	}
 
@@ -398,7 +398,7 @@ func TestImageRepositoryReconciler_imageAttribute_hostPort(t *testing.T) {
 		},
 	}
 	objectName := types.NamespacedName{
-		Name:      "random",
+		Name:      "hostport" + randStringRunes(5),
 		Namespace: "default",
 	}
 
