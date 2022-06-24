@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.19.2
+
+**Release date:** 2022-06-24
+
+This prerelease comes with finalizers to properly record the reconciliation metrics for deleted resources.
+
+Improvements:
+- Add finalizers to `ImagePolicy` and `ImageRepository` resources
+  [#266](https://github.com/fluxcd/image-reflector-controller/pull/266)
+
+Fixes:
+- Fix response body read and close defer order
+  [#272](https://github.com/fluxcd/image-reflector-controller/pull/272)
+- Use unique resources in tests
+  [#279](https://github.com/fluxcd/image-reflector-controller/pull/279)
+
 ## 0.19.1
 
 **Release date:** 2022-06-08
