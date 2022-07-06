@@ -1,6 +1,6 @@
 module github.com/fluxcd/image-reflector-controller/api
 
-go 1.17
+go 1.18
 
 require (
 	github.com/fluxcd/pkg/apis/acl v0.0.3
