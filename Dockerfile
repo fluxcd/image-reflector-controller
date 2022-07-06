@@ -3,7 +3,7 @@ ARG XX_VERSION=1.1.0
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.17-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.18-alpine AS builder
 
 # Copy the build utilities.
 COPY --from=xx / /
