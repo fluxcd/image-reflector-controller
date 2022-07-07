@@ -94,11 +94,11 @@ func (e *Exchanger) ExchangeACRAccessToken(armToken string) (string, error) {
 		var errors []acrError
 		decoder := json.NewDecoder(resp.Body)
 		if err = decoder.Decode(&errors); err == nil {
-			return "", fmt.Errorf("unexpected status code %d from exchnage request: errors:%s",
+			return "", fmt.Errorf("unexpected status code %d from exchange request: errors:%s",
 				resp.StatusCode, errors)
 		}
 
-		return "", fmt.Errorf("unexpected status code %d from exchnage request", resp.StatusCode)
+		return "", fmt.Errorf("unexpected status code %d from exchange request", resp.StatusCode)
 	}
 
 	var tokenResp tokenResponse
