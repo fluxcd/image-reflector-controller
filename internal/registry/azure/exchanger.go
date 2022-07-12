@@ -49,6 +49,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 )
 
 type tokenResponse struct {
@@ -63,48 +64,55 @@ type acrError struct {
 	Message string `json:"message"`
 }
 
-type Exchanger struct {
-	acrFQDN string
+type exchanger struct {
+	endpoint string
 }
 
-func NewExchanger(acrEndpoint string) *Exchanger {
-	return &Exchanger{
-		acrFQDN: acrEndpoint,
+// newExchanger returns an Azure Exchanger for Azure Container Registry with
+// a given endpoint, for example https://azurecr.io.
+func newExchanger(endpoint string) *exchanger {
+	return &exchanger{
+		endpoint: endpoint,
 	}
 }
 
-func (e *Exchanger) ExchangeACRAccessToken(armToken string) (string, error) {
-	exchangeUrl := fmt.Sprintf("https://%s/oauth2/exchange", e.acrFQDN)
-	parsedURL, err := url.Parse(exchangeUrl)
+// ExchangeACRAccessToken exchanges an access token for a refresh token with the
+// exchange service.
+func (e *exchanger) ExchangeACRAccessToken(armToken string) (string, error) {
+	// Construct the exchange URL.
+	exchangeURL, err := url.Parse(e.endpoint)
 	if err != nil {
 		return "", err
 	}
+	exchangeURL.Path = path.Join(exchangeURL.Path, "oauth2/exchange")
 
 	parameters := url.Values{}
 	parameters.Add("grant_type", "access_token")
-	parameters.Add("service", parsedURL.Hostname())
+	parameters.Add("service", exchangeURL.Hostname())
 	parameters.Add("access_token", armToken)
 
-	resp, err := http.PostForm(exchangeUrl, parameters)
+	resp, err := http.PostForm(exchangeURL.String(), parameters)
 	if err != nil {
 		return "", fmt.Errorf("failed to send token exchange request: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		// Parse the error response.
 		var errors []acrError
 		decoder := json.NewDecoder(resp.Body)
 		if err = decoder.Decode(&errors); err == nil {
-			return "", fmt.Errorf("unexpected status code %d from exchange request: errors:%s",
+			return "", fmt.Errorf("unexpected status code %d from exchange request: %s",
 				resp.StatusCode, errors)
 		}
 
+		// Error response could not be parsed, return a generic error.
 		return "", fmt.Errorf("unexpected status code %d from exchange request", resp.StatusCode)
 	}
 
 	var tokenResp tokenResponse
 	decoder := json.NewDecoder(resp.Body)
 	if err = decoder.Decode(&tokenResp); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to decode the response: %w", err)
 	}
 	return tokenResp.RefreshToken, nil
 }
