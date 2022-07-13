@@ -71,14 +71,14 @@ func getEKSClientToken(ctx context.Context, clusterName string) ([]byte, error) 
 func createKubeconfigEKS(ctx context.Context, state map[string]*tfjson.StateOutput, kcPath string) error {
 	clusterName := state["eks_cluster_name"].Value.(string)
 	eksHost := state["eks_cluster_endpoint"].Value.(string)
-	eksClusterArn := state["eks_cluster_endpoint"].Value.(string)
+	eksClusterArn := state["eks_cluster_arn"].Value.(string)
 	eksCa := state["eks_cluster_ca_certificate"].Value.(string)
 	eksToken, err := getEKSClientToken(ctx, clusterName)
 	if err != nil {
 		return fmt.Errorf("failed to obtain auth token: %w", err)
 	}
 
-	kubeconfigYaml := kubeconfigWithClusterAuthToken(string(eksToken), eksCa, eksHost, eksClusterArn, eksClusterArn)
+	kubeconfigYaml := kubeconfigWithClusterAuthToken(string(eksToken), eksCa, eksHost, eksClusterArn, clusterName)
 
 	f, err := os.Create(kcPath)
 	if err != nil {
@@ -95,9 +95,10 @@ func registryLoginECR(ctx context.Context, output map[string]*tfjson.StateOutput
 	// repositories to be created explicitly using their API before pushing
 	// image.
 	repoURL := output["ecr_repository_url"].Value.(string)
+	region := output["region"].Value.(string)
 
 	if err := tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin %s", repoURL),
+		fmt.Sprintf("aws ecr get-login-password --region %s | docker login --username AWS --password-stdin %s", region, repoURL),
 		tftestenv.RunCommandOptions{},
 	); err != nil {
 		return nil, err
