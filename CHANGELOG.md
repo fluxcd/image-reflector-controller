@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.19.3
+
+**Release date:** 2022-07-13
+
+This prerelease comes with some minor improvements and updates dependencies
+to patch upstream CVEs.
+
+Fixes:
+
+- Fix spelling mistake in azure/exchanger.go
+  [#265](https://github.com/fluxcd/image-reflector-controller/pull/265)
+
+Improvements:
+
+- build: Upgrade to Go 1.18
+  [#281](https://github.com/fluxcd/image-reflector-controller/pull/281)
+- Add native registry login tests for EKS, AKS and GKE
+  [#275](https://github.com/fluxcd/image-reflector-controller/pull/275)
+- Introduce registry package
+  [#276](https://github.com/fluxcd/image-reflector-controller/pull/276)
+- tests/int: ECR force delete and use go 1.18
+  [#282](https://github.com/fluxcd/image-reflector-controller/pull/282)
+- Update dependencies
+  [#280](https://github.com/fluxcd/image-reflector-controller/pull/280)
+  [#283](https://github.com/fluxcd/image-reflector-controller/pull/283)
+
+
 ## 0.19.2
 
 **Release date:** 2022-06-24
