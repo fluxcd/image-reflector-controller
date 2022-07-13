@@ -9,5 +9,23 @@ resource "random_pet" "suffix" {
 }
 
 locals {
-  name = "flux-test-${random_pet.suffix.id}"
+  name = "fluxTest${random_pet.suffix.id}"
+}
+
+module "aks" {
+  source = "git::https://github.com/fluxcd/test-infra.git//tf-modules/azure/aks"
+
+  name     = local.name
+  location = var.azure_location
+}
+
+module "acr" {
+  source = "git::https://github.com/fluxcd/test-infra.git//tf-modules/azure/acr"
+
+  name             = local.name
+  location         = var.azure_location
+  aks_principal_id = module.aks.principal_id
+  resource_group   = module.aks.resource_group
+
+  depends_on = [module.aks]
 }
