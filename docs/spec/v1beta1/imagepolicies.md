@@ -154,7 +154,7 @@ spec:
     pattern: '^main-[a-fA-F0-9]+-(?P<ts>.*)'
     extract: '$ts'
   policy:
-     numerical:
+    numerical:
       order: asc
 ```
 
@@ -199,7 +199,7 @@ Select the latest release candidate (semver):
 kind: ImagePolicy
 spec:
   filterTags:
-   pattern: '.*-rc.*'
+    pattern: '.*-rc.*'
   policy:
     semver:
       range: '^1.x-0'
