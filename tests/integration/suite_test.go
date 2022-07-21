@@ -92,6 +92,12 @@ var (
 // output.
 type registryLoginFunc func(ctx context.Context, output map[string]*tfjson.StateOutput) (map[string]string, error)
 
+// pushTestImages is used to push local flux test images to a remote registry
+// after logging in using registryLoginFunc. It takes a map of image name and
+// local images and terraform state output. The local images are retagged and
+// pushed to a corresponding registry repository for the image.
+type pushTestImages func(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error)
+
 // ProviderConfig is the test configuration of a supported cloud provider to run
 // the tests against.
 type ProviderConfig struct {
@@ -102,6 +108,8 @@ type ProviderConfig struct {
 	registryLogin registryLoginFunc
 	// createKubeconfig is used to create kubeconfig of a cluster.
 	createKubeconfig tftestenv.CreateKubeconfig
+	// pushFluxTestImages is used to push flux test images to a remote registry.
+	pushFluxTestImages pushTestImages
 }
 
 func init() {
@@ -121,6 +129,15 @@ func randStringRunes(n int) string {
 func TestMain(m *testing.M) {
 	flag.Parse()
 	ctx := context.TODO()
+
+	ircImg := os.Getenv("TEST_IMG")
+	if ircImg == "" {
+		log.Fatal("TEST_IMG must be set to the test image-reflector-controller image, cannot be empty")
+	}
+
+	localImgs := map[string]string{
+		"image-reflector-controller": ircImg,
+	}
 
 	// Validate the provider.
 	if *targetProvider == "" {
@@ -171,9 +188,19 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("Failed to log into registry: %v", err))
 	}
 
+	pushedImages, err := providerCfg.pushFluxTestImages(ctx, localImgs, output)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to push test images: %v", err))
+	}
+
 	// Create and push test images.
 	if err := createAndPushImages(testRepos, testImageTags); err != nil {
 		panic(fmt.Sprintf("Failed to create and push images: %v", err))
+	}
+
+	// Update flux install manifests with the pushed test images.
+	if err := updateAndBuildFluxInstallManifests(ctx, pushedImages); err != nil {
+		panic(fmt.Sprintf("Failed to update and build flux install manifests: %v", err))
 	}
 
 	log.Println("Installing flux")
@@ -197,21 +224,24 @@ func getProviderConfig(provider string) *ProviderConfig {
 	switch provider {
 	case "aws":
 		return &ProviderConfig{
-			terraformPath:    terraformPathAWS,
-			registryLogin:    registryLoginECR,
-			createKubeconfig: createKubeconfigEKS,
+			terraformPath:      terraformPathAWS,
+			registryLogin:      registryLoginECR,
+			pushFluxTestImages: pushFluxTestImagesECR,
+			createKubeconfig:   createKubeconfigEKS,
 		}
 	case "azure":
 		return &ProviderConfig{
-			terraformPath:    terraformPathAzure,
-			registryLogin:    registryLoginACR,
-			createKubeconfig: createKubeConfigAKS,
+			terraformPath:      terraformPathAzure,
+			registryLogin:      registryLoginACR,
+			pushFluxTestImages: pushFluxTestImagesACR,
+			createKubeconfig:   createKubeConfigAKS,
 		}
 	case "gcp":
 		return &ProviderConfig{
-			terraformPath:    terraformPathGCP,
-			registryLogin:    registryLoginGCR,
-			createKubeconfig: createKubeconfigGKE,
+			terraformPath:      terraformPathGCP,
+			registryLogin:      registryLoginGCR,
+			pushFluxTestImages: pushFluxTestImagesGCR,
+			createKubeconfig:   createKubeconfigGKE,
 		}
 	}
 	return nil

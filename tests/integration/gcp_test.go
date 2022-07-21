@@ -58,6 +58,21 @@ func registryLoginGCR(ctx context.Context, output map[string]*tfjson.StateOutput
 		return nil, err
 	}
 
+	artifactRegistry, artifactURL := getGoogleArtifactRegistryAndRepository(output)
+	if err := tftestenv.RunCommand(ctx, "./",
+		fmt.Sprintf("gcloud auth configure-docker %s", artifactRegistry),
+		tftestenv.RunCommandOptions{},
+	); err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		"gcr":               repoURL + "/" + randStringRunes(5),
+		"artifact_registry": artifactURL + "/" + randStringRunes(5),
+	}, nil
+}
+
+func getGoogleArtifactRegistryAndRepository(output map[string]*tfjson.StateOutput) (string, string) {
 	// NOTE: Artifact Registry calls a registry a "repository". A repository can
 	// contain multiple different images, unlike ECR or ACR where a repository
 	// can contain multiple tags of only a single image.
@@ -70,16 +85,15 @@ func registryLoginGCR(ctx context.Context, output map[string]*tfjson.StateOutput
 	// Use the fixed docker formatted repository suffix with the location to
 	// create the registry address.
 	artifactRegistry := fmt.Sprintf("%s-docker.pkg.dev", location)
-	artifactURL := fmt.Sprintf("%s/%s/%s", artifactRegistry, project, repository)
-	if err := tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("gcloud auth configure-docker %s", artifactRegistry),
-		tftestenv.RunCommandOptions{},
-	); err != nil {
-		return nil, err
-	}
+	artifactRepository := fmt.Sprintf("%s/%s/%s", artifactRegistry, project, repository)
+	return artifactRegistry, artifactRepository
+}
 
-	return map[string]string{
-		"gcr":               repoURL + "/" + randStringRunes(5),
-		"artifact_registry": artifactURL + "/" + randStringRunes(5),
-	}, nil
+// pushFluxTestImagesGCR pushes flux images that are being tested. It must be
+// called after registryLoginGCR to ensure the local docker client is already
+// logged in and is capable of pushing the test images.
+func pushFluxTestImagesGCR(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error) {
+	// Get the repository name and construct the image names accordingly.
+	_, repo := getGoogleArtifactRegistryAndRepository(output)
+	return retagAndPush(ctx, repo, localImgs)
 }

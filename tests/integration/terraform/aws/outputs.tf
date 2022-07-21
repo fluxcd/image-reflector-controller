@@ -30,3 +30,7 @@ output "ecr_repository_url" {
 output "ecr_registry_id" {
   value = aws_ecr_repository.testrepo.registry_id
 }
+
+output "ecr_image_reflector_controller_repo_url" {
+  value = aws_ecr_repository.image_reflector_controller.repository_url
+}
