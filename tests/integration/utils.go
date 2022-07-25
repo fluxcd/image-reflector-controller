@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -28,6 +30,43 @@ import (
 
 	tftestenv "github.com/fluxcd/image-reflector-controller/tests/tftestenv"
 )
+
+// updateAndBuildFluxInstallManifests assumes that ./build/flux/ already exists
+// with downloaded install.yaml and copied kustomization.yaml. It updates the
+// kustomization.yaml with new test images and builds a new install manifest
+// at ./build/flux.yaml.
+func updateAndBuildFluxInstallManifests(ctx context.Context, images map[string]string) error {
+	// Construct kustomize set image arguments.
+	setImgArgs := []string{}
+	for name, img := range images {
+		// NOTE: There's an assumption here that the existing images in the
+		// manifest have fluxcd/ prefixed images.
+		imageName := path.Join("fluxcd", name)
+		arg := fmt.Sprintf("%s=%s", imageName, img)
+		setImgArgs = append(setImgArgs, arg)
+	}
+	log.Println("setting images:", setImgArgs)
+
+	// Update all the images in kustomization.
+	err := tftestenv.RunCommand(ctx, "./build/flux",
+		fmt.Sprintf("kustomize edit set image %s", strings.Join(setImgArgs, " ")),
+		tftestenv.RunCommandOptions{},
+	)
+	if err != nil {
+		return err
+	}
+
+	// Build install manifest.
+	err = tftestenv.RunCommand(ctx, "./",
+		"kustomize build build/flux > build/flux.yaml",
+		tftestenv.RunCommandOptions{},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func installFlux(ctx context.Context, kubeconfig, installManifest string) error {
 	return tftestenv.RunCommand(ctx, "./",
@@ -73,4 +112,30 @@ func createAndPushImages(repos map[string]string, tags []string) error {
 		}
 	}
 	return nil
+}
+
+// retagAndPush retags local images based on the remote repo and pushes them.
+func retagAndPush(ctx context.Context, repo string, localImgs map[string]string) (map[string]string, error) {
+	imgs := map[string]string{}
+	for name, li := range localImgs {
+		remoteImage := path.Join(repo, name)
+		remoteImage += ":test"
+
+		log.Printf("pushing flux test image %s\n", remoteImage)
+		// Retag local image and push.
+		if err := tftestenv.RunCommand(ctx, "./",
+			fmt.Sprintf("docker tag %s %s", li, remoteImage),
+			tftestenv.RunCommandOptions{},
+		); err != nil {
+			return nil, err
+		}
+		if err := tftestenv.RunCommand(ctx, "./",
+			fmt.Sprintf("docker push %s", remoteImage),
+			tftestenv.RunCommandOptions{},
+		); err != nil {
+			return nil, err
+		}
+		imgs[name] = remoteImage
+	}
+	return imgs, nil
 }

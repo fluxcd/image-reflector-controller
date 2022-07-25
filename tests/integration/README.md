@@ -38,10 +38,16 @@ deleted manually.
 Copy `.env.sample` to `.env`, put the respective provider configurations in the
 environment variables and source it, `source .env`.
 
-Run the test with `make test-*`:
+Ensure the image-reflector-controller container image to be tested is built and
+ready for testing. A development image can be built from the root of the project
+by running the make target `docker-build`. Or, a release image can also be
+downloaded and used for testing.
+
+Run the test with `make test-*`, setting the image-reflector image, built or
+downloaded, with variable `TEST_IMG`:
 
 ```console
-$ make test-aws
+$ make test-aws TEST_IMG=foo/image-reflector-controller:dev
 mkdir -p build/flux
 curl -Lo build/flux/install.yaml https://github.com/fluxcd/flux2/releases/latest/download/install.yaml
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
@@ -54,10 +60,12 @@ go test -timeout 20m -v ./... -existing
 2022/06/15 01:55:09 Terraform binary:  /go/src/github.com/fluxcd/image-reflector-controller/tests/integration/build/terraform
 2022/06/15 01:55:09 Init Terraform
 2022/06/15 01:55:14 Applying Terraform
+2022/06/15 01:55:21 pushing flux test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-test-image-reflector-direct-elephant:test
 2022/06/15 01:55:41 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.0
 2022/06/15 01:55:45 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.2
 2022/06/15 01:55:48 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.3
 2022/06/15 01:55:51 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.4
+2022/06/15 01:55:54 setting images: [fluxcd/image-reflector-controller=457472006214.dkr.ecr.us-east-2.amazonaws.com/flux-test-image-reflector-direct-elephant:test]
 2022/06/15 01:55:54 Installing flux
 === RUN   TestImageRepositoryScan
 === RUN   TestImageRepositoryScan/ecr
@@ -78,9 +86,9 @@ Then the `kustomization.yaml` is copied to `build/flux/`. This kustomization
 contains configurations to configure the flux installation by patching the
 downloaded `install.yaml`. It can also be used to set any custom images for any
 of the flux components. The image-reflector-controller image can be configured
-by setting the `IMG` variable when running the test. The kustomization is built
-and the resulting flux installation manifest is written to `build/flux.yaml`.
-This is used by the test to install flux.
+by setting the `TEST_IMG` variable when running the test. The kustomization is
+built and the resulting flux installation manifest is written to
+`build/flux.yaml`.  This is used by the test to install flux.
 
 The go test is started with a long timeout because the infrastructure set up
 can take a long time. It can also be configured by setting the variable
@@ -110,25 +118,25 @@ For debugging environment provisioning, enable verbose output with `-verbose`
 test flag.
 
 ```console
-$ make test-aws GO_TEST_ARGS="-verbose"
+$ make test-aws GO_TEST_ARGS="-verbose" TEST_IMG=foo/image-reflector-controller:dev
 ```
 
 The test environment is destroyed at the end by default. Run the tests with
 `-retain` flag to retain the created test infrastructure.
 
 ```console
-$ make test-aws GO_TEST_ARGS="-retain"
+$ make test-aws GO_TEST_ARGS="-retain" TEST_IMG=foo/image-reflector-controller:dev
 ```
 
 The tests require the infrastructure state to be clean. For re-running the tests
 with a retained infrastructure, set `-existing` flag.
 
 ```console
-$ make test-aws GO_TEST_ARGS="-retain -existing"
+$ make test-aws GO_TEST_ARGS="-retain -existing" TEST_IMG=foo/image-reflector-controller:dev
 ```
 
 To delete an existing infrastructure created with `-retain` flag:
 
 ```console
-$ make test-aws GO_TEST_ARGS="-existing"
+$ make test-aws GO_TEST_ARGS="-existing" TEST_IMG=foo/image-reflector-controller:dev
 ```

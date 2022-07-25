@@ -19,6 +19,7 @@ package integration
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -94,15 +95,67 @@ func registryLoginECR(ctx context.Context, output map[string]*tfjson.StateOutput
 	// NOTE: ECR provides pre-existing registry per account. It requires
 	// repositories to be created explicitly using their API before pushing
 	// image.
-	repoURL := output["ecr_repository_url"].Value.(string)
+	testRepoURL := output["ecr_repository_url"].Value.(string)
+	ircRepoURL := output["ecr_image_reflector_controller_repo_url"].Value.(string)
 	region := output["region"].Value.(string)
 
 	if err := tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("aws ecr get-login-password --region %s | docker login --username AWS --password-stdin %s", region, repoURL),
+		fmt.Sprintf("aws ecr get-login-password --region %s | docker login --username AWS --password-stdin %s", region, testRepoURL),
 		tftestenv.RunCommandOptions{},
 	); err != nil {
 		return nil, err
 	}
 
-	return map[string]string{"ecr": repoURL}, nil
+	if err := tftestenv.RunCommand(ctx, "./",
+		fmt.Sprintf("aws ecr get-login-password --region %s | docker login --username AWS --password-stdin %s", region, ircRepoURL),
+		tftestenv.RunCommandOptions{},
+	); err != nil {
+		return nil, err
+	}
+
+	return map[string]string{"ecr": testRepoURL}, nil
+}
+
+// pushFluxTestImagesECR pushes flux image that is being tested. It must be
+// called after registryLoginECR to ensure the local docker client is already
+// logged in and is capable of pushing the test images.
+func pushFluxTestImagesECR(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error) {
+	// NOTE: Unlike Azure Container Registry and Google Artifact Registry, ECR
+	// does not support dynamic image repositories. A new repository for a new
+	// image has to be explicitly created. Therefore, the single local image
+	// is retagged and pushed in the already created repository.
+	if len(localImgs) != 1 {
+		return nil, fmt.Errorf("ECR repository supports pushing one image only, got: %v", localImgs)
+	}
+
+	// Get the registry name and construct the image names accordingly.
+	repo := output["ecr_image_reflector_controller_repo_url"].Value.(string)
+
+	remoteImage := repo + ":test"
+
+	// Extract the component name and local image.
+	var name, localImage string
+	for n, i := range localImgs {
+		name, localImage = n, i
+	}
+
+	if err := tftestenv.RunCommand(ctx, "./",
+		fmt.Sprintf("docker tag %s %s", localImage, remoteImage),
+		tftestenv.RunCommandOptions{},
+	); err != nil {
+		return nil, err
+	}
+
+	log.Printf("pushing flux test image %s\n", remoteImage)
+
+	if err := tftestenv.RunCommand(ctx, "./",
+		fmt.Sprintf("docker push %s", remoteImage),
+		tftestenv.RunCommandOptions{},
+	); err != nil {
+		return nil, err
+	}
+
+	return map[string]string{
+		name: remoteImage,
+	}, nil
 }

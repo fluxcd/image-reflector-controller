@@ -59,3 +59,12 @@ func registryLoginACR(ctx context.Context, output map[string]*tfjson.StateOutput
 	}
 	return map[string]string{"acr": registryURL + "/" + randStringRunes(5)}, nil
 }
+
+// pushFluxTestImagesACR pushes flux images that are being tested. It must be
+// called after registryLoginACR to ensure the local docker client is already
+// logged in and is capable of pushing the test images.
+func pushFluxTestImagesACR(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error) {
+	// Get the registry name and construct the image names accordingly.
+	repo := output["acr_registry_url"].Value.(string)
+	return retagAndPush(ctx, repo, localImgs)
+}
