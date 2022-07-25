@@ -19,9 +19,16 @@ package tftestenv
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
+	"path"
 	"time"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 // RunCommandOptions is used to configure the RunCommand execution.
@@ -51,4 +58,63 @@ func RunCommand(ctx context.Context, dir, command string, opts RunCommandOptions
 		return fmt.Errorf("failed to run command %s: %v", string(output), err)
 	}
 	return nil
+}
+
+// CreateAndPushImages randomly generates test images with the given tags and
+// pushes them to the given test repositories.
+func CreateAndPushImages(repos map[string]string, tags []string) error {
+	// TODO: Build and push concurrently.
+	for _, repo := range repos {
+		for _, tag := range tags {
+			imgRef := repo + ":" + tag
+			ref, err := name.ParseReference(imgRef)
+			if err != nil {
+				return err
+			}
+
+			// Use the login credentials from the host docker/podman client config.
+			opts := []remote.Option{
+				remote.WithAuthFromKeychain(authn.DefaultKeychain),
+			}
+
+			// Create a random image.
+			img, err := random.Image(1024, 1)
+			if err != nil {
+				return err
+			}
+
+			log.Printf("pushing test image %s\n", ref.String())
+			if err := remote.Write(ref, img, opts...); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// retagAndPush retags local images based on the remote repo and pushes them
+// with :test tag.
+func retagAndPush(ctx context.Context, registry string, localImgs map[string]string) (map[string]string, error) {
+	imgs := map[string]string{}
+	for name, li := range localImgs {
+		remoteImage := path.Join(registry, name)
+		remoteImage += ":test"
+
+		log.Printf("pushing flux test image %s\n", remoteImage)
+		// Retag local image and push.
+		if err := RunCommand(ctx, "./",
+			fmt.Sprintf("docker tag %s %s", li, remoteImage),
+			RunCommandOptions{},
+		); err != nil {
+			return nil, err
+		}
+		if err := RunCommand(ctx, "./",
+			fmt.Sprintf("docker push %s", remoteImage),
+			RunCommandOptions{},
+		); err != nil {
+			return nil, err
+		}
+		imgs[name] = remoteImage
+	}
+	return imgs, nil
 }
