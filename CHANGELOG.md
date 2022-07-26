@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.19.4
+
+**Release date:** 2022-07-26
+
+This prerelease comes with fix for a bug introduced in the last release during
+the refactoring of the cloud provider registry auto-login. When a cloud provider
+registry is identified, but is not configured for auto-login, to continue
+attempting scan as public repository, an unconfigured provider error is ignored.
+
+Fixes:
+- imagerepo: Continue scan for unconfigured provider
+  [#290](https://github.com/fluxcd/image-reflector-controller/pull/290)
+
+Improvements:
+- Fix the indentation issues in example
+  [#286](https://github.com/fluxcd/image-reflector-controller/pull/286)
+- cloud-provider-e2e: Use test image-reflector build
+  [#287](https://github.com/fluxcd/image-reflector-controller/pull/287)
+
 ## 0.19.3
 
 **Release date:** 2022-07-13
