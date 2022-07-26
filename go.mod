@@ -10,7 +10,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/aws/aws-sdk-go v1.44.53
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/fluxcd/image-reflector-controller/api v0.19.2
+	github.com/fluxcd/image-reflector-controller/api v0.19.4
 	github.com/fluxcd/pkg/apis/acl v0.0.3
 	github.com/fluxcd/pkg/apis/meta v0.14.2
 	github.com/fluxcd/pkg/runtime v0.16.2
