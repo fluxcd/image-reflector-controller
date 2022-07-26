@@ -23,11 +23,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/random"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-
 	tftestenv "github.com/fluxcd/image-reflector-controller/tests/tftestenv"
 )
 
@@ -80,62 +75,4 @@ func uninstallFlux(ctx context.Context, kubeconfig, installManifest string) erro
 		fmt.Sprintf("kubectl --kubeconfig=%s delete -f %s", kubeconfig, installManifest),
 		tftestenv.RunCommandOptions{},
 	)
-}
-
-// createAndPushImages randomly generates test images with the given tags and
-// pushes them to the given test repositories.
-func createAndPushImages(repos map[string]string, tags []string) error {
-	// TODO: Build and push concurrently.
-	for _, repo := range repos {
-		for _, tag := range tags {
-			imgRef := repo + ":" + tag
-			ref, err := name.ParseReference(imgRef)
-			if err != nil {
-				return err
-			}
-
-			// Use the login credentials from the host docker/podman client config.
-			opts := []remote.Option{
-				remote.WithAuthFromKeychain(authn.DefaultKeychain),
-			}
-
-			// Create a random image.
-			img, err := random.Image(1024, 1)
-			if err != nil {
-				return err
-			}
-
-			log.Printf("pushing test image %s\n", ref.String())
-			if err := remote.Write(ref, img, opts...); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// retagAndPush retags local images based on the remote repo and pushes them.
-func retagAndPush(ctx context.Context, repo string, localImgs map[string]string) (map[string]string, error) {
-	imgs := map[string]string{}
-	for name, li := range localImgs {
-		remoteImage := path.Join(repo, name)
-		remoteImage += ":test"
-
-		log.Printf("pushing flux test image %s\n", remoteImage)
-		// Retag local image and push.
-		if err := tftestenv.RunCommand(ctx, "./",
-			fmt.Sprintf("docker tag %s %s", li, remoteImage),
-			tftestenv.RunCommandOptions{},
-		); err != nil {
-			return nil, err
-		}
-		if err := tftestenv.RunCommand(ctx, "./",
-			fmt.Sprintf("docker push %s", remoteImage),
-			tftestenv.RunCommandOptions{},
-		); err != nil {
-			return nil, err
-		}
-		imgs[name] = remoteImage
-	}
-	return imgs, nil
 }

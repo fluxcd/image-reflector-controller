@@ -19,7 +19,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"os"
 
 	tfjson "github.com/hashicorp/terraform-json"
 
@@ -33,16 +32,7 @@ func createKubeconfigGKE(ctx context.Context, state map[string]*tfjson.StateOutp
 	if !ok || kubeconfigYaml == "" {
 		return fmt.Errorf("failed to obtain kubeconfig from tf output")
 	}
-
-	f, err := os.Create(kcPath)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprint(f, kubeconfigYaml)
-	if err != nil {
-		return err
-	}
-	return f.Close()
+	return tftestenv.CreateKubeconfigGKE(ctx, kubeconfigYaml, kcPath)
 }
 
 // registryLoginGCR logs into the container/artifact registries using the
@@ -50,50 +40,32 @@ func createKubeconfigGKE(ctx context.Context, state map[string]*tfjson.StateOutp
 func registryLoginGCR(ctx context.Context, output map[string]*tfjson.StateOutput) (map[string]string, error) {
 	// NOTE: GCR accepts dynamic repository creation by just pushing a new image
 	// with a new repository name.
+	testRepos := map[string]string{}
+
 	repoURL := output["gcr_repository_url"].Value.(string)
-	if err := tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("gcloud auth configure-docker %s", repoURL),
-		tftestenv.RunCommandOptions{},
-	); err != nil {
+	if err := tftestenv.RegistryLoginGCR(ctx, repoURL); err != nil {
 		return nil, err
 	}
+	testRepos["gcr"] = repoURL + "/" + randStringRunes(5)
 
-	artifactRegistry, artifactURL := getGoogleArtifactRegistryAndRepository(output)
-	if err := tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("gcloud auth configure-docker %s", artifactRegistry),
-		tftestenv.RunCommandOptions{},
-	); err != nil {
-		return nil, err
-	}
-
-	return map[string]string{
-		"gcr":               repoURL + "/" + randStringRunes(5),
-		"artifact_registry": artifactURL + "/" + randStringRunes(5),
-	}, nil
-}
-
-func getGoogleArtifactRegistryAndRepository(output map[string]*tfjson.StateOutput) (string, string) {
-	// NOTE: Artifact Registry calls a registry a "repository". A repository can
-	// contain multiple different images, unlike ECR or ACR where a repository
-	// can contain multiple tags of only a single image.
-	// Artifact Registry also supports dynamic repository(image) creation by
-	// pushing a new image with a new image name once a new registry(repository)
-	// is created.
-	location := output["gcp_region"].Value.(string)
 	project := output["gcp_project"].Value.(string)
-	repository := output["gcp_artifact_repository"].Value.(string)
-	// Use the fixed docker formatted repository suffix with the location to
-	// create the registry address.
-	artifactRegistry := fmt.Sprintf("%s-docker.pkg.dev", location)
-	artifactRepository := fmt.Sprintf("%s/%s/%s", artifactRegistry, project, repository)
-	return artifactRegistry, artifactRepository
+	region := output["gcp_region"].Value.(string)
+	repositoryID := output["gcp_artifact_repository"].Value.(string)
+	artifactRegistryURL, artifactRepoURL := tftestenv.GetGoogleArtifactRegistryAndRepository(project, region, repositoryID)
+	if err := tftestenv.RegistryLoginGCR(ctx, artifactRegistryURL); err != nil {
+		return nil, err
+	}
+	testRepos["artifact_registry"] = artifactRepoURL + "/" + randStringRunes(5)
+
+	return testRepos, nil
 }
 
 // pushFluxTestImagesGCR pushes flux images that are being tested. It must be
 // called after registryLoginGCR to ensure the local docker client is already
 // logged in and is capable of pushing the test images.
 func pushFluxTestImagesGCR(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error) {
-	// Get the repository name and construct the image names accordingly.
-	_, repo := getGoogleArtifactRegistryAndRepository(output)
-	return retagAndPush(ctx, repo, localImgs)
+	project := output["gcp_project"].Value.(string)
+	region := output["gcp_region"].Value.(string)
+	repositoryID := output["gcp_artifact_repository"].Value.(string)
+	return tftestenv.PushTestAppImagesGCR(ctx, localImgs, project, region, repositoryID)
 }

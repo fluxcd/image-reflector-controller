@@ -19,7 +19,6 @@ package integration
 import (
 	"context"
 	"fmt"
-	"os"
 
 	tfjson "github.com/hashicorp/terraform-json"
 
@@ -33,16 +32,7 @@ func createKubeConfigAKS(ctx context.Context, state map[string]*tfjson.StateOutp
 	if !ok || kubeconfigYaml == "" {
 		return fmt.Errorf("failed to obtain kubeconfig from tf output")
 	}
-
-	f, err := os.Create(kcPath)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprint(f, kubeconfigYaml)
-	if err != nil {
-		return err
-	}
-	return f.Close()
+	return tftestenv.CreateKubeconfigAKS(ctx, kubeconfigYaml, kcPath)
 }
 
 // registryLoginACR logs into the container/artifact registries using the
@@ -50,14 +40,15 @@ func createKubeConfigAKS(ctx context.Context, state map[string]*tfjson.StateOutp
 func registryLoginACR(ctx context.Context, output map[string]*tfjson.StateOutput) (map[string]string, error) {
 	// NOTE: ACR registry accept dynamic repository creation by just pushing a
 	// new image with a new repository name.
-	registryURL := output["acr_registry_url"].Value.(string)
+	testRepos := map[string]string{}
 
-	if err := tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("az acr login --name %s", registryURL), tftestenv.RunCommandOptions{},
-	); err != nil {
+	registryURL := output["acr_registry_url"].Value.(string)
+	if err := tftestenv.RegistryLoginACR(ctx, registryURL); err != nil {
 		return nil, err
 	}
-	return map[string]string{"acr": registryURL + "/" + randStringRunes(5)}, nil
+	testRepos["acr"] = registryURL + "/" + randStringRunes(5)
+
+	return testRepos, nil
 }
 
 // pushFluxTestImagesACR pushes flux images that are being tested. It must be
@@ -65,6 +56,6 @@ func registryLoginACR(ctx context.Context, output map[string]*tfjson.StateOutput
 // logged in and is capable of pushing the test images.
 func pushFluxTestImagesACR(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error) {
 	// Get the registry name and construct the image names accordingly.
-	repo := output["acr_registry_url"].Value.(string)
-	return retagAndPush(ctx, repo, localImgs)
+	registryURL := output["acr_registry_url"].Value.(string)
+	return tftestenv.PushTestAppImagesACR(ctx, localImgs, registryURL)
 }

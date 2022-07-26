@@ -194,7 +194,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Create and push test images.
-	if err := createAndPushImages(testRepos, testImageTags); err != nil {
+	if err := tftestenv.CreateAndPushImages(testRepos, testImageTags); err != nil {
 		panic(fmt.Sprintf("Failed to create and push images: %v", err))
 	}
 
