@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -491,4 +492,43 @@ func TestImageRepositoryReconciler_authRegistryWithServiceAccount(t *testing.T) 
 	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
+}
+
+func TestImageRepositoryReconciler_ScanPublicRepos(t *testing.T) {
+	tests := []struct {
+		name  string
+		image string
+	}{
+		{"gcr", "k8s.gcr.io/coredns/coredns"},
+		{"ghcr", "ghcr.io/stefanprodan/podinfo"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			repo := imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					Interval: metav1.Duration{Duration: time.Hour},
+					Image:    tt.image,
+				},
+			}
+			objectName := types.NamespacedName{
+				Name:      "public-repo" + randStringRunes(5),
+				Namespace: "default",
+			}
+			repo.Name = objectName.Name
+			repo.Namespace = objectName.Namespace
+
+			ctx, cancel := context.WithTimeout(context.TODO(), contextTimeout)
+			defer cancel()
+			g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
+
+			g.Eventually(func() bool {
+				err := testEnv.Get(ctx, objectName, &repo)
+				return err == nil && repo.Status.LastScanResult != nil
+			}, timeout, interval).Should(BeTrue())
+			g.Expect(repo.Status.LastScanResult.TagCount).ToNot(BeZero())
+			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
+		})
+	}
 }

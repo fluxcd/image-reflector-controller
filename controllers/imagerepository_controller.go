@@ -53,6 +53,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 	"github.com/fluxcd/image-reflector-controller/internal/registry/login"
 )
 
@@ -257,13 +258,18 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		auth, authErr = login.NewManager().Login(ctx, imageRepo.Spec.Image, ref, r.ProviderOptions)
 	}
 	if authErr != nil {
-		imagev1.SetImageRepositoryReadiness(
-			imageRepo,
-			metav1.ConditionFalse,
-			imagev1.ReconciliationFailedReason,
-			authErr.Error(),
-		)
-		return authErr
+		// If it's not unconfigured provider error, abort reconciliation.
+		// Continue reconciliation if it's unconfigured providers for scanning
+		// public repositories.
+		if !errors.Is(authErr, registry.ErrUnconfiguredProvider) {
+			imagev1.SetImageRepositoryReadiness(
+				imageRepo,
+				metav1.ConditionFalse,
+				imagev1.ReconciliationFailedReason,
+				authErr.Error(),
+			)
+			return authErr
+		}
 	}
 	if auth != nil {
 		options = append(options, remote.WithAuth(auth))
