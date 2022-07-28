@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
-	tftestenv "github.com/fluxcd/image-reflector-controller/tests/tftestenv"
+	"github.com/fluxcd/test-infra/tftestenv"
 )
 
 const (

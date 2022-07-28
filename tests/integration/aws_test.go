@@ -21,7 +21,7 @@ import (
 
 	tfjson "github.com/hashicorp/terraform-json"
 
-	tftestenv "github.com/fluxcd/image-reflector-controller/tests/tftestenv"
+	"github.com/fluxcd/test-infra/tftestenv"
 )
 
 // createKubeconfigEKS constructs kubeconfig from the terraform state output at
