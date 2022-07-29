@@ -1,12 +1,12 @@
 output "aks_kubeconfig" {
-  value     = azurerm_kubernetes_cluster.default.kube_config_raw
+  value     = module.aks.kubeconfig
   sensitive = true
 }
 
 output "acr_registry_url" {
-  value = azurerm_container_registry.acr.login_server
+  value = module.acr.registry_url
 }
 
 output "acr_registry_id" {
-  value = azurerm_container_registry.acr.id
+  value = module.acr.registry_id
 }

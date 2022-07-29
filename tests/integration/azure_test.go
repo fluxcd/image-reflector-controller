@@ -22,7 +22,7 @@ import (
 
 	tfjson "github.com/hashicorp/terraform-json"
 
-	"github.com/fluxcd/image-reflector-controller/tests/tftestenv"
+	"github.com/fluxcd/test-infra/tftestenv"
 )
 
 // createKubeConfigAKS constructs kubeconfig for an AKS cluster from the

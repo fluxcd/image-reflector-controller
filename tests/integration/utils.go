@@ -23,7 +23,7 @@ import (
 	"path"
 	"strings"
 
-	tftestenv "github.com/fluxcd/image-reflector-controller/tests/tftestenv"
+	"github.com/fluxcd/test-infra/tftestenv"
 )
 
 // updateAndBuildFluxInstallManifests assumes that ./build/flux/ already exists

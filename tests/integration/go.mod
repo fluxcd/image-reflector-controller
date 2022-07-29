@@ -2,11 +2,9 @@ module github.com/fluxcd/image-reflector-controller/tests/integration
 
 go 1.18
 
-replace github.com/fluxcd/image-reflector-controller/tests/tftestenv => ../tftestenv
-
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.18.0
-	github.com/fluxcd/image-reflector-controller/tests/tftestenv v0.0.0
+	github.com/fluxcd/test-infra/tftestenv v0.0.0-20220726140458-65e1a901cbb9
 	github.com/hashicorp/terraform-json v0.14.0
 	github.com/onsi/gomega v1.18.1
 	k8s.io/apimachinery v0.24.1

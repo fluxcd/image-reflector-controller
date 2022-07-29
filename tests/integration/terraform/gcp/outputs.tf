@@ -1,20 +1,20 @@
-output "gcr_repository_url" {
-  value = data.google_container_registry_repository.test_repo.repository_url
-}
-
 output "gcp_kubeconfig" {
-  value     = module.gke_auth.kubeconfig_raw
+  value     = module.gke.kubeconfig
   sensitive = true
 }
 
 output "gcp_project" {
-  value = data.google_client_config.current.project
+  value = module.gke.project
 }
 
 output "gcp_region" {
-  value = data.google_client_config.current.region
+  value = module.gke.region
+}
+
+output "gcr_repository_url" {
+  value = module.gcr.gcr_repository_url
 }
 
 output "gcp_artifact_repository" {
-  value = google_artifact_registry_repository.test_repo.repository_id
+  value = module.gcr.artifact_repository_id
 }
