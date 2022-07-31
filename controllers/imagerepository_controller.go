@@ -53,8 +53,8 @@ import (
 	"github.com/fluxcd/pkg/runtime/predicates"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
-	"github.com/fluxcd/image-reflector-controller/internal/registry"
-	"github.com/fluxcd/image-reflector-controller/internal/registry/login"
+	"github.com/fluxcd/pkg/oci"
+	"github.com/fluxcd/pkg/oci/auth/login"
 )
 
 // These are intended to match the keys used in e.g.,
@@ -261,7 +261,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1
 		// If it's not unconfigured provider error, abort reconciliation.
 		// Continue reconciliation if it's unconfigured providers for scanning
 		// public repositories.
-		if !errors.Is(authErr, registry.ErrUnconfiguredProvider) {
+		if !errors.Is(authErr, oci.ErrUnconfiguredProvider) {
 			imagev1.SetImageRepositoryReadiness(
 				imageRepo,
 				metav1.ConditionFalse,
