@@ -42,7 +42,7 @@ import (
 	// +kubebuilder:scaffold:imports
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
-	"github.com/fluxcd/image-reflector-controller/internal/registry/login"
+	"github.com/fluxcd/pkg/oci/auth/login"
 )
 
 const controllerName = "image-reflector-controller"

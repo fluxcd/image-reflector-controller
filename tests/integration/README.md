@@ -14,7 +14,7 @@
 
 - Azure account with an active subscription to be able to create AKS and ACR,
     and permission to assign roles. Role assignment is required for allowing AKS
-    workloads to access ECR.
+    workloads to access ACR.
 - Azure CLI, need to be logged in using `az login`.
 - Docker CLI for registry login.
 - kubectl for applying certain install manifests.
@@ -27,7 +27,7 @@
 - Docker CLI for registry login.
 - kubectl for applying certain install manifests.
 
-**NOTE:** Unlike ECR, AKS and Google Artifact Registry, Google Container
+**NOTE:** Unlike ECR, ACR and Google Artifact Registry, Google Container
 Registry tests don't create a new registry. It pushes to an existing registry
 host in a project, for example `gcr.io`. Due to this, the test images pushed to
 GCR aren't cleaned up automatically at the end of the test and have to be
@@ -65,7 +65,7 @@ go test -timeout 20m -v ./... -existing
 2022/06/15 01:55:45 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.2
 2022/06/15 01:55:48 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.3
 2022/06/15 01:55:51 pushing test image foo111.dkr.ecr.us-east-2.amazonaws.com/flux-image-automation-test:v0.1.4
-2022/06/15 01:55:54 setting images: [fluxcd/image-reflector-controller=457472006214.dkr.ecr.us-east-2.amazonaws.com/flux-test-image-reflector-direct-elephant:test]
+2022/06/15 01:55:54 setting images: [fluxcd/image-reflector-controller=foo111.dkr.ecr.us-east-2.amazonaws.com/flux-test-image-reflector-direct-elephant:test]
 2022/06/15 01:55:54 Installing flux
 === RUN   TestImageRepositoryScan
 === RUN   TestImageRepositoryScan/ecr
