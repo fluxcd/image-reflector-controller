@@ -31,10 +31,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      # azure-sdk-for-go requires 1.16 or greater
+      # azure-sdk-for-go requires 1.18 or greater
       - uses: actions/setup-go@v3
         with:
-          go-version: '1.17.x'
+          go-version: '1.18.x'
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v1
         with:
