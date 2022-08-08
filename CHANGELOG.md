@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.20.0
+
+**Release date:** 2022-08-08
+
+This prerelease replaces the cloud provider registry auto-login code with the
+new [github.com/fluxcd/pkg/oci](https://pkg.go.dev/github.com/fluxcd/pkg/oci)
+package. It also comes with some minor improvements and updates dependencies to
+their latest versions.
+
+Improvements:
+- tests: Move common provider helpers to tftestenv
+  [#288](https://github.com/fluxcd/image-reflector-controller/pull/288)
+- tests/integration: Use terraform modules and test-infra/tftestenv
+  [#292](https://github.com/fluxcd/image-reflector-controller/pull/292)
+- Use fluxcd/pkg/oci
+  [#293](https://github.com/fluxcd/image-reflector-controller/pull/293)
+- Update pkg/oci to v0.2.0
+  [#295](https://github.com/fluxcd/image-reflector-controller/pull/295)
+- Add flags to configure exponential back-off retry
+  [#297](https://github.com/fluxcd/image-reflector-controller/pull/297)
+- Update dependencies
+  [#298](https://github.com/fluxcd/image-reflector-controller/pull/298)
+- Skip error policy reconciliation if no tags are found
+  [#300](https://github.com/fluxcd/image-reflector-controller/pull/300)
+
 ## 0.19.4
 
 **Release date:** 2022-07-26
