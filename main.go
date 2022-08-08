@@ -31,6 +31,7 @@ import (
 
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
+	helper "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/leaderelection"
 	"github.com/fluxcd/pkg/runtime/logger"
@@ -75,6 +76,7 @@ func main() {
 		gcpAutoLogin            bool
 		azureAutoLogin          bool
 		aclOptions              acl.Options
+		rateLimiterOptions      helper.RateLimiterOptions
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -93,6 +95,7 @@ func main() {
 	logOptions.BindFlags(flag.CommandLine)
 	leaderElectionOptions.BindFlags(flag.CommandLine)
 	aclOptions.BindFlags(flag.CommandLine)
+	rateLimiterOptions.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	log := logger.NewLogger(logOptions)
@@ -157,6 +160,7 @@ func main() {
 		},
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
+		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
@@ -170,6 +174,7 @@ func main() {
 		ACLOptions:      aclOptions,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
+		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImagePolicyKind)
 		os.Exit(1)
