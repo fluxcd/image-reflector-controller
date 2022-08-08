@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
@@ -84,6 +85,7 @@ type ImageRepositoryReconciler struct {
 
 type ImageRepositoryReconcilerOptions struct {
 	MaxConcurrentReconciles int
+	RateLimiter             ratelimiter.RateLimiter
 }
 
 type dockerConfig struct {
@@ -493,6 +495,7 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts Imag
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
+			RateLimiter:             opts.RateLimiter,
 		}).
 		Complete(r)
 }
