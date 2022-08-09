@@ -182,6 +182,14 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		var tags []string
 		tags, err = r.Database.Tags(repo.Status.CanonicalImageName)
 		if err == nil {
+			if len(tags) == 0 {
+				msg := fmt.Sprintf("no tags found in local storage for '%s'", repo.Name)
+				r.event(ctx, pol, events.EventSeverityInfo, msg)
+				log.Info(msg)
+
+				return ctrl.Result{}, nil
+			}
+
 			var filter *policy.RegexFilter
 			if pol.Spec.FilterTags != nil {
 				filter, err = policy.NewRegexFilter(pol.Spec.FilterTags.Pattern, pol.Spec.FilterTags.Extract)
