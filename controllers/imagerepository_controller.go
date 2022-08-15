@@ -496,6 +496,7 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts Imag
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
 			RateLimiter:             opts.RateLimiter,
+			RecoverPanic:            true,
 		}).
 		Complete(r)
 }
