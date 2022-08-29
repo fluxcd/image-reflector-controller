@@ -7,7 +7,7 @@ replace github.com/fluxcd/image-reflector-controller/api => ./api
 require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/fluxcd/image-reflector-controller/api v0.20.0
+	github.com/fluxcd/image-reflector-controller/api v0.20.1
 	github.com/fluxcd/pkg/apis/acl v0.1.0
 	github.com/fluxcd/pkg/apis/meta v0.15.0
 	github.com/fluxcd/pkg/oci v0.7.0
