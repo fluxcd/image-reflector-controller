@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.20.1
+
+**Release date:** 2022-08-29
+
+This prerelease comes with panic recovery, to protect the controller
+from crashing when reconciliations lead to a crash.
+
+In addition, the controller dependencies have been updated to Kubernetes v1.25.0.
+
+Improvements:
+* Enables RecoverPanic option on reconcilers
+  [#302](https://github.com/fluxcd/image-reflector-controller/pull/302)
+* Update Kubernetes packages to v1.25.0
+  [#403](https://github.com/fluxcd/image-reflector-controller/pull/303)
+
 ## 0.20.0
 
 **Release date:** 2022-08-08
