@@ -12,7 +12,7 @@ controller to drive automated config updates.
 ## Installing
 
 Please see the [installation and use
-guide](https://fluxcd.io/docs/guides/image-update/).
+guide](https://fluxcd.io/flux/guides/image-update/).
 
 If you just want to run this controller for development purposes, do
 

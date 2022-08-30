@@ -222,7 +222,7 @@ Fixes:
 This prerelease comes with support for automatically getting
 credentials from Azure and Google Cloud when scanning images in ACR and GCR.
 To configure autologin for ACR, ECR or GCR please see the
-[cloud providers authentication guide](https://fluxcd.io/docs/guides/image-update/#imagerepository-cloud-providers-authentication).
+[cloud providers authentication guide](https://fluxcd.io/flux/guides/image-update/#imagerepository-cloud-providers-authentication).
 
 Platform admins can disable cross-namespace references with the
 `--no-cross-namespace-refs=true` flag. When this flag is set,
