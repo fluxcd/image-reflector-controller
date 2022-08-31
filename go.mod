@@ -10,8 +10,8 @@ require (
 	github.com/fluxcd/image-reflector-controller/api v0.20.1
 	github.com/fluxcd/pkg/apis/acl v0.1.0
 	github.com/fluxcd/pkg/apis/meta v0.15.0
-	github.com/fluxcd/pkg/oci v0.7.0
-	github.com/fluxcd/pkg/runtime v0.17.0
+	github.com/fluxcd/pkg/oci v0.8.0
+	github.com/fluxcd/pkg/runtime v0.18.0
 	github.com/fluxcd/pkg/version v0.2.0
 	github.com/google/go-containerregistry v0.11.0
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20220824164412-87b3a7966622
@@ -20,7 +20,7 @@ require (
 	k8s.io/api v0.25.0
 	k8s.io/apimachinery v0.25.0
 	k8s.io/client-go v0.25.0
-	sigs.k8s.io/controller-runtime v0.11.2
+	sigs.k8s.io/controller-runtime v0.12.3
 )
 
 // Fix CVE-2022-28948
