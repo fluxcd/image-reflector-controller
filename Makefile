@@ -143,6 +143,8 @@ fuzz-build:
 	docker run --rm \
 		-e FUZZING_LANGUAGE=go -e SANITIZER=address \
 		-e CIFUZZ_DEBUG='True' -e OSS_FUZZ_PROJECT_NAME=fluxcd \
+		-u "0:$(shell id -g)" \
+		-v "$(shell go env GOMODCACHE):/root/go/pkg/mod" \
 		-v "$(shell pwd)/build/fuzz/out":/out \
 		local-fuzzing:latest
 
