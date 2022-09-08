@@ -8,6 +8,10 @@ BUILD_ARGS ?=
 # Architectures to build images for.
 BUILD_PLATFORMS ?= linux/amd64
 
+# FUZZ_TIME defines the max amount of time, in Go Duration,
+# each fuzzer should run for.
+FUZZ_TIME ?= 1m
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -134,7 +138,7 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
-# Build fuzzers
+# Build fuzzers used by oss-fuzz.
 fuzz-build:
 	rm -rf $(shell pwd)/build/fuzz/
 	mkdir -p $(shell pwd)/build/fuzz/out/
@@ -148,7 +152,7 @@ fuzz-build:
 		-v "$(shell pwd)/build/fuzz/out":/out \
 		local-fuzzing:latest
 
-# Run each fuzzer once to ensure they are working
+# Run each fuzzer once to ensure they will work when executed by oss-fuzz.
 fuzz-smoketest: fuzz-build
 	docker run --rm \
 		-v "$(shell pwd)/build/fuzz/out":/out \
@@ -156,3 +160,9 @@ fuzz-smoketest: fuzz-build
 		-e ENVTEST_KUBERNETES_VERSION="$(ENVTEST_KUBERNETES_VERSION)" \
 		local-fuzzing:latest \
 		bash -c "/runner.sh"
+
+# Run fuzz tests for the duration set in FUZZ_TIME.
+fuzz-native: 
+	KUBEBUILDER_ASSETS=$(KUBEBUILDER_ASSETS) \
+	FUZZ_TIME=$(FUZZ_TIME) \
+		./tests/fuzz/native_go_run.sh
