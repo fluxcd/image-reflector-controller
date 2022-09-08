@@ -17,7 +17,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fuzz
+package controllers
 
 import (
 	"context"
@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 
 	"go.uber.org/zap/zapcore"
@@ -48,7 +49,6 @@ import (
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
-	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
@@ -58,24 +58,93 @@ var cfg *rest.Config
 var k8sClient client.Client
 var k8sMgr ctrl.Manager
 var stopManager func()
-var imageRepoReconciler *controllers.ImageRepositoryReconciler
-var imagePolicyReconciler *controllers.ImagePolicyReconciler
+var imageRepoReconciler *ImageRepositoryReconciler
+var imagePolicyReconciler *ImagePolicyReconciler
 var testEnv *envtest.Environment
 var badgerDir string
 var badgerDB *badger.DB
 var initter sync.Once
 
-const defaultBinVersion = "1.23"
-
-func envtestBinVersion() string {
-	if binVersion := os.Getenv("ENVTEST_KUBERNETES_VERSION"); binVersion != "" {
-		return binVersion
-	}
-	return defaultBinVersion
-}
+const defaultBinVersion = "1.24"
 
 //go:embed testdata/crd/*.yaml
 var testFiles embed.FS
+
+// Fuzz implements a fuzzer that creates pseudo-random objects
+// for the ImageRepositoryController to reconcile.
+func Fuzz_ImageRepositoryController(f *testing.F) {
+	f.Fuzz(func(t *testing.T, seed []byte) {
+
+		initter.Do(initFunc)
+		registryServer = test.NewRegistryServer()
+		defer registryServer.Close()
+		fc := fuzz.NewConsumer(seed)
+
+		imgRepo := test.RegistryName(registryServer)
+		repo := imagev1.ImageRepository{}
+		err := fc.GenerateStruct(&repo)
+		if err != nil {
+			return
+		}
+		repo.Spec.Image = imgRepo
+
+		objectName, err := fc.GetStringFrom("abcdefghijklmnopqrstuvwxyz123456789", 59)
+		if err != nil {
+			return
+		}
+		imageObjectName := types.NamespacedName{
+			Name:      objectName,
+			Namespace: "default",
+		}
+		repo.Name = imageObjectName.Name
+		repo.Namespace = imageObjectName.Namespace
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*200)
+		defer cancel()
+
+		r := imageRepoReconciler
+		if r == nil {
+			return
+		}
+		err = r.Create(ctx, &repo)
+		if err != nil {
+			return
+		}
+		time.Sleep(30 * time.Millisecond)
+		err = r.Get(ctx, imageObjectName, &repo)
+		if err != nil || repo.Status.LastScanResult != nil {
+			return
+		}
+
+		polNs, err := fc.GetStringFrom("abcdefghijklmnopqrstuvwxyz123456789", 59)
+		if err != nil {
+			return
+		}
+		polName := types.NamespacedName{
+			Name:      polNs,
+			Namespace: imageObjectName.Namespace,
+		}
+		pol := imagev1.ImagePolicy{}
+		err = fc.GenerateStruct(&pol)
+		if err != nil {
+			return
+		}
+		pol.Spec.ImageRepositoryRef.Name = imageObjectName.Name
+
+		pol.Namespace = polName.Namespace
+		pol.Name = polName.Name
+
+		ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond*200)
+		defer cancel()
+
+		err = r.Create(ctx, &pol)
+		if err != nil {
+			return
+		}
+		time.Sleep(time.Millisecond * 30)
+		r.Get(ctx, polName, &pol)
+	})
+}
 
 // ensureDependencies ensure that:
 // a) setup-envtest is installed and a specific version of envtest is deployed.
@@ -178,22 +247,22 @@ func initFunc() {
 		panic(err)
 	}
 
-	imageRepoReconciler = &controllers.ImageRepositoryReconciler{
+	imageRepoReconciler = &ImageRepositoryReconciler{
 		Client:   k8sMgr.GetClient(),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	err = imageRepoReconciler.SetupWithManager(k8sMgr, controllers.ImageRepositoryReconcilerOptions{})
+	err = imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})
 	if err != nil {
 		panic(err)
 	}
 
-	imagePolicyReconciler = &controllers.ImagePolicyReconciler{
+	imagePolicyReconciler = &ImagePolicyReconciler{
 		Client:   k8sMgr.GetClient(),
 		Scheme:   scheme.Scheme,
 		Database: database.NewBadgerDatabase(badgerDB),
 	}
-	err = imagePolicyReconciler.SetupWithManager(k8sMgr, controllers.ImagePolicyReconcilerOptions{})
+	err = imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})
 	if err != nil {
 		panic(err)
 	}
@@ -213,79 +282,9 @@ func initFunc() {
 	}
 }
 
-// Fuzz implements a fuzzer that creates pseudo-random objects
-// for the ImageRepositoryController to reconcile.
-func FuzzImageRepositoryController(data []byte) int {
-	initter.Do(initFunc)
-	registryServer = test.NewRegistryServer()
-	defer registryServer.Close()
-	f := fuzz.NewConsumer(data)
-
-	imgRepo := test.RegistryName(registryServer)
-	repo := imagev1.ImageRepository{}
-	err := f.GenerateStruct(&repo)
-	if err != nil {
-		return 0
+func envtestBinVersion() string {
+	if binVersion := os.Getenv("ENVTEST_KUBERNETES_VERSION"); binVersion != "" {
+		return binVersion
 	}
-	repo.Spec.Image = imgRepo
-
-	objectName, err := f.GetStringFrom("abcdefghijklmnopqrstuvwxyz123456789", 59)
-	if err != nil {
-		return 0
-	}
-	imageObjectName := types.NamespacedName{
-		Name:      objectName,
-		Namespace: "default",
-	}
-	repo.Name = imageObjectName.Name
-	repo.Namespace = imageObjectName.Namespace
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*200)
-	defer cancel()
-
-	r := imageRepoReconciler
-	if r == nil {
-		return 0
-	}
-	err = r.Create(ctx, &repo)
-	if err != nil {
-		return 0
-	}
-	time.Sleep(30 * time.Millisecond)
-	err = r.Get(ctx, imageObjectName, &repo)
-	if err != nil || repo.Status.LastScanResult != nil {
-		return 0
-	}
-
-	polNs, err := f.GetStringFrom("abcdefghijklmnopqrstuvwxyz123456789", 59)
-	if err != nil {
-		return 0
-	}
-	polName := types.NamespacedName{
-		Name:      polNs,
-		Namespace: imageObjectName.Namespace,
-	}
-	pol := imagev1.ImagePolicy{}
-	err = f.GenerateStruct(&pol)
-	if err != nil {
-		return 0
-	}
-	pol.Spec.ImageRepositoryRef.Name = imageObjectName.Name
-
-	pol.Namespace = polName.Namespace
-	pol.Name = polName.Name
-
-	ctx, cancel = context.WithTimeout(context.Background(), time.Millisecond*200)
-	defer cancel()
-
-	err = r.Create(ctx, &pol)
-	if err != nil {
-		return 0
-	}
-	time.Sleep(time.Millisecond * 30)
-	err = r.Get(ctx, polName, &pol)
-	if err != nil {
-		return 0
-	}
-	return 1
+	return defaultBinVersion
 }

@@ -19,21 +19,66 @@ set -euxo pipefail
 GOPATH="${GOPATH:-/root/go}"
 GO_SRC="${GOPATH}/src"
 PROJECT_PATH="github.com/fluxcd/image-reflector-controller"
+TMP_DIR=$(mktemp -d /tmp/oss_fuzz-XXXXXX)
 
-pushd "${GO_SRC}/${PROJECT_PATH}"
+cleanup(){
+	rm -rf "${TMP_DIR}"
+}
+trap cleanup EXIT
 
-# The go.mod in tests/fuzz only exists to avoid dependency pollution
-# in the main module.
-rm tests/fuzz/go.mod
+install_deps(){
+	if ! command -v go-118-fuzz-build &> /dev/null || ! command -v addimport &> /dev/null; then
+		mkdir -p "${TMP_DIR}/go-118-fuzz-build"
 
-go mod download
-go mod tidy -go=1.16 && go mod tidy -go=1.17
-go get -d github.com/AdaLogics/go-fuzz-headers
+		git clone https://github.com/AdamKorcz/go-118-fuzz-build "${TMP_DIR}/go-118-fuzz-build"
+		cd "${TMP_DIR}/go-118-fuzz-build"
+		go build -o "${GOPATH}/bin/go-118-fuzz-build"
 
-# Setup files to be embedded into controllers_fuzzer.go's testFiles variable.
-mkdir -p tests/fuzz/testdata/crd
-cp config/crd/bases/*.yaml tests/fuzz/testdata/crd
+		cd addimport
+		go build -o "${GOPATH}/bin/addimport"
+	fi
 
-compile_go_fuzzer "${PROJECT_PATH}/tests/fuzz/" FuzzImageRepositoryController fuzz_imagerepositorycontroller
+	if ! command -v goimports &> /dev/null; then
+		go install golang.org/x/tools/cmd/goimports@latest
+	fi
+}
 
-popd
+# Removes the content of test funcs which could cause the Fuzz
+# tests to break.
+remove_test_funcs(){
+	filename=$1
+
+	echo "removing co-located *testing.T"
+	sed -i -e '/func Test.*testing.T) {$/ {:r;/\n}/!{N;br}; s/\n.*\n/\n/}' "${filename}"
+	# Remove gomega reference as it is not used by Fuzz tests.
+	sed -i 's;. "github.com/onsi/gomega";;g' "${filename}"
+
+	# After removing the body of the go testing funcs, consolidate the imports.
+	goimports -w "${filename}"
+}
+
+install_deps
+
+cd "${GO_SRC}/${PROJECT_PATH}"
+
+go get github.com/AdamKorcz/go-118-fuzz-build/utils
+
+mkdir -p controllers/testdata/crd
+cp config/crd/bases/*.yaml controllers/testdata/crd
+
+# Iterate through all Go Fuzz targets, compiling each into a fuzzer.
+test_files=$(grep -r --include='**_test.go' --files-with-matches 'func Fuzz' .)
+for file in ${test_files}
+do
+	remove_test_funcs "${file}"
+
+	targets=$(grep -oP 'func \K(Fuzz\w*)' "${file}")
+	for target_name in ${targets}
+	do
+		fuzzer_name=$(echo "${target_name}" | tr '[:upper:]' '[:lower:]')
+		target_dir=$(dirname "${file}")
+
+		echo "Building ${file}.${target_name} into ${fuzzer_name}"
+		compile_native_go_fuzzer "${target_dir}" "${target_name}" "${fuzzer_name}"
+	done
+done
