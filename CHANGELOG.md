@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.21.0
+
+**Release date:** 2022-09-09
+
+This prerelease comes with improvements to fuzzing.
+In addition, the controller dependencies have been updated
+to Kubernetes controller-runtime v0.12.
+
+:warning: **Breaking change:** The controller logs have been aligned
+with the Kubernetes structured logging. For more details on the new logging
+structure please see: [fluxcd/flux2#3051](https://github.com/fluxcd/flux2/issues/3051).
+
+Improvements:
+* Align controller logs to Kubernetes structured logging
+  [#306](https://github.com/fluxcd/image-reflector-controller/pull/306)
+* Refactor Fuzzers based on Go native fuzzing
+  [#308](https://github.com/fluxcd/image-reflector-controller/pull/308)
+* Fuzz optimisations
+  [#307](https://github.com/fluxcd/image-reflector-controller/pull/307)
+
 ## 0.20.1
 
 **Release date:** 2022-08-29
