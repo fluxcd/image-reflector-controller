@@ -8,7 +8,7 @@ require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20220903154154-e8044f6e4c72
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/dgraph-io/badger/v3 v3.2103.2
-	github.com/fluxcd/image-reflector-controller/api v0.20.1
+	github.com/fluxcd/image-reflector-controller/api v0.21.0
 	github.com/fluxcd/pkg/apis/acl v0.1.0
 	github.com/fluxcd/pkg/apis/meta v0.15.0
 	github.com/fluxcd/pkg/oci v0.8.0
