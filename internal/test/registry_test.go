@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package test
 
 import (
 	"testing"
@@ -23,18 +23,16 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/gomega"
-
-	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
 func TestRegistryHandler(t *testing.T) {
 	g := NewWithT(t)
 
-	srv := test.NewRegistryServer()
+	srv := NewRegistryServer()
 	defer srv.Close()
 
 	uploadedTags := []string{"tag1", "tag2"}
-	repoString, err := test.LoadImages(srv, "testimage", uploadedTags)
+	repoString, err := LoadImages(srv, "testimage", uploadedTags)
 	g.Expect(err).ToNot(HaveOccurred())
 	repo, _ := name.NewRepository(repoString)
 
@@ -66,13 +64,13 @@ func TestAuthenticationHandler(t *testing.T) {
 		},
 	}
 
-	registryServer := test.NewAuthenticatedRegistryServer(username, password)
+	registryServer := NewAuthenticatedRegistryServer(username, password)
 	defer registryServer.Close()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
-			repo, err := name.NewRepository(test.RegistryName(registryServer) + "/convenient")
+			repo, err := name.NewRepository(RegistryName(registryServer) + "/convenient")
 			g.Expect(err).ToNot(HaveOccurred())
 
 			var listErr error
