@@ -1,5 +1,5 @@
 /*
-Copyright 2020, 2021 The Flux authors
+Copyright 2022 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,20 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/fluxcd/pkg/apis/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const ImagePolicyKind = "ImagePolicy"
 const ImagePolicyFinalizer = "finalizers.fluxcd.io"
 
 // ImagePolicySpec defines the parameters for calculating the
-// ImagePolicy
+// ImagePolicy.
 type ImagePolicySpec struct {
 	// ImageRepositoryRef points at the object specifying the image
 	// being scanned
@@ -113,22 +111,17 @@ type ImagePolicyStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
-func (p *ImagePolicy) GetStatusConditions() *[]metav1.Condition {
-	return &p.Status.Conditions
+// GetConditions returns the status conditions of the object.
+func (p ImagePolicy) GetConditions() []metav1.Condition {
+	return p.Status.Conditions
 }
 
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reason, message string) {
-	p.Status.ObservedGeneration = p.ObjectMeta.Generation
-	newCondition := metav1.Condition{
-		Type:    meta.ReadyCondition,
-		Status:  status,
-		Reason:  reason,
-		Message: message,
-	}
-	apimeta.SetStatusCondition(p.GetStatusConditions(), newCondition)
+// SetConditions sets the status conditions on the object.
+func (p *ImagePolicy) SetConditions(conditions []metav1.Condition) {
+	p.Status.Conditions = conditions
 }
 
+// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`
@@ -143,7 +136,7 @@ type ImagePolicy struct {
 	Status ImagePolicyStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // ImagePolicyList contains a list of ImagePolicy
 type ImagePolicyList struct {
