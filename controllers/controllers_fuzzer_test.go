@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -48,7 +49,7 @@ import (
 
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
@@ -242,15 +243,17 @@ func initFunc() {
 	if err != nil {
 		panic(err)
 	}
-	badgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
+	badgerOpts := badger.DefaultOptions(badgerDir)
+	badgerOpts.Logger = nil
+	badgerDB, err = badger.Open(badgerOpts)
 	if err != nil {
 		panic(err)
 	}
 
 	imageRepoReconciler = &ImageRepositoryReconciler{
-		Client:   k8sMgr.GetClient(),
-		Scheme:   scheme.Scheme,
-		Database: database.NewBadgerDatabase(badgerDB),
+		Client:        k8sMgr.GetClient(),
+		Database:      database.NewBadgerDatabase(badgerDB),
+		EventRecorder: record.NewFakeRecorder(256),
 	}
 	err = imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})
 	if err != nil {
@@ -258,9 +261,9 @@ func initFunc() {
 	}
 
 	imagePolicyReconciler = &ImagePolicyReconciler{
-		Client:   k8sMgr.GetClient(),
-		Scheme:   scheme.Scheme,
-		Database: database.NewBadgerDatabase(badgerDB),
+		Client:        k8sMgr.GetClient(),
+		Database:      database.NewBadgerDatabase(badgerDB),
+		EventRecorder: record.NewFakeRecorder(256),
 	}
 	err = imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})
 	if err != nil {

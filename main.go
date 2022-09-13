@@ -29,8 +29,8 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
+	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -38,16 +38,15 @@ import (
 	feathelper "github.com/fluxcd/pkg/runtime/features"
 	"github.com/fluxcd/pkg/runtime/leaderelection"
 	"github.com/fluxcd/pkg/runtime/logger"
-	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	// +kubebuilder:scaffold:imports
+
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/features"
-	"github.com/fluxcd/pkg/oci/auth/login"
 )
 
 const controllerName = "image-reflector-controller"
@@ -124,9 +123,6 @@ func main() {
 	defer badgerDB.Close()
 	db := database.NewBadgerDatabase(badgerDB)
 
-	metricsRecorder := metrics.NewRecorder()
-	crtlmetrics.Registry.MustRegister(metricsRecorder.Collectors()...)
-
 	watchNamespace := ""
 	if !watchAllNamespaces {
 		watchNamespace = os.Getenv("RUNTIME_NAMESPACE")
@@ -171,17 +167,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	metricsH := helper.MustMakeMetrics(mgr)
+
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		EventRecorder:   eventRecorder,
-		MetricsRecorder: metricsRecorder,
-		Database:        db,
+		Client:        mgr.GetClient(),
+		EventRecorder: eventRecorder,
+		Metrics:       metricsH,
+		Database:      db,
 		ProviderOptions: login.ProviderOptions{
 			AwsAutoLogin:   awsAutoLogin,
 			GcpAutoLogin:   gcpAutoLogin,
 			AzureAutoLogin: azureAutoLogin,
 		},
+		ControllerName: controllerName,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
@@ -190,12 +188,12 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.ImagePolicyReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		EventRecorder:   eventRecorder,
-		MetricsRecorder: metricsRecorder,
-		Database:        db,
-		ACLOptions:      aclOptions,
+		Client:         mgr.GetClient(),
+		EventRecorder:  eventRecorder,
+		Metrics:        metricsH,
+		Database:       db,
+		ACLOptions:     aclOptions,
+		ControllerName: controllerName,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),

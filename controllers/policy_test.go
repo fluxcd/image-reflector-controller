@@ -26,16 +26,14 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/runtime/acl"
+	"github.com/fluxcd/pkg/runtime/conditions"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 	// +kubebuilder:scaffold:imports
@@ -110,7 +108,6 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 
 	r := &ImagePolicyReconciler{
 		Client:        builder.Build(),
-		Scheme:        scheme.Scheme,
 		Database:      database.NewBadgerDatabase(testBadgerDB),
 		EventRecorder: record.NewFakeRecorder(32),
 		ACLOptions: acl.Options{
@@ -118,18 +115,10 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 		},
 	}
 
-	key := client.ObjectKeyFromObject(&imagePolicy)
-	res, err := r.Reconcile(context.TODO(), ctrl.Request{NamespacedName: key})
-	g.Expect(err).To(BeNil())
+	res, err := r.reconcile(ctx, &imagePolicy)
+	g.Expect(err).To(Not(BeNil()))
 	g.Expect(res.Requeue).ToNot(BeTrue())
-
-	var pol imagev1.ImagePolicy
-	g.Eventually(func() bool {
-		err := r.Get(ctx, imagePolicyName, &pol)
-		return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
-	}, timeout, interval).Should(BeTrue())
-	ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
-	g.Expect(ready.Reason).To(Equal(aclapi.AccessDeniedReason))
+	g.Expect(conditions.GetReason(&imagePolicy, meta.ReadyCondition)).To(Equal(aclapi.AccessDeniedReason))
 }
 
 func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {

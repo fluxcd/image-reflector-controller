@@ -31,11 +31,12 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 	// +kubebuilder:scaffold:imports
@@ -160,13 +161,17 @@ func TestImageRepositoryReconciler_repositorySuspended(t *testing.T) {
 	repo.Name = imageRepoName.Name
 	repo.Namespace = imageRepoName.Namespace
 
+	// Add finalizer so that reconciliation reaches suspend check.
+	controllerutil.AddFinalizer(&repo, imagev1.ImageRepositoryFinalizer)
+
+	builder := fakeclient.NewClientBuilder().WithScheme(testEnv.GetScheme())
+	builder.WithObjects(&repo)
+
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
-	g.Expect(testEnv.Create(ctx, &repo)).To(Succeed())
 
 	r := &ImageRepositoryReconciler{
-		Client:   testEnv,
-		Scheme:   scheme.Scheme,
+		Client:   builder.Build(),
 		Database: database.NewBadgerDatabase(testBadgerDB),
 	}
 
@@ -177,13 +182,10 @@ func TestImageRepositoryReconciler_repositorySuspended(t *testing.T) {
 
 	// Make sure no status was written.
 	var ir imagev1.ImageRepository
-	g.Eventually(func() bool {
-		err := testEnv.Get(ctx, imageRepoName, &ir)
-		return err == nil
-	}, timeout, interval).Should(BeTrue())
+	g.Expect(r.Get(ctx, imageRepoName, &ir)).ToNot(HaveOccurred())
 	g.Expect(ir.Status.CanonicalImageName).To(Equal(""))
 	// Cleanup.
-	g.Expect(testEnv.Delete(ctx, &ir)).To(Succeed())
+	g.Expect(r.Delete(ctx, &ir)).To(Succeed())
 }
 
 func TestImageRepositoryReconciler_reconcileAtAnnotation(t *testing.T) {
@@ -335,7 +337,7 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 	var ready *metav1.Condition
 	g.Eventually(func() bool {
 		_ = testEnv.Get(ctx, objectName, &repo)
-		ready = apimeta.FindStatusCondition(*repo.GetStatusConditions(), meta.ReadyCondition)
+		ready = apimeta.FindStatusCondition(repo.GetConditions(), meta.ReadyCondition)
 		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
@@ -374,7 +376,7 @@ func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
 	var ready *metav1.Condition
 	g.Eventually(func() bool {
 		_ = testEnv.Get(ctx, objectName, &repo)
-		ready = apimeta.FindStatusCondition(*repo.GetStatusConditions(), meta.ReadyCondition)
+		ready = apimeta.FindStatusCondition(repo.GetConditions(), meta.ReadyCondition)
 		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(ready.Message).To(ContainSubstring("should not contain a tag"))

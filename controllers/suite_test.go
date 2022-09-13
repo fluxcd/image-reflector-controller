@@ -27,11 +27,13 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/testenv"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	// +kubebuilder:scaffold:imports
 )
@@ -72,27 +74,30 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create temporary directory for badger: %v", err))
 	}
-	testBadgerDB, err = badger.Open(badger.DefaultOptions(badgerDir))
+	badgerOpts := badger.DefaultOptions(badgerDir)
+	badgerOpts.Logger = nil
+	testBadgerDB, err = badger.Open(badgerOpts)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to create new Badger database: %v", err))
 	}
 
-	controllerName := "image-reflector-controller"
 	if err = (&ImageRepositoryReconciler{
 		Client:        testEnv,
-		Scheme:        scheme.Scheme,
 		Database:      database.NewBadgerDatabase(testBadgerDB),
-		EventRecorder: testEnv.GetEventRecorderFor(controllerName),
-	}).SetupWithManager(testEnv, ImageRepositoryReconcilerOptions{}); err != nil {
+		EventRecorder: record.NewFakeRecorder(256),
+	}).SetupWithManager(testEnv, ImageRepositoryReconcilerOptions{
+		RateLimiter: controller.GetDefaultRateLimiter(),
+	}); err != nil {
 		panic(fmt.Sprintf("Failed to start ImageRepositoryReconciler: %v", err))
 	}
 
 	if err = (&ImagePolicyReconciler{
 		Client:        testEnv,
-		Scheme:        scheme.Scheme,
 		Database:      database.NewBadgerDatabase(testBadgerDB),
-		EventRecorder: testEnv.GetEventRecorderFor(controllerName),
-	}).SetupWithManager(testEnv, ImagePolicyReconcilerOptions{}); err != nil {
+		EventRecorder: record.NewFakeRecorder(256),
+	}).SetupWithManager(testEnv, ImagePolicyReconcilerOptions{
+		RateLimiter: controller.GetDefaultRateLimiter(),
+	}); err != nil {
 		panic(fmt.Sprintf("Failed to start ImagePolicyReconciler: %v", err))
 	}
 

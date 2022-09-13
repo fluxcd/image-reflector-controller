@@ -18,15 +18,15 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
-	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,34 +39,52 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
-	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/acl"
-	"github.com/fluxcd/pkg/runtime/metrics"
+	"github.com/fluxcd/pkg/runtime/conditions"
+	helper "github.com/fluxcd/pkg/runtime/controller"
+	"github.com/fluxcd/pkg/runtime/patch"
+	pkgreconcile "github.com/fluxcd/pkg/runtime/reconcile"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
+
+// errAccessDenied is returned when an ImageRepository reference in ImagePolicy
+// is not allowed.
+type errAccessDenied struct {
+	err error
+}
+
+// Error implements the error interface.
+func (e errAccessDenied) Error() string {
+	return e.err.Error()
+}
+
+// errInvalidPolicy is returned when the policy is invalid and can't be used.
+type errInvalidPolicy struct {
+	err error
+}
+
+// Error implements the error interface.
+func (e errInvalidPolicy) Error() string {
+	return e.err.Error()
+}
+
+var errNoTagsInDatabase = errors.New("no tags in database")
+
+// imagePolicyOwnedConditions is a list of conditions owned by the
+// ImagePolicyReconciler.
+var imagePolicyOwnedConditions = []string{
+	meta.ReadyCondition,
+	meta.ReconcilingCondition,
+	meta.StalledCondition,
+}
 
 // this is used as the key for the index of policy->repository; the
 // string is arbitrary and acts as a reminder where the value comes
 // from.
 const imageRepoKey = ".spec.imageRepository"
-
-// ImagePolicyReconciler reconciles a ImagePolicy object
-type ImagePolicyReconciler struct {
-	client.Client
-	Scheme          *runtime.Scheme
-	EventRecorder   kuberecorder.EventRecorder
-	MetricsRecorder *metrics.Recorder
-	Database        DatabaseReader
-	ACLOptions      acl.Options
-}
-
-type ImagePolicyReconcilerOptions struct {
-	MaxConcurrentReconciles int
-	RateLimiter             ratelimiter.RateLimiter
-}
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagepolicies/status,verbs=get;update;patch
@@ -74,172 +92,20 @@ type ImagePolicyReconcilerOptions struct {
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reconcileStart := time.Now()
+// ImagePolicyReconciler reconciles a ImagePolicy object
+type ImagePolicyReconciler struct {
+	client.Client
+	kuberecorder.EventRecorder
+	helper.Metrics
 
-	var pol imagev1.ImagePolicy
-	if err := r.Get(ctx, req.NamespacedName, &pol); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
+	ControllerName string
+	Database       DatabaseReader
+	ACLOptions     acl.Options
+}
 
-	log := ctrl.LoggerFrom(ctx)
-
-	// record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &pol)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
-	}
-	defer r.recordReadinessMetric(ctx, &pol)
-
-	// Add our finalizer if it does not exist.
-	if !controllerutil.ContainsFinalizer(&pol, imagev1.ImagePolicyFinalizer) {
-		patch := client.MergeFrom(pol.DeepCopy())
-		controllerutil.AddFinalizer(&pol, imagev1.ImagePolicyFinalizer)
-		if err := r.Patch(ctx, &pol, patch); err != nil {
-			log.Error(err, "unable to register finalizer")
-			return ctrl.Result{}, err
-		}
-	}
-
-	// If the object is under deletion, record the readiness, and remove our finalizer.
-	if !pol.ObjectMeta.DeletionTimestamp.IsZero() {
-		r.recordReadinessMetric(ctx, &pol)
-		controllerutil.RemoveFinalizer(&pol, imagev1.ImagePolicyFinalizer)
-		if err := r.Update(ctx, &pol); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
-	var repo imagev1.ImageRepository
-	repoNamespacedName := types.NamespacedName{
-		Namespace: pol.Namespace,
-		Name:      pol.Spec.ImageRepositoryRef.Name,
-	}
-	if pol.Spec.ImageRepositoryRef.Namespace != "" {
-		repoNamespacedName.Namespace = pol.Spec.ImageRepositoryRef.Namespace
-	}
-
-	recordError := func(err error, reason string) (ctrl.Result, error) {
-		r.event(ctx, pol, eventv1.EventSeverityError, err.Error())
-		imagev1.SetImagePolicyReadiness(&pol, metav1.ConditionFalse, reason, err.Error())
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			err = fmt.Errorf("failed to patch ImagePolicy: %s.%s status: %w", pol.GetName(), pol.GetNamespace(), err)
-			return ctrl.Result{Requeue: true}, err
-		}
-		return ctrl.Result{}, nil
-	}
-	recordErrorAndLog := func(err error, errorMsg, reason string) (ctrl.Result, error) {
-		log.Error(err, errorMsg)
-		return recordError(err, reason)
-	}
-
-	// check if we're allowed to reference across namespaces, before trying to fetch it
-	if r.ACLOptions.NoCrossNamespaceRefs && repoNamespacedName.Namespace != pol.GetNamespace() {
-		err := fmt.Errorf("cannot access '%s/%s', cross-namespace references have been blocked", imagev1.ImageRepositoryKind, repoNamespacedName)
-		// this cannot proceed until the spec changes, so no need to requeue explicitly
-		return recordErrorAndLog(err, "access denied to cross-namespace ImageRepository", aclapi.AccessDeniedReason)
-	}
-
-	if err := r.Get(ctx, repoNamespacedName, &repo); err != nil {
-		if client.IgnoreNotFound(err) == nil {
-			return recordErrorAndLog(err, "referenced ImageRepository does not exist", imagev1.DependencyNotReadyReason)
-		}
-		return ctrl.Result{}, err
-	}
-
-	// check if we are allowed to use the referenced ImageRepository
-
-	aclAuth := acl.NewAuthorization(r.Client)
-	if err := aclAuth.HasAccessToRef(ctx, &pol, repoNamespacedName, repo.Spec.AccessFrom); err != nil {
-		return recordErrorAndLog(err, "access denied", aclapi.AccessDeniedReason)
-	}
-
-	// if the image repo hasn't been scanned, don't bother
-	if repo.Status.CanonicalImageName == "" {
-		msg := "referenced ImageRepository has not been scanned yet"
-		imagev1.SetImagePolicyReadiness(
-			&pol,
-			metav1.ConditionFalse,
-			imagev1.DependencyNotReadyReason,
-			msg,
-		)
-		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Info(msg)
-		return ctrl.Result{}, nil
-	}
-
-	policer, err := policy.PolicerFromSpec(pol.Spec.Policy)
-	if err != nil {
-		return recordErrorAndLog(err, "invalid policy", "InvalidPolicy")
-	}
-
-	var latest string
-	if policer != nil {
-		var tags []string
-		tags, err = r.Database.Tags(repo.Status.CanonicalImageName)
-		if err == nil {
-			if len(tags) == 0 {
-				msg := fmt.Sprintf("no tags found in local storage for '%s'", repo.Name)
-				r.event(ctx, pol, eventv1.EventSeverityInfo, msg)
-				log.Info(msg)
-
-				return ctrl.Result{}, nil
-			}
-
-			var filter *policy.RegexFilter
-			if pol.Spec.FilterTags != nil {
-				filter, err = policy.NewRegexFilter(pol.Spec.FilterTags.Pattern, pol.Spec.FilterTags.Extract)
-				if err == nil {
-					filter.Apply(tags)
-					tags = filter.Items()
-					latest, err = policer.Latest(tags)
-					if err == nil {
-						latest = filter.GetOriginalTag(latest)
-					}
-				}
-			} else {
-				latest, err = policer.Latest(tags)
-			}
-		}
-	}
-
-	if err != nil || latest == "" {
-		pol.Status.LatestImage = ""
-		if err == nil {
-			err = fmt.Errorf("Cannot determine latest tag for policy")
-		} else {
-			err = fmt.Errorf("Cannot determine latest tag for policy: %w", err)
-		}
-		res, recErr := recordError(err, imagev1.ReconciliationFailedReason)
-		if recErr != nil {
-			// log the actual error since we are returning the error related to patching status
-			log.Error(err, "")
-			return res, recErr
-		}
-		return ctrl.Result{}, err
-	}
-
-	msg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", repo.Spec.Image, latest)
-	pol.Status.LatestImage = repo.Spec.Image + ":" + latest
-	imagev1.SetImagePolicyReadiness(
-		&pol,
-		metav1.ConditionTrue,
-		imagev1.ReconciliationSucceededReason,
-		msg,
-	)
-
-	if err := r.patchStatus(ctx, req, pol.Status); err != nil {
-		return ctrl.Result{}, err
-	}
-	r.event(ctx, pol, eventv1.EventSeverityInfo, msg)
-
-	return ctrl.Result{}, err
+type ImagePolicyReconcilerOptions struct {
+	MaxConcurrentReconciles int
+	RateLimiter             ratelimiter.RateLimiter
 }
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
@@ -276,7 +142,241 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 		Complete(r)
 }
 
-// ---
+func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
+	start := time.Now()
+
+	// Fetch the ImagePolicy.
+	obj := &imagev1.ImagePolicy{}
+	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Initialize the patch helper with the current version of the object.
+	patchHelper, err := patch.NewHelper(obj, r.Client)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Always attempt to patch the object after each reconciliation.
+	defer func() {
+		// Create patch options for patching the object.
+		patchOpts := []patch.Option{}
+		patchOpts = pkgreconcile.AddPatchOptions(obj, patchOpts, imagePolicyOwnedConditions, r.ControllerName)
+		if err = patchHelper.Patch(ctx, obj, patchOpts...); err != nil {
+			// Ignore patch error "not found" when the object is being deleted.
+			if !obj.GetDeletionTimestamp().IsZero() {
+				err = kerrors.FilterOut(err, func(e error) bool { return apierrors.IsNotFound(e) })
+			}
+			retErr = kerrors.NewAggregate([]error{retErr, err})
+		}
+
+		// Always record readiness and duration metrics.
+		r.Metrics.RecordReadiness(ctx, obj)
+		r.Metrics.RecordDuration(ctx, obj, start)
+	}()
+
+	// Add finalizer first if it doesn't exist to avoid the race condition
+	// between init and delete.
+	if !controllerutil.ContainsFinalizer(obj, imagev1.ImagePolicyFinalizer) {
+		controllerutil.AddFinalizer(obj, imagev1.ImagePolicyFinalizer)
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// Examine if the object is under deletion.
+	if !obj.ObjectMeta.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, obj)
+	}
+
+	// Call subreconciler.
+	result, retErr = r.reconcile(ctx, obj)
+	return
+}
+
+func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
+	oldObj := obj.DeepCopy()
+
+	var resultImage, resultTag string
+
+	// If there's no error and no requeue is requested, it's a success. Unlike
+	// other reconcilers, this reconciler doesn't requeue on its own with a
+	// RequeueAfter value.
+	isSuccess := func(res ctrl.Result, err error) bool {
+		if err != nil || res.Requeue {
+			return false
+		}
+		return true
+	}
+
+	defer func() {
+		readyMsg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", resultImage, resultTag)
+		rs := pkgreconcile.NewResultFinalizer(isSuccess, readyMsg)
+		retErr = rs.Finalize(obj, result, retErr)
+
+		notify(ctx, r.EventRecorder, oldObj, obj, readyMsg)
+	}()
+
+	// Set reconciling condition.
+	if obj.Generation != obj.Status.ObservedGeneration {
+		conditions.MarkReconciling(obj, "NewGeneration", "reconciling new object generation (%d)", obj.Generation)
+	}
+
+	// Clear previous ready status condition value.
+	conditions.Delete(obj, meta.ReadyCondition)
+
+	// Cleanup the last result.
+	obj.Status.LatestImage = ""
+
+	// Get ImageRepository from reference.
+	conditions.MarkReconciling(obj, "AccessingRepository", "accessing ImageRepository")
+	repo, err := r.getImageRepository(ctx, obj)
+	if err != nil {
+		reason := metav1.StatusFailure
+		if _, ok := err.(errAccessDenied); ok {
+			reason = aclapi.AccessDeniedReason
+		}
+
+		if apierrors.IsNotFound(err) {
+			reason = imagev1.DependencyNotReadyReason
+		}
+
+		// Mark not ready and return a runtime error to retry. We need to retry
+		// here because the access may be allowed due to change in objects not
+		// watched by this reconciler, like the namespace that ImageRepository
+		// allows access from.
+		e := fmt.Errorf("failed to get the referred ImageRepository: %w", err)
+		conditions.MarkFalse(obj, meta.ReadyCondition, reason, e.Error())
+		result, retErr = ctrl.Result{}, e
+		return
+	}
+
+	// Proceed only if the ImageRepository has scan result.
+	if repo.Status.LastScanResult == nil {
+		// Mark not ready but don't requeue. When the repository becomes ready,
+		// it'll trigger a policy reconciliation. No runtime error to prevent
+		// requeue.
+		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "referenced ImageRepository has not been scanned yet")
+		result, retErr = ctrl.Result{}, nil
+		return
+	}
+
+	// Construct a policer from the spec.policy.
+	// Read the tags from database and use the policy to obtain a result for the
+	// latest tag.
+	conditions.MarkReconciling(obj, "ApplyingPolicy", "applying policy on ImageRepository tags")
+	latest, err := r.applyPolicy(ctx, obj, repo)
+	if err != nil {
+		// Stall if it's an invalid policy.
+		if _, ok := err.(errInvalidPolicy); ok {
+			conditions.MarkStalled(obj, "InvalidPolicy", err.Error())
+			result, retErr = ctrl.Result{}, nil
+			return
+		}
+
+		// If there's no tag in the database, mark not ready and retry.
+		if err == errNoTagsInDatabase {
+			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, err.Error())
+			result, retErr = ctrl.Result{}, err
+			return
+		}
+
+		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, err.Error())
+		result, retErr = ctrl.Result{}, err
+		return
+	}
+
+	// Write the observations on status.
+	obj.Status.LatestImage = repo.Spec.Image + ":" + latest
+
+	resultImage = repo.Spec.Image
+	resultTag = latest
+
+	conditions.Delete(obj, meta.ReadyCondition)
+
+	result, retErr = ctrl.Result{}, nil
+	return
+}
+
+// getImageRepository tries to fetch an ImageRepository referenced by the given
+// ImagePolicy if it's accessible.
+func (r *ImagePolicyReconciler) getImageRepository(ctx context.Context, obj *imagev1.ImagePolicy) (*imagev1.ImageRepository, error) {
+	repo := &imagev1.ImageRepository{}
+	repoNamespacedName := types.NamespacedName{
+		Namespace: obj.Namespace,
+		Name:      obj.Spec.ImageRepositoryRef.Name,
+	}
+	if obj.Spec.ImageRepositoryRef.Namespace != "" {
+		repoNamespacedName.Namespace = obj.Spec.ImageRepositoryRef.Namespace
+	}
+
+	// If NoCrossNamespaceRefs is true and ImageRepository and ImagePolicy are
+	// in different namespaces, the ImageRepository can't be accessed.
+	if r.ACLOptions.NoCrossNamespaceRefs && repoNamespacedName.Namespace != obj.GetNamespace() {
+		return nil, errAccessDenied{
+			err: fmt.Errorf("cannot access '%s/%s', cross-namespace references have been blocked", imagev1.ImageRepositoryKind, repoNamespacedName),
+		}
+	}
+
+	// Get the ImageRepository.
+	if err := r.Get(ctx, repoNamespacedName, repo); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			return nil, fmt.Errorf("referenced %s does not exist: %w", imagev1.ImageRepositoryKind, err)
+		}
+	}
+
+	// Check if the ImageRepository allows access to ImagePolicy.
+	aclAuth := acl.NewAuthorization(r.Client)
+	if err := aclAuth.HasAccessToRef(ctx, obj, repoNamespacedName, repo.Spec.AccessFrom); err != nil {
+		return nil, errAccessDenied{err: fmt.Errorf("access denied: %w", err)}
+	}
+
+	return repo, nil
+}
+
+// applyPolicy reads the tags of the given repository from the internal database
+// and applies the tag filters and constraints to return the latest image.
+func (r *ImagePolicyReconciler) applyPolicy(ctx context.Context, obj *imagev1.ImagePolicy, repo *imagev1.ImageRepository) (string, error) {
+	policer, err := policy.PolicerFromSpec(obj.Spec.Policy)
+	if err != nil {
+		return "", errInvalidPolicy{err: fmt.Errorf("invalid policy: %w", err)}
+	}
+
+	// Read tags from database, apply and filter is configured and compute the
+	// result.
+	tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
+	if err != nil {
+		return "", fmt.Errorf("failed to read tags from database: %w", err)
+	}
+
+	if len(tags) == 0 {
+		return "", errNoTagsInDatabase
+	}
+
+	// Apply tag filter.
+	if obj.Spec.FilterTags != nil {
+		filter, err := policy.NewRegexFilter(obj.Spec.FilterTags.Pattern, obj.Spec.FilterTags.Extract)
+		if err != nil {
+			return "", errInvalidPolicy{err: fmt.Errorf("failed to filter tags: %w", err)}
+		}
+		filter.Apply(tags)
+		tags = filter.Items()
+		latest, err := policer.Latest(tags)
+		if err != nil {
+			return "", err
+		}
+		return filter.GetOriginalTag(latest), nil
+	}
+	// Compute and return result.
+	return policer.Latest(tags)
+}
+
+// reconcileDelete handles the deletion of the object.
+func (r *ImagePolicyReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImagePolicy) (reconcile.Result, error) {
+	// Remove our finalizer from the list.
+	controllerutil.RemoveFinalizer(obj, imagev1.ImagePolicyFinalizer)
+
+	// Stop reconciliation as the object is being deleted.
+	return ctrl.Result{}, nil
+}
 
 func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []reconcile.Request {
 	ctx := context.Background()
@@ -290,46 +390,4 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []
 		reqs[i].NamespacedName.Namespace = policies.Items[i].GetNamespace()
 	}
 	return reqs
-}
-
-// event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1.ImagePolicy, severity, msg string) {
-	eventtype := "Normal"
-	if severity == eventv1.EventSeverityError {
-		eventtype = "Warning"
-	}
-	r.EventRecorder.Eventf(&policy, eventtype, severity, msg)
-}
-
-func (r *ImagePolicyReconciler) recordReadinessMetric(ctx context.Context, policy *imagev1.ImagePolicy) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-
-	objRef, err := reference.GetReference(r.Scheme, policy)
-	if err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "unable to record readiness metric")
-		return
-	}
-	if rc := apimeta.FindStatusCondition(policy.Status.Conditions, meta.ReadyCondition); rc != nil {
-		r.MetricsRecorder.RecordCondition(*objRef, *rc, !policy.DeletionTimestamp.IsZero())
-	} else {
-		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
-			Type:   meta.ReadyCondition,
-			Status: metav1.ConditionUnknown,
-		}, !policy.DeletionTimestamp.IsZero())
-	}
-}
-
-func (r *ImagePolicyReconciler) patchStatus(ctx context.Context, req ctrl.Request,
-	newStatus imagev1.ImagePolicyStatus) error {
-	var res imagev1.ImagePolicy
-	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
-		return err
-	}
-
-	patch := client.MergeFrom(res.DeepCopy())
-	res.Status = newStatus
-
-	return r.Status().Patch(ctx, &res, patch)
 }
