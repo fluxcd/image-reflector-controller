@@ -316,3 +316,42 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 		})
 	}
 }
+
+func TestComposeImagePolicyReadyMessage(t *testing.T) {
+	testImage := "foo/bar"
+
+	tests := []struct {
+		name        string
+		previousTag string
+		latestTag   string
+		image       string
+		wantMessage string
+	}{
+		{
+			name:        "no previous tag",
+			latestTag:   "1.0.0",
+			wantMessage: "Latest image tag for 'foo/bar' resolved to 1.0.0",
+		},
+		{
+			name:        "different previous tag",
+			previousTag: "1.0.0",
+			latestTag:   "1.1.0",
+			wantMessage: "Latest image tag for 'foo/bar' updated from 1.0.0 to 1.1.0",
+		},
+		{
+			name:        "same previous and latest tags",
+			previousTag: "1.0.0",
+			latestTag:   "1.0.0",
+			wantMessage: "Latest image tag for 'foo/bar' resolved to 1.0.0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			result := composeImagePolicyReadyMessage(tt.previousTag, tt.latestTag, testImage)
+			g.Expect(result).To(Equal(tt.wantMessage))
+		})
+	}
+}

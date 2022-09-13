@@ -313,6 +313,19 @@ the policy.</p>
 </tr>
 <tr>
 <td>
+<code>observedPreviousImage</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ObservedPreviousImage is the observed previous LatestImage. It is used
+to keep track of the previous and current images.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>observedGeneration</code><br>
 <em>
 int64
@@ -860,6 +873,16 @@ int
 <a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
 Kubernetes meta/v1.Time
 </a>
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
+<code>latestTags</code><br>
+<em>
+[]string
 </em>
 </td>
 <td>

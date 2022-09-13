@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -56,6 +57,9 @@ import (
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/secret"
 )
+
+// latestTagsCount is the number of tags to use as latest tags.
+const latestTagsCount = 10
 
 // imageRepositoryOwnedConditions is a list of conditions owned by the
 // ImageRepositoryReconciler.
@@ -462,8 +466,9 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 
 	scanTime := metav1.Now()
 	obj.Status.LastScanResult = &imagev1.ScanResult{
-		TagCount: len(filteredTags),
-		ScanTime: scanTime,
+		TagCount:   len(filteredTags),
+		ScanTime:   scanTime,
+		LatestTags: getLatestTags(filteredTags),
 	}
 
 	// If the reconcile request annotation was set, consider it
@@ -549,6 +554,21 @@ func filterOutTags(tags []string, patterns []string) ([]string, error) {
 		}
 	}
 	return filteredTags, nil
+}
+
+// getLatestTags takes a slice of tags, sorts them in descending order of their
+// values and returns the 10 latest tags.
+func getLatestTags(tags []string) []string {
+	var result []string
+	sort.SliceStable(tags, func(i, j int) bool { return tags[i] > tags[j] })
+
+	if len(tags) >= latestTagsCount {
+		latestTags := tags[0:latestTagsCount]
+		result = append(result, latestTags...)
+	} else {
+		result = append(result, tags...)
+	}
+	return result
 }
 
 // isEqualSliceContent compares two string slices to check if they have the same

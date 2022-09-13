@@ -94,8 +94,9 @@ type ImageRepositorySpec struct {
 }
 
 type ScanResult struct {
-	TagCount int         `json:"tagCount"`
-	ScanTime metav1.Time `json:"scanTime,omitempty"`
+	TagCount   int         `json:"tagCount"`
+	ScanTime   metav1.Time `json:"scanTime,omitempty"`
+	LatestTags []string    `json:"latestTags,omitempty"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository

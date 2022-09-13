@@ -432,6 +432,10 @@ spec:
               lastScanResult:
                 description: LastScanResult contains the number of fetched tags.
                 properties:
+                  latestTags:
+                    items:
+                      type: string
+                    type: array
                   scanTime:
                     format: date-time
                     type: string

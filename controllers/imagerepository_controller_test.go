@@ -440,37 +440,48 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 	defer registryServer.Close()
 
 	tests := []struct {
-		name          string
-		tags          []string
-		exclusionList []string
-		annotation    string
-		db            *mockDatabase
-		wantErr       bool
-		wantTags      []string
+		name           string
+		tags           []string
+		exclusionList  []string
+		annotation     string
+		db             *mockDatabase
+		wantErr        bool
+		wantTags       []string
+		wantLatestTags []string
 	}{
 		{
 			name:    "no tags",
 			wantErr: true,
 		},
 		{
-			name:     "simple tags",
-			tags:     []string{"a", "b", "c", "d"},
-			db:       &mockDatabase{},
-			wantTags: []string{"a", "b", "c", "d"},
+			name:           "simple tags",
+			tags:           []string{"a", "b", "c", "d"},
+			db:             &mockDatabase{},
+			wantTags:       []string{"a", "b", "c", "d"},
+			wantLatestTags: []string{"d", "c", "b", "a"},
 		},
 		{
-			name:          "with single exclusion pattern",
-			tags:          []string{"a", "b", "c", "d"},
-			exclusionList: []string{"c"},
-			db:            &mockDatabase{},
-			wantTags:      []string{"a", "b", "d"},
+			name:           "simple tags, 10+",
+			tags:           []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+			db:             &mockDatabase{},
+			wantTags:       []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+			wantLatestTags: []string{"k", "j", "i", "h, g, f, e, d, c, b"},
 		},
 		{
-			name:          "with multiple exclusion pattern",
-			tags:          []string{"a", "b", "c", "d"},
-			exclusionList: []string{"c", "a"},
-			db:            &mockDatabase{},
-			wantTags:      []string{"b", "d"},
+			name:           "with single exclusion pattern",
+			tags:           []string{"a", "b", "c", "d"},
+			exclusionList:  []string{"c"},
+			db:             &mockDatabase{},
+			wantTags:       []string{"a", "b", "d"},
+			wantLatestTags: []string{"d", "b", "a"},
+		},
+		{
+			name:           "with multiple exclusion pattern",
+			tags:           []string{"a", "b", "c", "d"},
+			exclusionList:  []string{"c", "a"},
+			db:             &mockDatabase{},
+			wantTags:       []string{"b", "d"},
+			wantLatestTags: []string{"d", "b"},
 		},
 		{
 			name:          "bad exclusion pattern",
@@ -485,11 +496,12 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:       "with reconcile annotation",
-			tags:       []string{"a", "b"},
-			annotation: "foo",
-			db:         &mockDatabase{},
-			wantTags:   []string{"a", "b"},
+			name:           "with reconcile annotation",
+			tags:           []string{"a", "b"},
+			annotation:     "foo",
+			db:             &mockDatabase{},
+			wantTags:       []string{"a", "b"},
+			wantLatestTags: []string{"b", "a"},
 		},
 	}
 
@@ -531,6 +543,62 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 					g.Expect(repo.Status.LastHandledReconcileAt).To(Equal(tt.annotation))
 				}
 			}
+		})
+	}
+}
+
+func TestGetLatestTags(t *testing.T) {
+	tests := []struct {
+		name           string
+		tags           []string
+		wantLatestTags []string
+	}{
+		{
+			name:           "no tags",
+			wantLatestTags: nil,
+		},
+		{
+			name:           "few semver tags",
+			tags:           []string{"1.0.0", "0.0.8", "1.2.5", "3.0.1", "1.0.1"},
+			wantLatestTags: []string{"3.0.1", "1.2.5", "1.0.1", "1.0.0", "0.0.8"},
+		},
+		{
+			name:           "10 semver tags",
+			tags:           []string{"1.0.0", "0.0.8", "1.2.5", "3.0.1", "1.0.1", "5.1.1", "4.1.0", "4.5.0", "4.0.3", "2.2.2"},
+			wantLatestTags: []string{"5.1.1", "4.5.0", "4.1.0", "4.0.3", "3.0.1", "2.2.2", "1.2.5", "1.0.1", "1.0.0", "0.0.8"},
+		},
+		{
+			name:           "10+ semver tags",
+			tags:           []string{"1.0.0", "0.0.8", "1.2.5", "3.0.1", "1.0.1", "5.1.1", "4.1.0", "4.5.0", "4.0.3", "2.2.2", "0.5.1", "0.1.0"},
+			wantLatestTags: []string{"5.1.1", "4.5.0", "4.1.0", "4.0.3", "3.0.1", "2.2.2", "1.2.5", "1.0.1", "1.0.0", "0.5.1"},
+		},
+		{
+			name:           "few numerical tags",
+			tags:           []string{"-62", "-88", "73", "72", "15"},
+			wantLatestTags: []string{"73", "72", "15", "-88", "-62"},
+		},
+		{
+			name:           "few numerical tags",
+			tags:           []string{"-62", "-88", "73", "72", "15", "16", "15", "29", "-33", "-91", "100", "101"},
+			wantLatestTags: []string{"73", "72", "29", "16", "15", "15", "101", "100", "-91", "-88"},
+		},
+		{
+			name:           "few word tags",
+			tags:           []string{"aaa", "bbb", "ccc"},
+			wantLatestTags: []string{"ccc", "bbb", "aaa"},
+		},
+		{
+			name:           "few word tags",
+			tags:           []string{"aaa", "bbb", "ccc", "ddd", "eee", "fff", "ggg", "hhh", "iii", "jjj", "kkk", "lll"},
+			wantLatestTags: []string{"lll", "kkk", "jjj", "iii", "hhh", "ggg", "fff", "eee", "ddd", "ccc"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			g.Expect(getLatestTags(tt.tags)).To(Equal(tt.wantLatestTags))
 		})
 	}
 }

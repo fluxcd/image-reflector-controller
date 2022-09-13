@@ -391,6 +391,10 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              observedPreviousImage:
+                description: ObservedPreviousImage is the observed previous LatestImage.
+                  It is used to keep track of the previous and current images.
+                type: string
             type: object
         type: object
     served: true

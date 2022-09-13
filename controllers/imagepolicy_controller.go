@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -192,10 +193,20 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return
 }
 
+// composeImagePolicyReadyMessage composes a Ready message for an ImagePolicy
+// based on the results of applying the policy.
+func composeImagePolicyReadyMessage(previousTag, latestTag, image string) string {
+	readyMsg := fmt.Sprintf("Latest image tag for '%s' resolved to %s", image, latestTag)
+	if previousTag != "" && previousTag != latestTag {
+		readyMsg = fmt.Sprintf("Latest image tag for '%s' updated from %s to %s", image, previousTag, latestTag)
+	}
+	return readyMsg
+}
+
 func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
-	var resultImage, resultTag string
+	var resultImage, resultTag, previousTag string
 
 	// If there's no error and no requeue is requested, it's a success. Unlike
 	// other reconcilers, this reconciler doesn't requeue on its own with a
@@ -208,7 +219,8 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.Imag
 	}
 
 	defer func() {
-		readyMsg := fmt.Sprintf("Latest image tag for '%s' resolved to: %s", resultImage, resultTag)
+		readyMsg := composeImagePolicyReadyMessage(previousTag, resultTag, resultImage)
+
 		rs := pkgreconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
 
@@ -286,6 +298,26 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.Imag
 
 	// Write the observations on status.
 	obj.Status.LatestImage = repo.Spec.Image + ":" + latest
+	// If the old latest image and new latest image don't match, set the old
+	// image as the observed previous image.
+	// NOTE: The following allows the previous image to be set empty when
+	// there's a failure and a subsequent recovery from it. This behavior helps
+	// avoid creating an update event as there's no previous image to infer
+	// from. Recovery from a failure shouldn't result in an update event.
+	if oldObj.Status.LatestImage != obj.Status.LatestImage {
+		obj.Status.ObservedPreviousImage = oldObj.Status.LatestImage
+	}
+	// Parse the observed previous image if any and extract previous tag. This
+	// is used to determine image tag update path.
+	if obj.Status.ObservedPreviousImage != "" {
+		prevRef, err := name.NewTag(obj.Status.ObservedPreviousImage)
+		if err != nil {
+			e := fmt.Errorf("failed to parse previous image '%s': %w", obj.Status.ObservedPreviousImage, err)
+			conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, e.Error())
+			result, retErr = ctrl.Result{}, e
+		}
+		previousTag = prevRef.TagStr()
+	}
 
 	resultImage = repo.Spec.Image
 	resultTag = latest
