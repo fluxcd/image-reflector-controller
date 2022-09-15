@@ -69,6 +69,14 @@ var imageRepositoryOwnedConditions = []string{
 	meta.StalledCondition,
 }
 
+// imageRepositoryNegativeConditions is a list of negative polarity conditions
+// owned by ImageRepositoryReconciler. It is used in tests for compliance with
+// kstatus.
+var imageRepositoryNegativeConditions = []string{
+	meta.StalledCondition,
+	meta.ReconcilingCondition,
+}
+
 // Reasons for scan.
 const (
 	scanReasonNeverScanned         = "never scanned before"

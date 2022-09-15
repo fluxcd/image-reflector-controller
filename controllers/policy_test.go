@@ -20,7 +20,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fluxcd/pkg/apis/meta"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -30,8 +29,10 @@ import (
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
+	conditionscheck "github.com/fluxcd/pkg/runtime/conditions/check"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
@@ -225,6 +226,12 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
 				g.Expect(ready.Reason).To(ContainSubstring("InvalidPolicy"))
 			}
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &pol)
+
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
 	}
@@ -329,6 +336,12 @@ func TestImagePolicyReconciler_filterTags(t *testing.T) {
 				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
 				g.Expect(ready.Message).To(ContainSubstring("invalid regular expression pattern"))
 			}
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &pol)
+
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
 	}
@@ -498,6 +511,11 @@ func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
 				}, timeout, interval).Should(BeTrue())
 				g.Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal(aclapi.AccessDeniedReason))
 			}
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &pol)
 
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})

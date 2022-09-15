@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/fluxcd/pkg/apis/meta"
+	conditionscheck "github.com/fluxcd/pkg/runtime/conditions/check"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/gomega"
@@ -74,6 +75,12 @@ func TestImageRepositoryReconciler_canonicalImageName(t *testing.T) {
 	g.Expect(repo.Name).To(Equal(imageRepoName.Name))
 	g.Expect(repo.Namespace).To(Equal(imageRepoName.Namespace))
 	g.Expect(repo.Status.CanonicalImageName).To(Equal("index.docker.io/library/alpine"))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -137,6 +144,13 @@ func TestImageRepositoryReconciler_fetchImageTags(t *testing.T) {
 			}, timeout, interval).Should(BeTrue())
 			g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 			g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(tt.wantVersions)))
+			g.Expect(repo.Status.LastScanResult.LatestTags).ToNot(BeEmpty())
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &repo)
+
 			// Cleanup.
 			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 		})
@@ -232,6 +246,12 @@ func TestImageRepositoryReconciler_reconcileAtAnnotation(t *testing.T) {
 		return err == nil && repo.Status.LastScanResult.ScanTime.After(lastScanTime.Time)
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(repo.Status.LastHandledReconcileAt).To(Equal(requestToken))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -302,6 +322,12 @@ func TestImageRepositoryReconciler_authRegistry(t *testing.T) {
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -341,6 +367,12 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -380,6 +412,12 @@ func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
 		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(ready.Message).To(ContainSubstring("should not contain a tag"))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -417,6 +455,12 @@ func TestImageRepositoryReconciler_imageAttribute_hostPort(t *testing.T) {
 		return err == nil && repo.Status.LastScanResult != nil
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
 
@@ -492,6 +536,12 @@ func TestImageRepositoryReconciler_authRegistryWithServiceAccount(t *testing.T) 
 	}, timeout, interval).Should(BeTrue())
 	g.Expect(repo.Status.CanonicalImageName).To(Equal(imgRepo))
 	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(versions)))
+
+	// Check if the object status is valid.
+	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+	checker := conditionscheck.NewChecker(testEnv.Client, condns)
+	checker.CheckErr(ctx, &repo)
+
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -530,6 +580,12 @@ func TestImageRepositoryReconciler_ScanPublicRepos(t *testing.T) {
 				return err == nil && repo.Status.LastScanResult != nil
 			}, timeout, interval).Should(BeTrue())
 			g.Expect(repo.Status.LastScanResult.TagCount).ToNot(BeZero())
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &repo)
+
 			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 		})
 	}

@@ -82,6 +82,14 @@ var imagePolicyOwnedConditions = []string{
 	meta.StalledCondition,
 }
 
+// imagePolicyNegativeConditions is a list of negative polarity conditions
+// owned by ImagePolicyReconciler. It is used in tests for compliance with
+// kstatus.
+var imagePolicyNegativeConditions = []string{
+	meta.StalledCondition,
+	meta.ReconcilingCondition,
+}
+
 // this is used as the key for the index of policy->repository; the
 // string is arbitrary and acts as a reminder where the value comes
 // from.
