@@ -37,11 +37,15 @@ type ImageRepositorySpec struct {
 	Image string `json:"image,omitempty"`
 	// Interval is the length of time to wait between
 	// scans of the image repository.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$"
 	// +required
 	Interval metav1.Duration `json:"interval,omitempty"`
 
 	// Timeout for image scanning.
 	// Defaults to 'Interval' duration.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ms|s|m))+$"
 	// +optional
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
 
@@ -54,6 +58,7 @@ type ImageRepositorySpec struct {
 
 	// ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
 	// the image pull if the service account has attached pull secrets.
+	// +kubebuilder:validation:MaxLength=253
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
