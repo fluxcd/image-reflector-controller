@@ -447,6 +447,7 @@ spec:
               interval:
                 description: Interval is the length of time to wait between scans
                   of the image repository.
+                pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$
                 type: string
               secretRef:
                 description: SecretRef can be given the name of a secret containing
@@ -463,6 +464,7 @@ spec:
                 description: ServiceAccountName is the name of the Kubernetes ServiceAccount
                   used to authenticate the image pull if the service account has attached
                   pull secrets.
+                maxLength: 253
                 type: string
               suspend:
                 description: This flag tells the controller to suspend subsequent
@@ -471,6 +473,7 @@ spec:
                 type: boolean
               timeout:
                 description: Timeout for image scanning. Defaults to 'Interval' duration.
+                pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m))+$
                 type: string
             type: object
           status:
