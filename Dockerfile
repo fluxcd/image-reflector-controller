@@ -1,25 +1,23 @@
+ARG GO_VERSION=1.19
 ARG XX_VERSION=1.1.0
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
-# Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.18-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine as builder
 
 # Copy the build utilities.
 COPY --from=xx / /
 
 ARG TARGETPLATFORM
 
-# Configure workspace.
 WORKDIR /workspace
+
+# copy api submodule
+COPY api/ api/
 
 # copy modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
-
-# Copy this, which should not change often; and, needs to be in place
-# before `go mod download`.
-COPY api/ api/
 
 # cache modules
 RUN go mod download
@@ -29,9 +27,9 @@ COPY main.go main.go
 COPY controllers/ controllers/
 COPY internal/ internal/
 
-# build without giving the arch, so that it gets it from the machine
+# build
 ENV CGO_ENABLED=0
-RUN xx-go build -a -o image-reflector-controller main.go
+RUN xx-go build -trimpath -a -o image-reflector-controller main.go
 
 FROM alpine:3.16
 
