@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.22.0
+
+**Release date:** 2022-09-27
+
+This prerelease comes with strict validation rules for API fields which define a
+(time) duration. Effectively, this means values without a time unit (e.g. `ms`,
+`s`, `m`, `h`) will now be rejected by the API server. To stimulate sane
+configurations, the units `ns`, `us` and `µs` can no longer be configured, nor
+can `h` be set for fields defining a timeout value.
+
+In addition, the controller dependencies have been updated
+to Kubernetes controller-runtime v0.13.
+
+:warning: **Breaking changes:**
+- `ImageRepository.spec.interval` new validation pattern is `"^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$"`
+- `ImageRepository.spec.timeout` new validation pattern is `"^([0-9]+(\\.[0-9]+)?(ms|s|m))+$"`
+
+Improvements:
+* api: add custom validation for v1.Duration types
+  [#314](https://github.com/fluxcd/image-reflector-controller/pull/314)
+* Update dependencies
+  [#315](https://github.com/fluxcd/image-reflector-controller/pull/315)
+* Dockerfile: Build with Go 1.19
+  [#317](https://github.com/fluxcd/image-reflector-controller/pull/317)
+
 ## 0.21.0
 
 **Release date:** 2022-09-09
