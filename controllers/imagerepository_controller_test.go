@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/conditions"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
@@ -122,11 +121,10 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 	testServiceAccountWithSecret.ImagePullSecrets = []corev1.LocalObjectReference{{Name: testSecretName}}
 
 	tests := []struct {
-		name              string
-		mockObjs          []client.Object
-		imageRepoSpec     imagev1.ImageRepositorySpec
-		loginProviderOpts login.ProviderOptions
-		wantErr           bool
+		name          string
+		mockObjs      []client.Object
+		imageRepoSpec imagev1.ImageRepositorySpec
+		wantErr       bool
 	}{
 		{
 			name: "no auth options",
@@ -157,10 +155,10 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 		{
 			name: "contextual login",
 			imageRepoSpec: imagev1.ImageRepositorySpec{
-				Image: "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
+				Image:    "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
+				Provider: "aws",
 			},
-			loginProviderOpts: login.ProviderOptions{AwsAutoLogin: true},
-			wantErr:           true,
+			wantErr: true,
 		},
 		{
 			name: "cloud provider repo without login",
@@ -249,9 +247,8 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 			clientBuilder.WithObjects(tt.mockObjs...)
 
 			r := &ImageRepositoryReconciler{
-				EventRecorder:   record.NewFakeRecorder(32),
-				Client:          clientBuilder.Build(),
-				ProviderOptions: tt.loginProviderOpts,
+				EventRecorder: record.NewFakeRecorder(32),
+				Client:        clientBuilder.Build(),
 			}
 
 			obj := &imagev1.ImageRepository{

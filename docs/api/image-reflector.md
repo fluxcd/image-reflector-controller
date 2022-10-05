@@ -527,6 +527,19 @@ to the ImageRepository object based on the caller&rsquo;s namespace labels.</p>
 from being stored in the database.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>provider</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The provider used for authentication, can be &lsquo;aws&rsquo;, &lsquo;azure&rsquo;, &lsquo;gcp&rsquo; or &lsquo;generic&rsquo;.
+When not specified, defaults to &lsquo;generic&rsquo;.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -697,6 +710,19 @@ to the ImageRepository object based on the caller&rsquo;s namespace labels.</p>
 <em>(Optional)</em>
 <p>ExclusionList is a list of regex strings used to exclude certain tags
 from being stored in the database.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>provider</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>The provider used for authentication, can be &lsquo;aws&rsquo;, &lsquo;azure&rsquo;, &lsquo;gcp&rsquo; or &lsquo;generic&rsquo;.
+When not specified, defaults to &lsquo;generic&rsquo;.</p>
 </td>
 </tr>
 </tbody>

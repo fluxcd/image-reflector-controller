@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -30,7 +31,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -91,6 +91,8 @@ func main() {
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
+
+	// NOTE: Deprecated flags.
 	flag.BoolVar(&awsAutoLogin, "aws-autologin-for-ecr", false, "(AWS) Attempt to get credentials for images in Elastic Container Registry, when no secret is referenced")
 	flag.BoolVar(&gcpAutoLogin, "gcp-autologin-for-gcr", false, "(GCP) Attempt to get credentials for images in Google Container Registry, when no secret is referenced")
 	flag.BoolVar(&azureAutoLogin, "azure-autologin-for-acr", false, "(Azure) Attempt to get credentials for images in Azure Container Registry, when no secret is referenced")
@@ -105,6 +107,12 @@ func main() {
 
 	log := logger.NewLogger(logOptions)
 	ctrl.SetLogger(log)
+
+	if awsAutoLogin || gcpAutoLogin || azureAutoLogin {
+		setupLog.Error(errors.New("use of deprecated flags"),
+			"autologin flags have been deprecated and have no effect. These flags will be removed in a future release."+
+				" Please update the respective ImageRepository objects with .spec.provider field.")
+	}
 
 	err := featureGates.WithLogger(setupLog).
 		SupportedFeatures(features.FeatureGates())
@@ -170,15 +178,10 @@ func main() {
 	metricsH := helper.MustMakeMetrics(mgr)
 
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:        mgr.GetClient(),
-		EventRecorder: eventRecorder,
-		Metrics:       metricsH,
-		Database:      db,
-		ProviderOptions: login.ProviderOptions{
-			AwsAutoLogin:   awsAutoLogin,
-			GcpAutoLogin:   gcpAutoLogin,
-			AzureAutoLogin: azureAutoLogin,
-		},
+		Client:         mgr.GetClient(),
+		EventRecorder:  eventRecorder,
+		Metrics:        metricsH,
+		Database:       db,
 		ControllerName: controllerName,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,

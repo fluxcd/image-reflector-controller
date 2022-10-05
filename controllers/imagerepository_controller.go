@@ -105,7 +105,6 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
-	login.ProviderOptions
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -310,8 +309,17 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 		}
 		auth, authErr = secret.AuthFromSecret(authSecret, ref)
 	} else {
-		// Use the registry provider options to attempt registry login.
-		auth, authErr = login.NewManager().Login(ctx, obj.Spec.Image, ref, r.ProviderOptions)
+		// Build login provider options and use it to attempt registry login.
+		opts := login.ProviderOptions{}
+		switch obj.GetProvider() {
+		case "aws":
+			opts.AwsAutoLogin = true
+		case "azure":
+			opts.AzureAutoLogin = true
+		case "gcp":
+			opts.GcpAutoLogin = true
+		}
+		auth, authErr = login.NewManager().Login(ctx, obj.Spec.Image, ref, opts)
 	}
 	if authErr != nil {
 		// If it's not unconfigured provider error, abort reconciliation.

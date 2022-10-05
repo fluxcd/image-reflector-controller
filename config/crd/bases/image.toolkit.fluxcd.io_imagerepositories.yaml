@@ -319,6 +319,16 @@ spec:
                   of the image repository.
                 pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))+$
                 type: string
+              provider:
+                default: generic
+                description: The provider used for authentication, can be 'aws', 'azure',
+                  'gcp' or 'generic'. When not specified, defaults to 'generic'.
+                enum:
+                - generic
+                - aws
+                - azure
+                - gcp
+                type: string
               secretRef:
                 description: SecretRef can be given the name of a secret containing
                   credentials to use for the image registry. The secret should be

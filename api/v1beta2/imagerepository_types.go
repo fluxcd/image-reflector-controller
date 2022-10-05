@@ -91,6 +91,13 @@ type ImageRepositorySpec struct {
 	// +kubebuilder:validation:MaxItems:=25
 	// +optional
 	ExclusionList []string `json:"exclusionList,omitempty"`
+
+	// The provider used for authentication, can be 'aws', 'azure', 'gcp' or 'generic'.
+	// When not specified, defaults to 'generic'.
+	// +kubebuilder:validation:Enum=generic;aws;azure;gcp
+	// +kubebuilder:default:=generic
+	// +optional
+	Provider string `json:"provider,omitempty"`
 }
 
 type ScanResult struct {
