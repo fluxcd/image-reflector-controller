@@ -25,7 +25,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 )
 
 func TestImageRepositoryScan(t *testing.T) {
@@ -44,6 +44,7 @@ func testImageRepositoryScan(t *testing.T, repoURL string) {
 		Spec: imagev1.ImageRepositorySpec{
 			Interval: v1.Duration{Duration: 30 * time.Second},
 			Image:    repoURL,
+			Provider: *targetProvider,
 		},
 	}
 	repoObjectKey := types.NamespacedName{
