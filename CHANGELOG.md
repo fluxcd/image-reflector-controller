@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.22.1
+
+**Release date:** 2022-10-28
+
+This prerelease comes with dependency updates to patch upstream CVEs.
+
+The controller dependencies have been updated to Kubernetes v1.25.3.
+The `golang.org/x/text` package has been updated to v0.4.0 (fix for CVE-2022-32149).
+
+Improvements:
+* Update dependencies
+  [#319](https://github.com/fluxcd/image-reflector-controller/pull/319)
+
 ## 0.22.0
 
 **Release date:** 2022-09-27
