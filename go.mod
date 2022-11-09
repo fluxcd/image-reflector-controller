@@ -5,25 +5,26 @@ go 1.18
 replace github.com/fluxcd/image-reflector-controller/api => ./api
 
 require (
-	github.com/AdaLogics/go-fuzz-headers v0.0.0-20221007124625-37f5449ff7df
+	github.com/AdaLogics/go-fuzz-headers v0.0.0-20221103172237-443f56ff4ba8
 	github.com/Masterminds/semver/v3 v3.1.1
-	github.com/dgraph-io/badger/v3 v3.2103.3
+	github.com/dgraph-io/badger/v3 v3.2103.4
 	github.com/fluxcd/image-reflector-controller/api v0.22.1
 	github.com/fluxcd/pkg/apis/acl v0.1.0
+	github.com/fluxcd/pkg/apis/event v0.1.0
 	github.com/fluxcd/pkg/apis/meta v0.17.0
 	github.com/fluxcd/pkg/oci v0.14.0
-	github.com/fluxcd/pkg/runtime v0.22.0
+	github.com/fluxcd/pkg/runtime v0.23.0
 	github.com/fluxcd/pkg/version v0.2.0
 	github.com/google/go-containerregistry v0.12.0
-	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20221019221123-02f47e132cf5
+	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20221103173901-353a117661ae
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.22.1
+	github.com/onsi/gomega v1.24.0
 	github.com/spf13/pflag v1.0.5
 	go.uber.org/zap v1.23.0
 	k8s.io/api v0.25.3
 	k8s.io/apimachinery v0.25.3
 	k8s.io/client-go v0.25.3
-	sigs.k8s.io/controller-runtime v0.13.0
+	sigs.k8s.io/controller-runtime v0.13.1
 )
 
 // Fix CVE-2022-28948
@@ -163,7 +164,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.25.0 // indirect
 	k8s.io/cli-runtime v0.25.2 // indirect
-	k8s.io/component-base v0.25.2 // indirect
+	k8s.io/component-base v0.25.3 // indirect
 	k8s.io/klog/v2 v2.80.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/kubectl v0.24.0 // indirect

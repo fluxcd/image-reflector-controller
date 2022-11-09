@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 
+	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
@@ -173,7 +174,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{Requeue: true}, err
 		}
 		err := fmt.Errorf("Unable to parse image name: %s: %w", imageRepo.Spec.Image, err)
-		r.event(ctx, imageRepo, events.EventSeverityError, err.Error())
+		r.event(ctx, imageRepo, eventv1.EventSeverityError, err.Error())
 		return ctrl.Result{Requeue: true}, err
 	}
 
@@ -196,12 +197,12 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{Requeue: true}, err
 		}
 		if reconcileErr != nil {
-			r.event(ctx, imageRepo, events.EventSeverityError, reconcileErr.Error())
+			r.event(ctx, imageRepo, eventv1.EventSeverityError, reconcileErr.Error())
 			return ctrl.Result{Requeue: true}, reconcileErr
 		}
 		// emit successful scan event
 		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, imagev1.ReconciliationSucceededReason); rc != nil {
-			r.event(ctx, imageRepo, events.EventSeverityInfo, rc.Message)
+			r.event(ctx, imageRepo, eventv1.EventSeverityInfo, rc.Message)
 		}
 	}
 
@@ -531,7 +532,7 @@ func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticat
 // event emits a Kubernetes event and forwards the event to notification controller if configured
 func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.ImageRepository, severity, msg string) {
 	eventtype := "Normal"
-	if severity == events.EventSeverityError {
+	if severity == eventv1.EventSeverityError {
 		eventtype = "Warning"
 	}
 	r.EventRecorder.Eventf(&repo, eventtype, severity, msg)
