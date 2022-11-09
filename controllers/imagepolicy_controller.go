@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
+	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/acl"
-	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/metrics"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
@@ -122,7 +122,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	recordError := func(err error, reason string) (ctrl.Result, error) {
-		r.event(ctx, pol, events.EventSeverityError, err.Error())
+		r.event(ctx, pol, eventv1.EventSeverityError, err.Error())
 		imagev1.SetImagePolicyReadiness(&pol, metav1.ConditionFalse, reason, err.Error())
 		if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 			err = fmt.Errorf("failed to patch ImagePolicy: %s.%s status: %w", pol.GetName(), pol.GetNamespace(), err)
@@ -184,7 +184,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if err == nil {
 			if len(tags) == 0 {
 				msg := fmt.Sprintf("no tags found in local storage for '%s'", repo.Name)
-				r.event(ctx, pol, events.EventSeverityInfo, msg)
+				r.event(ctx, pol, eventv1.EventSeverityInfo, msg)
 				log.Info(msg)
 
 				return ctrl.Result{}, nil
@@ -235,7 +235,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.patchStatus(ctx, req, pol.Status); err != nil {
 		return ctrl.Result{}, err
 	}
-	r.event(ctx, pol, events.EventSeverityInfo, msg)
+	r.event(ctx, pol, eventv1.EventSeverityInfo, msg)
 
 	return ctrl.Result{}, err
 }
@@ -292,7 +292,7 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []
 // event emits a Kubernetes event and forwards the event to notification controller if configured
 func (r *ImagePolicyReconciler) event(ctx context.Context, policy imagev1.ImagePolicy, severity, msg string) {
 	eventtype := "Normal"
-	if severity == events.EventSeverityError {
+	if severity == eventv1.EventSeverityError {
 		eventtype = "Warning"
 	}
 	r.EventRecorder.Eventf(&policy, eventtype, severity, msg)
