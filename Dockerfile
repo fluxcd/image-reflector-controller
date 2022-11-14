@@ -35,10 +35,6 @@ FROM alpine:3.16
 
 LABEL org.opencontainers.image.source="https://github.com/fluxcd/image-reflector-controller"
 
-# Create minimal nsswitch.conf file to prioritize the usage of /etc/hosts over DNS queries.
-# https://github.com/gliderlabs/docker-alpine/issues/367#issuecomment-354316460
-RUN [ ! -e /etc/nsswitch.conf ] && echo 'hosts: files dns' > /etc/nsswitch.conf
-
 RUN apk add --no-cache ca-certificates tini
 
 COPY --from=builder /workspace/image-reflector-controller /usr/local/bin/
