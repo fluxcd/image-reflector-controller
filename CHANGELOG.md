@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.23.0
+
+**Release date:** 2022-11-18
+
+This prerelease comes with the removal of the `v1alpha1` and `v1alpha2` API versions which were deprecated in 2021.
+
+Improvements:
+* Use Flux Event API v1beta1
+  [#321](https://github.com/fluxcd/image-reflector-controller/pull/321)
+* Remove deprecated alpha APIs
+  [#323](https://github.com/fluxcd/image-reflector-controller/pull/323)
+* Remove nsswitch.conf creation
+  [#326](https://github.com/fluxcd/image-reflector-controller/pull/326)
+* Update dependencies
+  [#327](https://github.com/fluxcd/image-reflector-controller/pull/327)
+
 ## 0.22.1
 
 **Release date:** 2022-10-28
