@@ -1,5 +1,5 @@
-//go:build gofuzz
-// +build gofuzz
+//go:build gofuzz_libfuzzer
+// +build gofuzz_libfuzzer
 
 /*
 Copyright 2021 The Flux authors
