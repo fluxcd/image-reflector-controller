@@ -5,18 +5,18 @@ go 1.18
 replace github.com/fluxcd/image-reflector-controller/api => ./api
 
 require (
-	github.com/AdaLogics/go-fuzz-headers v0.0.0-20221103172237-443f56ff4ba8
-	github.com/Masterminds/semver/v3 v3.1.1
+	github.com/AdaLogics/go-fuzz-headers v0.0.0-20221206110420-d395f97c4830
+	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/dgraph-io/badger/v3 v3.2103.4
 	github.com/fluxcd/image-reflector-controller/api v0.23.0
 	github.com/fluxcd/pkg/apis/acl v0.1.0
 	github.com/fluxcd/pkg/apis/event v0.2.0
 	github.com/fluxcd/pkg/apis/meta v0.18.0
-	github.com/fluxcd/pkg/oci v0.15.0
+	github.com/fluxcd/pkg/oci v0.17.0
 	github.com/fluxcd/pkg/runtime v0.24.0
 	github.com/fluxcd/pkg/version v0.2.0
 	github.com/google/go-containerregistry v0.12.1
-	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20221114162634-781782aa2757
+	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20221213180026-23d895d08035
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.24.1
 	github.com/spf13/pflag v1.0.5
@@ -26,6 +26,9 @@ require (
 	k8s.io/client-go v0.25.4
 	sigs.k8s.io/controller-runtime v0.13.1
 )
+
+// Fix CVE-2022-32149
+replace golang.org/x/text => golang.org/x/text v0.4.0
 
 require (
 	cloud.google.com/go/compute v1.10.0 // indirect
@@ -44,21 +47,20 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v0.7.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
-	github.com/aws/aws-sdk-go v1.44.137 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.16.16 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.17.8 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.12.21 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.17 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.23 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.17 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.24 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ecr v1.17.18 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.17.2 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.18.4 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.13.4 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.26 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.27 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.17.22 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ecrpublic v1.13.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.17 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.11.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.6 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.16.19 // indirect
-	github.com/aws/smithy-go v1.13.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.20 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.11.26 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.9 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.17.6 // indirect
+	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/awslabs/amazon-ecr-credential-helper/ecr-login v0.0.0-20221004211355-a250ad2ca1e3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
