@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.23.1
+
+**Release date:** 2022-12-20
+
+This prerelease comes with dependency updates and improvements to the fuzzing.
+
+Improvements:
+* Update dependencies
+  [#331](https://github.com/fluxcd/image-reflector-controller/pull/331)
+* fuzz: Use build script from upstream
+  [#330](https://github.com/fluxcd/image-reflector-controller/pull/330)
+* fuzz: Improve fuzz tests' reliability
+  [#329](https://github.com/fluxcd/image-reflector-controller/pull/329)
+
 ## 0.23.0
 
 **Release date:** 2022-11-18
