@@ -79,13 +79,22 @@ var imageRepositoryNegativeConditions = []string{
 
 // Reasons for scan.
 const (
-	scanReasonNeverScanned         = "never scanned before"
+	scanReasonNeverScanned         = "first scan"
 	scanReasonReconcileRequested   = "reconcile requested"
 	scanReasonNewImageName         = "new image name"
 	scanReasonUpdatedExclusionList = "updated exclusion list"
 	scanReasonEmptyDatabase        = "no tags in database"
-	scanReasonInterval             = "scan interval"
+	scanReasonInterval             = "triggered by interval"
 )
+
+// getPatchOptions composes patch options based on the given parameters.
+// It is used as the options used when patching an object.
+func getPatchOptions(ownedConditions []string, controllerName string) []patch.Option {
+	return []patch.Option{
+		patch.WithOwnedConditions{Conditions: ownedConditions},
+		patch.WithFieldOwner(controllerName),
+	}
+}
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories/status,verbs=get;update;patch
@@ -105,6 +114,8 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+
+	patchOptions []patch.Option
 }
 
 type ImageRepositoryReconcilerOptions struct {
@@ -113,6 +124,8 @@ type ImageRepositoryReconcilerOptions struct {
 }
 
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
+	r.patchOptions = getPatchOptions(imageRepositoryOwnedConditions, r.ControllerName)
+
 	recoverPanic := true
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImageRepository{}).
@@ -139,17 +152,13 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	r.RecordSuspend(ctx, obj, obj.Spec.Suspend)
 
 	// Initialize the patch helper with the current version of the object.
-	patchHelper, err := patch.NewHelper(obj, r.Client)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	serialPatcher := patch.NewSerialPatcher(obj, r.Client)
 
 	// Always attempt to patch the object after each reconciliation.
 	defer func() {
-		// Create patch options for patching the object.
-		patchOpts := []patch.Option{}
-		patchOpts = reconcile.AddPatchOptions(obj, patchOpts, imageRepositoryOwnedConditions, r.ControllerName)
-		if err = patchHelper.Patch(ctx, obj, patchOpts...); err != nil {
+		// Create patch options for the final patch of the object.
+		patchOpts := reconcile.AddPatchOptions(obj, r.patchOptions, imageRepositoryOwnedConditions, r.ControllerName)
+		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
 			// Ignore patch error "not found" when the object is being deleted.
 			if !obj.GetDeletionTimestamp().IsZero() {
 				err = kerrors.FilterOut(err, func(e error) bool { return apierrors.IsNotFound(e) })
@@ -181,11 +190,12 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Call subreconciler.
-	result, retErr = r.reconcile(ctx, obj, start)
+	result, retErr = r.reconcile(ctx, serialPatcher, obj, start)
 	return
 }
 
-func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, obj *imagev1.ImageRepository, startTime time.Time) (result ctrl.Result, retErr error) {
+func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher,
+	obj *imagev1.ImageRepository, startTime time.Time) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
 	var foundTags int
@@ -203,20 +213,45 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, obj *imagev1.
 			return true
 		}
 
-		readyMsg := fmt.Sprintf("successful scan, found %d tags", foundTags)
+		readyMsg := fmt.Sprintf("successful scan: found %d tags", foundTags)
 		rs := reconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
+
+		// Presence of reconciling means that the reconciliation didn't succeed.
+		// Set the Reconciling reason to ProgressingWithRetry to indicate a
+		// failure retry.
+		if conditions.IsReconciling(obj) {
+			reconciling := conditions.Get(obj, meta.ReconcilingCondition)
+			reconciling.Reason = meta.ProgressingWithRetryReason
+			conditions.Set(obj, reconciling)
+		}
 
 		notify(ctx, r.EventRecorder, oldObj, obj, nextScanMsg)
 	}()
 
 	// Set reconciling condition.
-	if obj.Generation != obj.Status.ObservedGeneration {
-		conditions.MarkReconciling(obj, "NewGeneration", "reconciling new object generation (%d)", obj.Generation)
+	reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")
+
+	var reconcileAtVal string
+	if v, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+		reconcileAtVal = v
 	}
 
-	// Clear previous ready status condition value.
-	conditions.Delete(obj, meta.ReadyCondition)
+	// Persist reconciling if generation differs or reconciliation is requested.
+	switch {
+	case obj.Generation != obj.Status.ObservedGeneration:
+		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason,
+			"processing object: new generation %d -> %d", obj.Status.ObservedGeneration, obj.Generation)
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+			return
+		}
+	case reconcileAtVal != obj.Status.GetLastHandledReconcileRequest():
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+			return
+		}
+	}
 
 	// Parse image reference.
 	ref, err := parseImageReference(obj.Spec.Image)
@@ -247,7 +282,11 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, obj *imagev1.
 	// Scan the repository if it's scan time. No scan is a no-op reconciliation.
 	// The next scan time is not reset in case of no-op reconciliation.
 	if ok {
-		conditions.MarkReconciling(obj, "Scanning", reasonMsg)
+		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+		}
+
 		tags, err := r.scan(ctx, obj, ref, opts)
 		if err != nil {
 			e := fmt.Errorf("scan failed: %w", err)

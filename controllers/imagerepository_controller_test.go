@@ -249,6 +249,7 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 			r := &ImageRepositoryReconciler{
 				EventRecorder: record.NewFakeRecorder(32),
 				Client:        clientBuilder.Build(),
+				patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 			}
 
 			obj := &imagev1.ImageRepository{
@@ -411,6 +412,7 @@ func TestImageRepositoryReconciler_shouldScan(t *testing.T) {
 			r := &ImageRepositoryReconciler{
 				EventRecorder: record.NewFakeRecorder(32),
 				Database:      tt.db,
+				patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 			}
 
 			obj := &imagev1.ImageRepository{}
@@ -512,6 +514,7 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			r := ImageRepositoryReconciler{
 				EventRecorder: record.NewFakeRecorder(32),
 				Database:      tt.db,
+				patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 			}
 
 			repo := &imagev1.ImageRepository{}

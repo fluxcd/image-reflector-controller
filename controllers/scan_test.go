@@ -185,8 +185,9 @@ func TestImageRepositoryReconciler_repositorySuspended(t *testing.T) {
 	defer cancel()
 
 	r := &ImageRepositoryReconciler{
-		Client:   builder.Build(),
-		Database: database.NewBadgerDatabase(testBadgerDB),
+		Client:       builder.Build(),
+		Database:     database.NewBadgerDatabase(testBadgerDB),
+		patchOptions: getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 	}
 
 	key := client.ObjectKeyFromObject(&repo)
