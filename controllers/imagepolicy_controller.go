@@ -28,10 +28,12 @@ import (
 	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -260,7 +262,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&imagev1.ImagePolicy{}).
+		For(&imagev1.ImagePolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
 			&source.Kind{Type: &imagev1.ImageRepository{}},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
