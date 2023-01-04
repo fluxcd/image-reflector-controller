@@ -33,6 +33,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	conditionscheck "github.com/fluxcd/pkg/runtime/conditions/check"
+	"github.com/fluxcd/pkg/runtime/patch"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
@@ -114,9 +115,12 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 		ACLOptions: acl.Options{
 			NoCrossNamespaceRefs: true,
 		},
+		patchOptions: getPatchOptions(imagePolicyOwnedConditions, "irc"),
 	}
 
-	res, err := r.reconcile(ctx, &imagePolicy)
+	sp := patch.NewSerialPatcher(&imagePolicy, r.Client)
+
+	res, err := r.reconcile(ctx, sp, &imagePolicy)
 	g.Expect(err).To(Not(BeNil()))
 	g.Expect(res.Requeue).ToNot(BeTrue())
 	g.Expect(conditions.GetReason(&imagePolicy, meta.ReadyCondition)).To(Equal(aclapi.AccessDeniedReason))

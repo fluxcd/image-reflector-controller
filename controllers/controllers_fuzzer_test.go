@@ -254,6 +254,7 @@ func initFunc() {
 		Client:        k8sMgr.GetClient(),
 		Database:      database.NewBadgerDatabase(badgerDB),
 		EventRecorder: record.NewFakeRecorder(256),
+		patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 	}
 	err = imageRepoReconciler.SetupWithManager(k8sMgr, ImageRepositoryReconcilerOptions{})
 	if err != nil {
@@ -264,6 +265,7 @@ func initFunc() {
 		Client:        k8sMgr.GetClient(),
 		Database:      database.NewBadgerDatabase(badgerDB),
 		EventRecorder: record.NewFakeRecorder(256),
+		patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
 	}
 	err = imagePolicyReconciler.SetupWithManager(k8sMgr, ImagePolicyReconcilerOptions{})
 	if err != nil {

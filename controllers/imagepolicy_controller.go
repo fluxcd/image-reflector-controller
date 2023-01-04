@@ -110,6 +110,8 @@ type ImagePolicyReconciler struct {
 	ControllerName string
 	Database       DatabaseReader
 	ACLOptions     acl.Options
+
+	patchOptions []patch.Option
 }
 
 type ImagePolicyReconcilerOptions struct {
@@ -118,6 +120,8 @@ type ImagePolicyReconcilerOptions struct {
 }
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
+	r.patchOptions = getPatchOptions(imagePolicyOwnedConditions, r.ControllerName)
+
 	// index the policies by which image repo they point at, so that
 	// it's easy to list those out when an image repo changes.
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &imagev1.ImagePolicy{}, imageRepoKey, func(obj client.Object) []string {
@@ -161,17 +165,13 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Initialize the patch helper with the current version of the object.
-	patchHelper, err := patch.NewHelper(obj, r.Client)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	serialPatcher := patch.NewSerialPatcher(obj, r.Client)
 
 	// Always attempt to patch the object after each reconciliation.
 	defer func() {
 		// Create patch options for patching the object.
-		patchOpts := []patch.Option{}
-		patchOpts = pkgreconcile.AddPatchOptions(obj, patchOpts, imagePolicyOwnedConditions, r.ControllerName)
-		if err = patchHelper.Patch(ctx, obj, patchOpts...); err != nil {
+		patchOpts := pkgreconcile.AddPatchOptions(obj, r.patchOptions, imagePolicyOwnedConditions, r.ControllerName)
+		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
 			// Ignore patch error "not found" when the object is being deleted.
 			if !obj.GetDeletionTimestamp().IsZero() {
 				err = kerrors.FilterOut(err, func(e error) bool { return apierrors.IsNotFound(e) })
@@ -197,7 +197,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Call subreconciler.
-	result, retErr = r.reconcile(ctx, obj)
+	result, retErr = r.reconcile(ctx, serialPatcher, obj)
 	return
 }
 
@@ -211,7 +211,7 @@ func composeImagePolicyReadyMessage(previousTag, latestTag, image string) string
 	return readyMsg
 }
 
-func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
+func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
 	var resultImage, resultTag, previousTag string
@@ -232,22 +232,35 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.Imag
 		rs := pkgreconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
 
+		// Presence of reconciling means that the reconciliation didn't succeed.
+		// Set the Reconciling reason to ProgressingWithRetry to indicate a
+		// failure retry.
+		if conditions.IsReconciling(obj) {
+			reconciling := conditions.Get(obj, meta.ReconcilingCondition)
+			reconciling.Reason = meta.ProgressingWithRetryReason
+			conditions.Set(obj, reconciling)
+		}
+
 		notify(ctx, r.EventRecorder, oldObj, obj, readyMsg)
 	}()
 
 	// Set reconciling condition.
-	if obj.Generation != obj.Status.ObservedGeneration {
-		conditions.MarkReconciling(obj, "NewGeneration", "reconciling new object generation (%d)", obj.Generation)
-	}
+	pkgreconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")
 
-	// Clear previous ready status condition value.
-	conditions.Delete(obj, meta.ReadyCondition)
+	// Persist reconciling if generation differs.
+	if obj.Generation != obj.Status.ObservedGeneration {
+		pkgreconcile.ProgressiveStatus(false, obj, meta.ProgressingReason,
+			"processing object: new generation %d -> %d", obj.Status.ObservedGeneration, obj.Generation)
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+			return
+		}
+	}
 
 	// Cleanup the last result.
 	obj.Status.LatestImage = ""
 
 	// Get ImageRepository from reference.
-	conditions.MarkReconciling(obj, "AccessingRepository", "accessing ImageRepository")
 	repo, err := r.getImageRepository(ctx, obj)
 	if err != nil {
 		reason := metav1.StatusFailure
@@ -282,7 +295,6 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, obj *imagev1.Imag
 	// Construct a policer from the spec.policy.
 	// Read the tags from database and use the policy to obtain a result for the
 	// latest tag.
-	conditions.MarkReconciling(obj, "ApplyingPolicy", "applying policy on ImageRepository tags")
 	latest, err := r.applyPolicy(ctx, obj, repo)
 	if err != nil {
 		// Stall if it's an invalid policy.

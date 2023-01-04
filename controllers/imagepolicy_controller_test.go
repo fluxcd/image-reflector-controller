@@ -203,6 +203,7 @@ func TestImagePolicyReconciler_getImageRepository(t *testing.T) {
 				EventRecorder: record.NewFakeRecorder(32),
 				Client:        clientBuilder.Build(),
 				ACLOptions:    tt.aclOpts,
+				patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
 			}
 
 			obj := &imagev1.ImagePolicy{
@@ -295,6 +296,7 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 			r := &ImagePolicyReconciler{
 				EventRecorder: record.NewFakeRecorder(32),
 				Database:      tt.db,
+				patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
 			}
 
 			obj := &imagev1.ImagePolicy{
