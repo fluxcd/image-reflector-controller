@@ -491,13 +491,14 @@ func (r *ImageRepositoryReconciler) shouldScan(repo imagev1.ImageRepository, now
 }
 
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
+	recoverPanic := true
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImageRepository{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
 			RateLimiter:             opts.RateLimiter,
-			RecoverPanic:            true,
+			RecoverPanic:            &recoverPanic,
 		}).
 		Complete(r)
 }
