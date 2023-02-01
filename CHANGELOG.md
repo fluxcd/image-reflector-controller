@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.24.0
+
+**Release date:** 2023-02-01
+
+This prerelease disables caching of Secrets and ConfigMaps to improve memory
+usage. To opt-out from this behavior, start the controller with:
+`--feature-gates=CacheSecretsAndConfigMaps=true`.
+
+In addition, the controller dependencies have been updated to
+Kubernetes v1.26.1 and controller-runtime v0.14.2. The controller base image has
+been updated to Alpine 3.17.
+
+Improvements:
+* ImagePolicy: Add predicates to filter events
+  [#334](https://github.com/fluxcd/image-reflector-controller/pull/334)
+* Update dependencies
+  [#335](https://github.com/fluxcd/image-reflector-controller/pull/335)
+* build: Enable SBOM and SLSA Provenance
+  [#336](https://github.com/fluxcd/image-reflector-controller/pull/336)
+* Disable caching of Secrets and ConfigMaps
+  [#337](https://github.com/fluxcd/image-reflector-controller/pull/337)
+
 ## 0.23.1
 
 **Release date:** 2022-12-20
