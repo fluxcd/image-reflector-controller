@@ -1,5 +1,101 @@
 # Changelog
 
+## 0.25.0
+
+**Release date:** 2023-02-16
+
+This prerelease graduates the `ImageRepository` and `ImagePolicy` APIs to
+v1beta2.
+
+### `image.toolkit.fluxcd.io/v1beta2`
+
+After upgrading the controller to v0.25.0, please update the `ImageRepository`
+and `ImagePolicy` **Custom Resources** in Git by replacing
+`image.toolkit.fluxcd.io/v1beta1` with `image.toolkit.fluxcd.io/v1beta2` in all
+YAML manifests.
+
+### Highlights
+
+#### New API specification format
+
+[The specifications for the `v1beta2`
+API](https://github.com/fluxcd/image-reflector-controller/tree/v0.25.0/docs/spec/v1beta2)
+have been written in a new format with the aim to be more valuable to a user.
+Featuring separate sections with examples, and information on how to write
+and work with them.
+
+#### Enhanced Kubernetes Conditions
+
+`ImageRepository` and `ImagePolicy` resources will now advertise more explicit
+Condition types, provide `Reconciling` and `Stalled` Conditions where applicable
+for [better integration with
+`kstatus`](https://github.com/kubernetes-sigs/cli-utils/blob/master/pkg/kstatus/README.md#conditions),
+and record the Observed Generation on the Condition.
+
+#### Enhanced ImageRepository scanned tags status
+
+The `ImageRepository` objects will now show the ten latest scanned tags, which
+can be helpful in troubleshooting to see a sample of the tags that have been
+scanned.
+
+```yaml
+status:
+  ...
+  lastScanResult:
+    latestTags:
+    - latest
+    - 6.3.3
+    - 6.3.2
+    - 6.3.1
+    - 6.3.0
+    - 6.2.3
+    - 6.2.2
+    - 6.2.1
+    - 6.2.0
+    - 6.1.8
+    scanTime: "2023-02-07T19:18:01Z"
+    tagCount: 41
+```
+
+#### Enhanced ImagePolicy update status
+
+The `ImagePolicy` objects will now keep a record of the previous image in the
+status and include it in the update message in the events and notifications.
+
+Status:
+```yaml
+status:
+  ...
+  latestImage: ghcr.io/stefanprodan/podinfo:6.2.1
+  observedPreviousImage: ghcr.io/stefanprodan/podinfo:6.2.0
+```
+
+Event/notification message:
+
+```
+Latest image tag for 'ghcr.io/stefanprodan/podinfo' updated from 6.2.0 to 6.2.1
+```
+
+#### :warning: Breaking changes
+
+The autologin flags (`--aws-autologin-for-ecr`, `--gcp-autologin-for-gcr` and
+`--azure-autologin-for-acr`) have been deprecated to bring the Image API closer
+to the Source API, where cloud provider contextual login is configured at object
+level with `.spec.provider`. Usage of these flags will result in a logged error.
+Please update all the `ImageRepository` manifests that require contextual login
+with the new field `.spec.provider` and the appropriate cloud provider value;
+`aws`, `gcp`, or `azure`. Refer the
+[docs](https://fluxcd.io/flux/components/image/imagerepositories/#provider) for
+more details and examples.
+
+### Full changelog
+
+Improvements:
+* Refactor reconcilers and introduce v1beta2 API
+  [#311](https://github.com/fluxcd/image-reflector-controller/pull/311)
+* Update dependencies
+  [#341](https://github.com/fluxcd/image-reflector-controller/pull/341)
+
 ## 0.24.0
 
 **Release date:** 2023-02-01
