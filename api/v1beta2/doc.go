@@ -13,3 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+// Package v1beta2 contains API types for the image API group, version
+// v1beta2. These types are concerned with reflecting metadata from
+// OCI image repositories into a cluster, so they can be consulted for
+// e.g., automation.
+//
+// +kubebuilder:object:generate=true
+// +groupName=image.toolkit.fluxcd.io
+package v1beta2

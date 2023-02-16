@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,7 +30,6 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
-	crtlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
@@ -38,16 +38,15 @@ import (
 	feathelper "github.com/fluxcd/pkg/runtime/features"
 	"github.com/fluxcd/pkg/runtime/leaderelection"
 	"github.com/fluxcd/pkg/runtime/logger"
-	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	// +kubebuilder:scaffold:imports
+
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/controllers"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/features"
-	"github.com/fluxcd/pkg/oci/auth/login"
 )
 
 const controllerName = "image-reflector-controller"
@@ -92,6 +91,8 @@ func main() {
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
+
+	// NOTE: Deprecated flags.
 	flag.BoolVar(&awsAutoLogin, "aws-autologin-for-ecr", false, "(AWS) Attempt to get credentials for images in Elastic Container Registry, when no secret is referenced")
 	flag.BoolVar(&gcpAutoLogin, "gcp-autologin-for-gcr", false, "(GCP) Attempt to get credentials for images in Google Container Registry, when no secret is referenced")
 	flag.BoolVar(&azureAutoLogin, "azure-autologin-for-acr", false, "(Azure) Attempt to get credentials for images in Azure Container Registry, when no secret is referenced")
@@ -106,6 +107,12 @@ func main() {
 
 	log := logger.NewLogger(logOptions)
 	ctrl.SetLogger(log)
+
+	if awsAutoLogin || gcpAutoLogin || azureAutoLogin {
+		setupLog.Error(errors.New("use of deprecated flags"),
+			"autologin flags have been deprecated and have no effect. These flags will be removed in a future release."+
+				" Please update the respective ImageRepository objects with .spec.provider field.")
+	}
 
 	err := featureGates.WithLogger(setupLog).
 		SupportedFeatures(features.FeatureGates())
@@ -123,9 +130,6 @@ func main() {
 	}
 	defer badgerDB.Close()
 	db := database.NewBadgerDatabase(badgerDB)
-
-	metricsRecorder := metrics.NewRecorder()
-	crtlmetrics.Registry.MustRegister(metricsRecorder.Collectors()...)
 
 	watchNamespace := ""
 	if !watchAllNamespaces {
@@ -171,17 +175,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	metricsH := helper.MustMakeMetrics(mgr)
+
 	if err = (&controllers.ImageRepositoryReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		EventRecorder:   eventRecorder,
-		MetricsRecorder: metricsRecorder,
-		Database:        db,
-		ProviderOptions: login.ProviderOptions{
-			AwsAutoLogin:   awsAutoLogin,
-			GcpAutoLogin:   gcpAutoLogin,
-			AzureAutoLogin: azureAutoLogin,
-		},
+		Client:         mgr.GetClient(),
+		EventRecorder:  eventRecorder,
+		Metrics:        metricsH,
+		Database:       db,
+		ControllerName: controllerName,
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
@@ -190,12 +191,12 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.ImagePolicyReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		EventRecorder:   eventRecorder,
-		MetricsRecorder: metricsRecorder,
-		Database:        db,
-		ACLOptions:      aclOptions,
+		Client:         mgr.GetClient(),
+		EventRecorder:  eventRecorder,
+		Metrics:        metricsH,
+		Database:       db,
+		ACLOptions:     aclOptions,
+		ControllerName: controllerName,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),

@@ -1,5 +1,5 @@
 /*
-Copyright 2020, 2021 The Flux authors
+Copyright 2022 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package test
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -27,136 +26,11 @@ import (
 	"errors"
 	"math/big"
 	"net"
-	"net/http"
 	"net/http/httptest"
-	"testing"
 	"time"
 
-	. "github.com/onsi/gomega"
-
 	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
-	"github.com/fluxcd/image-reflector-controller/internal/test"
-	"github.com/fluxcd/pkg/apis/meta"
 )
-
-// Certificate code adapted from
-// https://ericchiang.github.io/post/go-tls/ (license
-// https://ericchiang.github.io/license/)
-
-func TestCertAuthentication_failsWithNoClientCert(t *testing.T) {
-	// This checks that _not_ using the client cert will fail;
-	// i.e., that the server is expecting a valid client
-	// certificate.
-
-	g := NewWithT(t)
-
-	srv, _, _, _, clientTLSCert, err := createTLSServer()
-	g.Expect(err).ToNot(HaveOccurred())
-
-	srv.StartTLS()
-	defer srv.Close()
-
-	tlsConfig := &tls.Config{}
-
-	// Use the server cert as a CA cert, so the client trusts the
-	// server cert. (Only works because the server uses the same
-	// cert in both roles).
-	pool := x509.NewCertPool()
-	pool.AddCert(srv.Certificate())
-	tlsConfig.RootCAs = pool
-	// BUT: don't supply a client certificate, so the server
-	// doesn't authenticate the client.
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-	client := &http.Client{
-		Transport: transport,
-	}
-	_, err = client.Get(srv.URL + "/v2/")
-	g.Expect(err).ToNot(Succeed())
-
-	// .. and this checks that using the test transport will work,
-	// for the same operation.
-	// Patch the client cert in as the client certificate.
-	transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-	_, err = client.Get(srv.URL + "/v2/")
-	g.Expect(err).To(Succeed())
-}
-
-func TestCertAuthentication_scanWithCertsFromSecret(t *testing.T) {
-	g := NewWithT(t)
-
-	srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err := createTLSServer()
-	g.Expect(err).ToNot(HaveOccurred())
-
-	srv.StartTLS()
-	defer srv.Close()
-
-	// Load an image to be scanned.
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-	}
-	// Use the server cert as a CA cert, so the client trusts the
-	// server cert. (Only works because the server uses the same
-	// cert in both roles).
-	pool := x509.NewCertPool()
-	pool.AddCert(srv.Certificate())
-	transport.TLSClientConfig.RootCAs = pool
-	transport.TLSClientConfig.Certificates = []tls.Certificate{clientTLSCert}
-	imgRepo, err := test.LoadImages(srv, "image-"+randStringRunes(5), []string{"1.0.0"}, remote.WithTransport(transport))
-	g.Expect(err).ToNot(HaveOccurred())
-
-	secretName := "tls-secret-" + randStringRunes(5)
-	tlsSecret := corev1.Secret{
-		StringData: map[string]string{
-			CACert:     string(rootCertPEM),
-			ClientCert: string(clientCertPEM),
-			ClientKey:  string(clientKeyPEM),
-		},
-	}
-	tlsSecret.Name = secretName
-	tlsSecret.Namespace = "default"
-
-	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
-	defer cancel()
-
-	g.Expect(testEnv.Create(ctx, &tlsSecret)).To(Succeed())
-
-	repoObj := imagev1.ImageRepository{
-		Spec: imagev1.ImageRepositorySpec{
-			Interval: metav1.Duration{Duration: time.Hour},
-			Image:    imgRepo,
-			CertSecretRef: &meta.LocalObjectReference{
-				Name: secretName,
-			},
-		},
-	}
-	imageRepoName := types.NamespacedName{
-		Name:      "scan-" + randStringRunes(5),
-		Namespace: "default",
-	}
-	repoObj.Name = imageRepoName.Name
-	repoObj.Namespace = imageRepoName.Namespace
-	g.Expect(testEnv.Create(ctx, &repoObj)).To(Succeed())
-
-	// Wait until the controller has done something with the object.
-	var newImgObj imagev1.ImageRepository
-	g.Eventually(func() bool {
-		err := testEnv.Get(ctx, imageRepoName, &newImgObj)
-		return err == nil && len(newImgObj.Status.Conditions) > 0
-	}, 10*time.Second, time.Second).Should(BeTrue())
-	cond := newImgObj.Status.Conditions[0]
-	g.Expect(cond.Type).To(Equal(meta.ReadyCondition))
-	g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-	// Double check that it found the tag.
-	g.Expect(newImgObj.Status.LastScanResult.TagCount).To(Equal(1))
-}
 
 // These two taken verbatim from https://ericchiang.github.io/post/go-tls/
 
@@ -200,11 +74,11 @@ func createCert(template, parent *x509.Certificate, pub interface{}, parentPriv 
 
 // ----
 
-func createTLSServer() (*httptest.Server, []byte, []byte, []byte, tls.Certificate, error) {
+func CreateTLSServer() (*httptest.Server, []byte, []byte, []byte, tls.Certificate, error) {
 	var clientTLSCert tls.Certificate
 	var rootCertPEM, clientCertPEM, clientKeyPEM []byte
 
-	reg := &test.TagListHandler{
+	reg := &TagListHandler{
 		RegistryHandler: registry.New(),
 		Imagetags:       map[string][]string{},
 	}

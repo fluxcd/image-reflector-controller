@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2022 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package secret
 
 import (
 	"encoding/json"
@@ -42,7 +42,7 @@ func TestExtractAuthn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	auth, err := authFromSecret(secret, dockerReg)
+	auth, err := AuthFromSecret(secret, dockerReg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestExtractAuthForURLs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		_, err = authFromSecret(secret, test.registry)
+		_, err = AuthFromSecret(secret, test.registry)
 		if err != nil {
 			t.Fatalf("error getting secret for %s: %s", "index.docker.io", err)
 		}

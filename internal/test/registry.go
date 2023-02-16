@@ -19,6 +19,8 @@ package test
 import (
 	"encoding/base64"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,7 +41,8 @@ var convenientTags = map[string][]string{
 
 // set up a local registry for testing scanning
 func NewRegistryServer() *httptest.Server {
-	regHandler := registry.New()
+	logOpt := registry.Logger(log.New(io.Discard, "", log.LstdFlags))
+	regHandler := registry.New(logOpt)
 	srv := httptest.NewServer(&TagListHandler{
 		RegistryHandler: regHandler,
 		Imagetags:       convenientTags,
@@ -48,7 +51,8 @@ func NewRegistryServer() *httptest.Server {
 }
 
 func NewAuthenticatedRegistryServer(username, pass string) *httptest.Server {
-	regHandler := registry.New()
+	logOpt := registry.Logger(log.New(io.Discard, "", log.LstdFlags))
+	regHandler := registry.New(logOpt)
 	regHandler = &TagListHandler{
 		RegistryHandler: regHandler,
 		Imagetags:       convenientTags,

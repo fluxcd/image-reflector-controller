@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Flux authors
+Copyright 2022 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta1
+package v1beta2
 
 import (
 	"time"
 
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/fluxcd/pkg/apis/acl"
@@ -88,13 +87,23 @@ type ImageRepositorySpec struct {
 
 	// ExclusionList is a list of regex strings used to exclude certain tags
 	// from being stored in the database.
+	// +kubebuilder:default:={"^.*\\.sig$"}
+	// +kubebuilder:validation:MaxItems:=25
 	// +optional
 	ExclusionList []string `json:"exclusionList,omitempty"`
+
+	// The provider used for authentication, can be 'aws', 'azure', 'gcp' or 'generic'.
+	// When not specified, defaults to 'generic'.
+	// +kubebuilder:validation:Enum=generic;aws;azure;gcp
+	// +kubebuilder:default:=generic
+	// +optional
+	Provider string `json:"provider,omitempty"`
 }
 
 type ScanResult struct {
-	TagCount int         `json:"tagCount"`
-	ScanTime metav1.Time `json:"scanTime,omitempty"`
+	TagCount   int         `json:"tagCount"`
+	ScanTime   metav1.Time `json:"scanTime,omitempty"`
+	LatestTags []string    `json:"latestTags,omitempty"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository
@@ -116,24 +125,12 @@ type ImageRepositoryStatus struct {
 	// +optional
 	LastScanResult *ScanResult `json:"lastScanResult,omitempty"`
 
+	// ObservedExclusionList is a list of observed exclusion list. It reflects
+	// the exclusion rules used for the observed scan result in
+	// spec.lastScanResult.
+	ObservedExclusionList []string `json:"observedExclusionList,omitempty"`
+
 	meta.ReconcileRequestStatus `json:",inline"`
-}
-
-// SetImageRepositoryReadiness sets the ready condition with the given status, reason and message.
-func SetImageRepositoryReadiness(ir *ImageRepository, status metav1.ConditionStatus, reason, message string) {
-	ir.Status.ObservedGeneration = ir.ObjectMeta.Generation
-	newCondition := metav1.Condition{
-		Type:    meta.ReadyCondition,
-		Status:  status,
-		Reason:  reason,
-		Message: message,
-	}
-	apimeta.SetStatusCondition(ir.GetStatusConditions(), newCondition)
-}
-
-// GetStatusConditions returns a pointer to the Status.Conditions slice
-func (in *ImageRepository) GetStatusConditions() *[]metav1.Condition {
-	return &in.Status.Conditions
 }
 
 // GetTimeout returns the timeout with default.
@@ -148,6 +145,41 @@ func (in ImageRepository) GetTimeout() time.Duration {
 	return duration
 }
 
+// GetExclusionList returns the exclusion list with default.
+func (in ImageRepository) GetExclusionList() []string {
+	el := []string{"^.*\\.sig$"}
+	if len(in.Spec.ExclusionList) > 0 {
+		el = in.Spec.ExclusionList
+	}
+	return el
+}
+
+// GetProvider returns the provider with default.
+func (in ImageRepository) GetProvider() string {
+	p := "generic"
+	if in.Spec.Provider != "" {
+		p = in.Spec.Provider
+	}
+	return p
+}
+
+// GetConditions returns the status conditions of the object.
+func (in ImageRepository) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
+}
+
+// SetConditions sets the status conditions on the object.
+func (in *ImageRepository) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
+}
+
+// GetRequeueAfter returns the duration after which the ImageRepository must be
+// reconciled again.
+func (in ImageRepository) GetRequeueAfter() time.Duration {
+	return in.Spec.Interval.Duration
+}
+
+// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Last scan",type=string,JSONPath=`.status.lastScanResult.scanTime`
@@ -163,7 +195,7 @@ type ImageRepository struct {
 	Status ImageRepositoryStatus `json:"status,omitempty"`
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // ImageRepositoryList contains a list of ImageRepository
 type ImageRepositoryList struct {

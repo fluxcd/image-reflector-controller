@@ -11,10 +11,11 @@ TEST_IMG ?= fluxcd/image-reflector-controller:dev
 $(INSTALL_MANIFEST_PATH):
 	mkdir -p build/flux
 	curl -Lo $(INSTALL_MANIFEST_PATH) $(FLUX_MANIFEST_URL)
+	cp ../../config/crd/bases/* build/flux/
 
 # Delete all the build files.
 distclean:
-	rm -r build/
+	rm -rf build/
 
 # Builds manifests and run the tests.
 test: $(INSTALL_MANIFEST_PATH)

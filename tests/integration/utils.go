@@ -35,8 +35,8 @@ func updateAndBuildFluxInstallManifests(ctx context.Context, images map[string]s
 	setImgArgs := []string{}
 	for name, img := range images {
 		// NOTE: There's an assumption here that the existing images in the
-		// manifest have fluxcd/ prefixed images.
-		imageName := path.Join("fluxcd", name)
+		// manifest have ghcr.io/fluxcd/ prefixed images.
+		imageName := path.Join("ghcr.io/fluxcd", name)
 		arg := fmt.Sprintf("%s=%s", imageName, img)
 		setImgArgs = append(setImgArgs, arg)
 	}

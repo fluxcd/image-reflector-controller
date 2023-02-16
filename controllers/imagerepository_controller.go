@@ -17,16 +17,11 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,12 +30,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
-	"k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -50,47 +45,55 @@ import (
 
 	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/runtime/events"
-	"github.com/fluxcd/pkg/runtime/metrics"
-	"github.com/fluxcd/pkg/runtime/predicates"
-
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
 	"github.com/fluxcd/pkg/oci"
 	"github.com/fluxcd/pkg/oci/auth/login"
+	"github.com/fluxcd/pkg/runtime/conditions"
+	helper "github.com/fluxcd/pkg/runtime/controller"
+	"github.com/fluxcd/pkg/runtime/events"
+	"github.com/fluxcd/pkg/runtime/patch"
+	"github.com/fluxcd/pkg/runtime/predicates"
+	"github.com/fluxcd/pkg/runtime/reconcile"
+
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
+	"github.com/fluxcd/image-reflector-controller/internal/secret"
 )
 
-// These are intended to match the keys used in e.g.,
-// https://github.com/fluxcd/flux2/blob/main/cmd/flux/create_secret_helm.go,
-// for consistency (and perhaps this will have its own flux create
-// secret subcommand at some point).
+// latestTagsCount is the number of tags to use as latest tags.
+const latestTagsCount = 10
+
+// imageRepositoryOwnedConditions is a list of conditions owned by the
+// ImageRepositoryReconciler.
+var imageRepositoryOwnedConditions = []string{
+	meta.ReadyCondition,
+	meta.ReconcilingCondition,
+	meta.StalledCondition,
+}
+
+// imageRepositoryNegativeConditions is a list of negative polarity conditions
+// owned by ImageRepositoryReconciler. It is used in tests for compliance with
+// kstatus.
+var imageRepositoryNegativeConditions = []string{
+	meta.StalledCondition,
+	meta.ReconcilingCondition,
+}
+
+// Reasons for scan.
 const (
-	ClientCert        = "certFile"
-	ClientKey         = "keyFile"
-	CACert            = "caFile"
-	CosignObjectRegex = "^.*\\.sig$"
+	scanReasonNeverScanned         = "first scan"
+	scanReasonReconcileRequested   = "reconcile requested"
+	scanReasonNewImageName         = "new image name"
+	scanReasonUpdatedExclusionList = "updated exclusion list"
+	scanReasonEmptyDatabase        = "no tags in database"
+	scanReasonInterval             = "triggered by interval"
 )
 
-// ImageRepositoryReconciler reconciles a ImageRepository object
-type ImageRepositoryReconciler struct {
-	client.Client
-	Scheme                *runtime.Scheme
-	EventRecorder         kuberecorder.EventRecorder
-	ExternalEventRecorder *events.Recorder
-	MetricsRecorder       *metrics.Recorder
-	Database              interface {
-		DatabaseWriter
-		DatabaseReader
+// getPatchOptions composes patch options based on the given parameters.
+// It is used as the options used when patching an object.
+func getPatchOptions(ownedConditions []string, controllerName string) []patch.Option {
+	return []patch.Option{
+		patch.WithOwnedConditions{Conditions: ownedConditions},
+		patch.WithFieldOwner(controllerName),
 	}
-	login.ProviderOptions
-}
-
-type ImageRepositoryReconcilerOptions struct {
-	MaxConcurrentReconciles int
-	RateLimiter             ratelimiter.RateLimiter
-}
-
-type dockerConfig struct {
-	Auths map[string]authn.AuthConfig
 }
 
 // +kubebuilder:rbac:groups=image.toolkit.fluxcd.io,resources=imagerepositories,verbs=get;list;watch;create;update;patch;delete
@@ -98,122 +101,468 @@ type dockerConfig struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch
-func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	reconcileStart := time.Now()
 
-	// NB: In general, if an error is returned then controller-runtime
-	// will requeue the request with back-off. In the following this
-	// is usually made explicit by _also_ returning
-	// `ctrl.Result{Requeue: true}`.
+// ImageRepositoryReconciler reconciles a ImageRepository object
+type ImageRepositoryReconciler struct {
+	client.Client
+	kuberecorder.EventRecorder
+	helper.Metrics
 
-	var imageRepo imagev1.ImageRepository
-	if err := r.Get(ctx, req.NamespacedName, &imageRepo); err != nil {
+	ControllerName        string
+	ExternalEventRecorder *events.Recorder
+	Database              interface {
+		DatabaseWriter
+		DatabaseReader
+	}
+
+	patchOptions []patch.Option
+}
+
+type ImageRepositoryReconcilerOptions struct {
+	MaxConcurrentReconciles int
+	RateLimiter             ratelimiter.RateLimiter
+}
+
+func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
+	r.patchOptions = getPatchOptions(imageRepositoryOwnedConditions, r.ControllerName)
+
+	recoverPanic := true
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&imagev1.ImageRepository{}).
+		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
+			RateLimiter:             opts.RateLimiter,
+			RecoverPanic:            &recoverPanic,
+		}).
+		Complete(r)
+}
+
+func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
+	start := time.Now()
+	log := ctrl.LoggerFrom(ctx)
+
+	// Fetch the ImageRepository.
+	obj := &imagev1.ImageRepository{}
+	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	defer r.recordSuspension(ctx, imageRepo)
+	// Record suspended status metric.
+	r.RecordSuspend(ctx, obj, obj.Spec.Suspend)
 
-	log := ctrl.LoggerFrom(ctx)
+	// Initialize the patch helper with the current version of the object.
+	serialPatcher := patch.NewSerialPatcher(obj, r.Client)
 
-	// Add our finalizer if it does not exist.
-	if !controllerutil.ContainsFinalizer(&imageRepo, imagev1.ImageRepositoryFinalizer) {
-		patch := client.MergeFrom(imageRepo.DeepCopy())
-		controllerutil.AddFinalizer(&imageRepo, imagev1.ImageRepositoryFinalizer)
-		if err := r.Patch(ctx, &imageRepo, patch); err != nil {
-			log.Error(err, "unable to register finalizer")
-			return ctrl.Result{}, err
+	// Always attempt to patch the object after each reconciliation.
+	defer func() {
+		// Create patch options for the final patch of the object.
+		patchOpts := reconcile.AddPatchOptions(obj, r.patchOptions, imageRepositoryOwnedConditions, r.ControllerName)
+		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
+			// Ignore patch error "not found" when the object is being deleted.
+			if !obj.GetDeletionTimestamp().IsZero() {
+				err = kerrors.FilterOut(err, func(e error) bool { return apierrors.IsNotFound(e) })
+			}
+			retErr = kerrors.NewAggregate([]error{retErr, err})
 		}
+
+		// Always record readiness and duration metrics.
+		r.Metrics.RecordReadiness(ctx, obj)
+		r.Metrics.RecordDuration(ctx, obj, start)
+	}()
+
+	// Add finalizer first if it doesn't exist to avoid the race condition
+	// between init and delete.
+	if !controllerutil.ContainsFinalizer(obj, imagev1.ImageRepositoryFinalizer) {
+		controllerutil.AddFinalizer(obj, imagev1.ImageRepositoryFinalizer)
+		return ctrl.Result{Requeue: true}, nil
 	}
 
-	// If the object is under deletion, record the readiness, and remove our finalizer.
-	if !imageRepo.ObjectMeta.DeletionTimestamp.IsZero() {
-		r.recordReadinessMetric(ctx, &imageRepo)
-		controllerutil.RemoveFinalizer(&imageRepo, imagev1.ImageRepositoryFinalizer)
-		if err := r.Update(ctx, &imageRepo); err != nil {
-			return ctrl.Result{}, err
-		}
+	// Examine if the object is under deletion.
+	if !obj.ObjectMeta.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, obj)
+	}
+
+	// Return if the object is suspended.
+	if obj.Spec.Suspend {
+		log.Info("reconciliation is suspended for this object")
 		return ctrl.Result{}, nil
 	}
 
-	if imageRepo.Spec.Suspend {
-		msg := "ImageRepository is suspended, skipping reconciliation"
-		imagev1.SetImageRepositoryReadiness(
-			&imageRepo,
-			metav1.ConditionFalse,
-			meta.SuspendedReason,
-			msg,
-		)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			log.Error(err, "unable to update status")
-			return ctrl.Result{Requeue: true}, err
-		}
-		log.Info(msg)
-		return ctrl.Result{}, nil
-	}
-
-	// Record readiness metric
-	defer r.recordReadinessMetric(ctx, &imageRepo)
-	// Record reconciliation duration
-	if r.MetricsRecorder != nil {
-		objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		defer r.MetricsRecorder.RecordDuration(*objRef, reconcileStart)
-	}
-
-	ref, err := parseImageReference(imageRepo.Spec.Image)
-	if err != nil {
-		imagev1.SetImageRepositoryReadiness(
-			&imageRepo,
-			metav1.ConditionFalse,
-			imagev1.ImageURLInvalidReason,
-			err.Error(),
-		)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		err := fmt.Errorf("Unable to parse image name: %s: %w", imageRepo.Spec.Image, err)
-		r.event(ctx, imageRepo, eventv1.EventSeverityError, err.Error())
-		return ctrl.Result{Requeue: true}, err
-	}
-
-	// Set CanonicalImageName based on the parsed reference
-	if c := ref.Context().String(); imageRepo.Status.CanonicalImageName != c {
-		imageRepo.Status.CanonicalImageName = c
-		if err = r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-	}
-
-	// Throttle scans based on spec Interval
-	ok, when, err := r.shouldScan(imageRepo, reconcileStart)
-	if err != nil {
-		return ctrl.Result{Requeue: true}, err
-	}
-	if ok {
-		reconcileErr := r.scan(ctx, &imageRepo, ref)
-		if err := r.patchStatus(ctx, req, imageRepo.Status); err != nil {
-			return ctrl.Result{Requeue: true}, err
-		}
-		if reconcileErr != nil {
-			r.event(ctx, imageRepo, eventv1.EventSeverityError, reconcileErr.Error())
-			return ctrl.Result{Requeue: true}, reconcileErr
-		}
-		// emit successful scan event
-		if rc := apimeta.FindStatusCondition(imageRepo.Status.Conditions, imagev1.ReconciliationSucceededReason); rc != nil {
-			r.event(ctx, imageRepo, eventv1.EventSeverityInfo, rc.Message)
-		}
-	}
-
-	log.Info(fmt.Sprintf("reconciliation finished in %s, next run in %s",
-		time.Now().Sub(reconcileStart).String(),
-		when.String(),
-	))
-
-	return ctrl.Result{RequeueAfter: when}, nil
+	// Call subreconciler.
+	result, retErr = r.reconcile(ctx, serialPatcher, obj, start)
+	return
 }
 
+func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher,
+	obj *imagev1.ImageRepository, startTime time.Time) (result ctrl.Result, retErr error) {
+	oldObj := obj.DeepCopy()
+
+	var foundTags int
+	// Store a message about current reconciliation and next scan.
+	var nextScanMsg string
+	// Set a default next scan time before processing the object.
+	nextScanTime := obj.GetRequeueAfter()
+
+	defer func() {
+		// Define the meaning of success based on the value of next scan time.
+		isSuccess := func(res ctrl.Result, err error) bool {
+			if err != nil || res.RequeueAfter != nextScanTime || res.Requeue {
+				return false
+			}
+			return true
+		}
+
+		readyMsg := fmt.Sprintf("successful scan: found %d tags", foundTags)
+		rs := reconcile.NewResultFinalizer(isSuccess, readyMsg)
+		retErr = rs.Finalize(obj, result, retErr)
+
+		// Presence of reconciling means that the reconciliation didn't succeed.
+		// Set the Reconciling reason to ProgressingWithRetry to indicate a
+		// failure retry.
+		if conditions.IsReconciling(obj) {
+			reconciling := conditions.Get(obj, meta.ReconcilingCondition)
+			reconciling.Reason = meta.ProgressingWithRetryReason
+			conditions.Set(obj, reconciling)
+		}
+
+		notify(ctx, r.EventRecorder, oldObj, obj, nextScanMsg)
+	}()
+
+	// Set reconciling condition.
+	reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")
+
+	var reconcileAtVal string
+	if v, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+		reconcileAtVal = v
+	}
+
+	// Persist reconciling if generation differs or reconciliation is requested.
+	switch {
+	case obj.Generation != obj.Status.ObservedGeneration:
+		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason,
+			"processing object: new generation %d -> %d", obj.Status.ObservedGeneration, obj.Generation)
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+			return
+		}
+	case reconcileAtVal != obj.Status.GetLastHandledReconcileRequest():
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+			return
+		}
+	}
+
+	// Parse image reference.
+	ref, err := parseImageReference(obj.Spec.Image)
+	if err != nil {
+		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, err.Error())
+		result, retErr = ctrl.Result{}, nil
+		return
+	}
+	conditions.Delete(obj, meta.StalledCondition)
+
+	opts, err := r.setAuthOptions(ctx, obj, ref)
+	if err != nil {
+		e := fmt.Errorf("failed to configure authentication options: %w", err)
+		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, e.Error())
+		result, retErr = ctrl.Result{}, e
+		return
+	}
+
+	// Check if it can be scanned now.
+	ok, when, reasonMsg, err := r.shouldScan(*obj, startTime)
+	if err != nil {
+		e := fmt.Errorf("failed to determine if it's scan time: %w", err)
+		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, e.Error())
+		result, retErr = ctrl.Result{}, e
+		return
+	}
+
+	// Scan the repository if it's scan time. No scan is a no-op reconciliation.
+	// The next scan time is not reset in case of no-op reconciliation.
+	if ok {
+		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
+		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
+			result, retErr = ctrl.Result{}, err
+		}
+
+		tags, err := r.scan(ctx, obj, ref, opts)
+		if err != nil {
+			e := fmt.Errorf("scan failed: %w", err)
+			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.ReadOperationFailedReason, e.Error())
+			result, retErr = ctrl.Result{}, e
+			return
+		}
+		foundTags = tags
+
+		nextScanMsg = fmt.Sprintf("next scan in %s", when.String())
+		// Check if new tags were found.
+		if oldObj.Status.LastScanResult != nil &&
+			oldObj.Status.LastScanResult.TagCount == foundTags {
+			nextScanMsg = "no new tags found, " + nextScanMsg
+		} else {
+			// When new tags are found, this message will be suppressed by
+			// another event based on the new Ready=true status value. This is
+			// set as a default message.
+			nextScanMsg = "successful scan, " + nextScanMsg
+		}
+	} else {
+		foundTags = obj.Status.LastScanResult.TagCount
+		nextScanMsg = fmt.Sprintf("no change in repository configuration since last scan, next scan in %s", when.String())
+	}
+
+	// Set the observations on the status.
+	obj.Status.CanonicalImageName = ref.Context().String()
+	obj.Status.ObservedExclusionList = obj.GetExclusionList()
+
+	// Remove any stale Ready condition, most likely False, set above. Its value
+	// is derived from the overall result of the reconciliation in the deferred
+	// block at the very end.
+	conditions.Delete(obj, meta.ReadyCondition)
+
+	// Set the next scan time in the result.
+	nextScanTime = when
+	result, retErr = ctrl.Result{RequeueAfter: when}, nil
+	return
+}
+
+// setAuthOptions returns authentication options required to scan a repository.
+func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference) ([]remote.Option, error) {
+	timeout := obj.GetTimeout()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Configure authentication strategy to access the registry.
+	var options []remote.Option
+	var authSecret corev1.Secret
+	var auth authn.Authenticator
+	var authErr error
+
+	if obj.Spec.SecretRef != nil {
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: obj.GetNamespace(),
+			Name:      obj.Spec.SecretRef.Name,
+		}, &authSecret); err != nil {
+			return nil, err
+		}
+		auth, authErr = secret.AuthFromSecret(authSecret, ref)
+	} else {
+		// Build login provider options and use it to attempt registry login.
+		opts := login.ProviderOptions{}
+		switch obj.GetProvider() {
+		case "aws":
+			opts.AwsAutoLogin = true
+		case "azure":
+			opts.AzureAutoLogin = true
+		case "gcp":
+			opts.GcpAutoLogin = true
+		}
+		auth, authErr = login.NewManager().Login(ctx, obj.Spec.Image, ref, opts)
+	}
+	if authErr != nil {
+		// If it's not unconfigured provider error, abort reconciliation.
+		// Continue reconciliation if it's unconfigured providers for scanning
+		// public repositories.
+		if !errors.Is(authErr, oci.ErrUnconfiguredProvider) {
+			return nil, authErr
+		}
+	}
+	if auth != nil {
+		options = append(options, remote.WithAuth(auth))
+	}
+
+	// Load any provided certificate.
+	if obj.Spec.CertSecretRef != nil {
+		var certSecret corev1.Secret
+		if obj.Spec.SecretRef != nil && obj.Spec.SecretRef.Name == obj.Spec.CertSecretRef.Name {
+			certSecret = authSecret
+		} else {
+			if err := r.Get(ctx, types.NamespacedName{
+				Namespace: obj.GetNamespace(),
+				Name:      obj.Spec.CertSecretRef.Name,
+			}, &certSecret); err != nil {
+				return nil, err
+			}
+		}
+
+		tr, err := secret.TransportFromSecret(&certSecret)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, remote.WithTransport(tr))
+	}
+
+	if obj.Spec.ServiceAccountName != "" {
+		serviceAccount := corev1.ServiceAccount{}
+		// Lookup service account
+		if err := r.Get(ctx, types.NamespacedName{
+			Namespace: obj.GetNamespace(),
+			Name:      obj.Spec.ServiceAccountName,
+		}, &serviceAccount); err != nil {
+			return nil, err
+		}
+
+		if len(serviceAccount.ImagePullSecrets) > 0 {
+			imagePullSecrets := make([]corev1.Secret, len(serviceAccount.ImagePullSecrets))
+			for i, ips := range serviceAccount.ImagePullSecrets {
+				var saAuthSecret corev1.Secret
+				if err := r.Get(ctx, types.NamespacedName{
+					Namespace: obj.GetNamespace(),
+					Name:      ips.Name,
+				}, &saAuthSecret); err != nil {
+					return nil, err
+				}
+				imagePullSecrets[i] = saAuthSecret
+			}
+			keychain, err := k8schain.NewFromPullSecrets(ctx, imagePullSecrets)
+			if err != nil {
+				return nil, err
+			}
+			options = append(options, remote.WithAuthFromKeychain(keychain))
+		}
+	}
+
+	return options, nil
+}
+
+// shouldScan takes an image repo and the time now, and returns whether
+// the repository should be scanned now, and how long to wait for the
+// next scan. It also returns the reason for the scan.
+// It returns immediate scan if
+//   - the repository is never scanned before
+//   - reconcile annotation is set on the object with a new value
+//   - the image URL has changed
+//   - the exclusion list has changed
+//   - there's no tag in the database
+//   - the difference between current time and last time is more than the scan
+//     interval
+//
+// Else it returns with next scan time.
+func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now time.Time) (bool, time.Duration, string, error) {
+	scanInterval := obj.Spec.Interval.Duration
+
+	// Never scanned; do it now.
+	lastScanResult := obj.Status.LastScanResult
+	if lastScanResult == nil {
+		return true, scanInterval, scanReasonNeverScanned, nil
+	}
+	lastScanTime := lastScanResult.ScanTime
+
+	// Is the controller seeing this because the reconcileAt
+	// annotation was tweaked? Despite the name of the annotation, all
+	// that matters is that it's different.
+	if syncAt, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+		if syncAt != obj.Status.GetLastHandledReconcileRequest() {
+			return true, scanInterval, scanReasonReconcileRequested, nil
+		}
+	}
+
+	// If the canonical image name of the image is different from the last
+	// observed name, scan now.
+	ref, err := parseImageReference(obj.Spec.Image)
+	if err != nil {
+		return false, scanInterval, "", err
+	}
+	if ref.Context().String() != obj.Status.CanonicalImageName {
+		return true, scanInterval, scanReasonNewImageName, nil
+	}
+
+	// If the exclusion list has changed, scan now.
+	if !isEqualSliceContent(obj.GetExclusionList(), obj.Status.ObservedExclusionList) {
+		return true, scanInterval, scanReasonUpdatedExclusionList, nil
+	}
+
+	// when recovering, it's possible that the resource has a last
+	// scan time, but there's no records because the database has been
+	// dropped and created again.
+
+	// FIXME If the repo exists, has been
+	// scanned, and doesn't have any tags, this will mean a scan every
+	// time the resource comes up for reconciliation.
+	tags, err := r.Database.Tags(obj.Status.CanonicalImageName)
+	if err != nil {
+		return false, scanInterval, "", err
+	}
+	if len(tags) == 0 {
+		return true, scanInterval, scanReasonEmptyDatabase, nil
+	}
+
+	when := scanInterval - now.Sub(lastScanTime.Time)
+	if when < time.Second {
+		return true, scanInterval, scanReasonInterval, nil
+	}
+	return false, when, "", nil
+}
+
+// scan performs repository scanning and writes the scanned result in the
+// internal database and populates the status of the ImageRepository.
+func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference, options []remote.Option) (int, error) {
+	timeout := obj.GetTimeout()
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	options = append(options, remote.WithContext(ctx))
+
+	tags, err := remote.List(ref.Context(), options...)
+	if err != nil {
+		return 0, err
+	}
+
+	filteredTags, err := filterOutTags(tags, obj.GetExclusionList())
+	if err != nil {
+		return 0, err
+	}
+
+	canonicalName := ref.Context().String()
+	if err := r.Database.SetTags(canonicalName, filteredTags); err != nil {
+		return 0, fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
+	}
+
+	scanTime := metav1.Now()
+	obj.Status.LastScanResult = &imagev1.ScanResult{
+		TagCount:   len(filteredTags),
+		ScanTime:   scanTime,
+		LatestTags: getLatestTags(filteredTags),
+	}
+
+	// If the reconcile request annotation was set, consider it
+	// handled (NB it doesn't matter here if it was changed since last
+	// time)
+	if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+		obj.Status.SetLastHandledReconcileRequest(token)
+	}
+
+	return len(filteredTags), nil
+}
+
+// reconcileDelete handles the deletion of the object.
+func (r *ImageRepositoryReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImageRepository) (ctrl.Result, error) {
+	// Remove our finalizer from the list.
+	controllerutil.RemoveFinalizer(obj, imagev1.ImageRepositoryFinalizer)
+
+	// Stop reconciliation as the object is being deleted.
+	return ctrl.Result{}, nil
+}
+
+// eventLogf records events, and logs at the same time.
+//
+// This log is different from the debug log in the EventRecorder, in the sense
+// that this is a simple log. While the debug log contains complete details
+// about the event.
+func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Object, eventType string, reason string, messageFmt string, args ...interface{}) {
+	msg := fmt.Sprintf(messageFmt, args...)
+	// Log and emit event.
+	if eventType == corev1.EventTypeWarning {
+		ctrl.LoggerFrom(ctx).Error(errors.New(reason), msg)
+	} else {
+		ctrl.LoggerFrom(ctx).Info(msg)
+	}
+	r.Eventf(obj, eventType, reason, msg)
+}
+
+// parseImageReference parses the given URL into a container registry repository
+// reference.
 func parseImageReference(url string) (name.Reference, error) {
 	if s := strings.Split(url, "://"); len(s) > 1 {
 		return nil, fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
@@ -232,404 +581,96 @@ func parseImageReference(url string) (name.Reference, error) {
 	return ref, nil
 }
 
-func (r *ImageRepositoryReconciler) scan(ctx context.Context, imageRepo *imagev1.ImageRepository, ref name.Reference) error {
-	timeout := imageRepo.GetTimeout()
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Configure authentication strategy to access the registry.
-	var options []remote.Option
-	var authSecret corev1.Secret
-	var auth authn.Authenticator
-	var authErr error
-	if imageRepo.Spec.SecretRef != nil {
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: imageRepo.GetNamespace(),
-			Name:      imageRepo.Spec.SecretRef.Name,
-		}, &authSecret); err != nil {
-			imagev1.SetImageRepositoryReadiness(
-				imageRepo,
-				metav1.ConditionFalse,
-				imagev1.ReconciliationFailedReason,
-				err.Error(),
-			)
-			return err
-		}
-		auth, authErr = authFromSecret(authSecret, ref)
-	} else {
-		// Use the registry provider options to attempt registry login.
-		auth, authErr = login.NewManager().Login(ctx, imageRepo.Spec.Image, ref, r.ProviderOptions)
-	}
-	if authErr != nil {
-		// If it's not unconfigured provider error, abort reconciliation.
-		// Continue reconciliation if it's unconfigured providers for scanning
-		// public repositories.
-		if !errors.Is(authErr, oci.ErrUnconfiguredProvider) {
-			imagev1.SetImageRepositoryReadiness(
-				imageRepo,
-				metav1.ConditionFalse,
-				imagev1.ReconciliationFailedReason,
-				authErr.Error(),
-			)
-			return authErr
-		}
-	}
-	if auth != nil {
-		options = append(options, remote.WithAuth(auth))
-	}
-
-	// Load any provided certificate.
-	if imageRepo.Spec.CertSecretRef != nil {
-		var certSecret corev1.Secret
-		if imageRepo.Spec.SecretRef != nil && imageRepo.Spec.SecretRef.Name == imageRepo.Spec.CertSecretRef.Name {
-			certSecret = authSecret
-		} else {
-			if err := r.Get(ctx, types.NamespacedName{
-				Namespace: imageRepo.GetNamespace(),
-				Name:      imageRepo.Spec.CertSecretRef.Name,
-			}, &certSecret); err != nil {
-				imagev1.SetImageRepositoryReadiness(
-					imageRepo,
-					metav1.ConditionFalse,
-					imagev1.ReconciliationFailedReason,
-					err.Error(),
-				)
-				return err
-			}
-		}
-
-		tr, err := transportFromSecret(&certSecret)
+// filterOutTags filters the given tags through the given regular expression
+// patterns and returns a list of tags that don't match with the pattern.
+func filterOutTags(tags []string, patterns []string) ([]string, error) {
+	// Compile all the regex first.
+	compiledRegexp := []*regexp.Regexp{}
+	for _, pattern := range patterns {
+		r, err := regexp.Compile(pattern)
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("failed to compile regex %s: %w", pattern, err)
 		}
-		options = append(options, remote.WithTransport(tr))
+		compiledRegexp = append(compiledRegexp, r)
 	}
 
-	if imageRepo.Spec.ServiceAccountName != "" {
-
-		serviceAccount := corev1.ServiceAccount{}
-		// lookup service account
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: imageRepo.GetNamespace(),
-			Name:      imageRepo.Spec.ServiceAccountName,
-		}, &serviceAccount); err != nil {
-			imagev1.SetImageRepositoryReadiness(
-				imageRepo,
-				metav1.ConditionFalse,
-				imagev1.ReconciliationFailedReason,
-				err.Error(),
-			)
-			return err
-		}
-
-		if len(serviceAccount.ImagePullSecrets) > 0 {
-			imagePullSecrets := make([]corev1.Secret, len(serviceAccount.ImagePullSecrets))
-
-			for i, ips := range serviceAccount.ImagePullSecrets {
-				var saAuthSecret corev1.Secret
-
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: imageRepo.GetNamespace(),
-					Name:      ips.Name,
-				}, &saAuthSecret); err != nil {
-					imagev1.SetImageRepositoryReadiness(
-						imageRepo,
-						metav1.ConditionFalse,
-						imagev1.ReconciliationFailedReason,
-						err.Error(),
-					)
-					return err
-				}
-
-				imagePullSecrets[i] = saAuthSecret
-			}
-
-			keychain, err := k8schain.NewFromPullSecrets(ctx, imagePullSecrets)
-			if err != nil {
-				return err
-			}
-
-			options = append(options, remote.WithAuthFromKeychain(keychain))
-		}
-	}
-
-	options = append(options, remote.WithContext(ctx))
-
-	tags, err := remote.List(ref.Context(), options...)
-	if err != nil {
-		imagev1.SetImageRepositoryReadiness(
-			imageRepo,
-			metav1.ConditionFalse,
-			imagev1.ReconciliationFailedReason,
-			err.Error(),
-		)
-		return err
-	}
-
-	// If no exclusion list has been defined, we make sure to always skip tags ending with
-	// ".sig", since that tag does not point to a valid image.
-	if len(imageRepo.Spec.ExclusionList) == 0 {
-		imageRepo.Spec.ExclusionList = append(imageRepo.Spec.ExclusionList, CosignObjectRegex)
-	}
-
+	// Pass the tags through the compiled regex and collect the filtered tags.
 	filteredTags := []string{}
-	for _, regex := range imageRepo.Spec.ExclusionList {
-		r, err := regexp.Compile(regex)
-		if err != nil {
-			return fmt.Errorf("failed to compile regex %s: %w", regex, err)
-		}
-		for _, tag := range tags {
-			if !r.MatchString(tag) {
-				filteredTags = append(filteredTags, tag)
+	for _, tag := range tags {
+		match := false
+		for _, regex := range compiledRegexp {
+			if regex.MatchString(tag) {
+				match = true
+				break
 			}
 		}
+		if !match {
+			filteredTags = append(filteredTags, tag)
+		}
 	}
-
-	canonicalName := ref.Context().String()
-	if err := r.Database.SetTags(canonicalName, filteredTags); err != nil {
-		return fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
-	}
-
-	scanTime := metav1.Now()
-	imageRepo.Status.LastScanResult = &imagev1.ScanResult{
-		TagCount: len(filteredTags),
-		ScanTime: scanTime,
-	}
-
-	// if the reconcile request annotation was set, consider it
-	// handled (NB it doesn't matter here if it was changed since last
-	// time)
-	if token, ok := meta.ReconcileAnnotationValue(imageRepo.GetAnnotations()); ok {
-		imageRepo.Status.SetLastHandledReconcileRequest(token)
-	}
-
-	imagev1.SetImageRepositoryReadiness(
-		imageRepo,
-		metav1.ConditionTrue,
-		imagev1.ReconciliationSucceededReason,
-		fmt.Sprintf("successful scan, found %v tags", len(filteredTags)),
-	)
-
-	return nil
+	return filteredTags, nil
 }
 
-func transportFromSecret(certSecret *corev1.Secret) (*http.Transport, error) {
-	// It's possible the secret doesn't contain any certs after
-	// all and the default transport could be used; but it's
-	// simpler here to assume a fresh transport is needed.
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-	}
-	tlsConfig := transport.TLSClientConfig
+// getLatestTags takes a slice of tags, sorts them in descending order of their
+// values and returns the 10 latest tags.
+func getLatestTags(tags []string) []string {
+	var result []string
+	sort.SliceStable(tags, func(i, j int) bool { return tags[i] > tags[j] })
 
-	if clientCert, ok := certSecret.Data[ClientCert]; ok {
-		// parse and set client cert and secret
-		if clientKey, ok := certSecret.Data[ClientKey]; ok {
-			cert, err := tls.X509KeyPair(clientCert, clientKey)
-			if err != nil {
-				return nil, err
+	if len(tags) >= latestTagsCount {
+		latestTags := tags[0:latestTagsCount]
+		result = append(result, latestTags...)
+	} else {
+		result = append(result, tags...)
+	}
+	return result
+}
+
+// isEqualSliceContent compares two string slices to check if they have the same
+// content.
+func isEqualSliceContent(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for _, x := range a {
+		found := false
+		for _, y := range b {
+			if x == y {
+				found = true
+				break
 			}
-			tlsConfig.Certificates = append(tlsConfig.Certificates, cert)
-		} else {
-			return nil, fmt.Errorf("client certificate found, but no key")
+		}
+		if !found {
+			return false
 		}
 	}
-	if caCert, ok := certSecret.Data[CACert]; ok {
-		syscerts, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, err
-		}
-		syscerts.AppendCertsFromPEM(caCert)
-		tlsConfig.RootCAs = syscerts
-	}
-
-	return transport, nil
+	return true
 }
 
-// shouldScan takes an image repo and the time now, and says whether
-// the repository should be scanned now, and how long to wait for the
-// next scan.
-func (r *ImageRepositoryReconciler) shouldScan(repo imagev1.ImageRepository, now time.Time) (bool, time.Duration, error) {
-	scanInterval := repo.Spec.Interval.Duration
+// notify emits events, logs and notification based on the resulting objects
+// before and after the reconciliation.
+func notify(ctx context.Context, r kuberecorder.EventRecorder, oldObj, newObj conditions.Setter, nextScanMsg string) {
+	ready := conditions.Get(newObj, meta.ReadyCondition)
 
-	// never scanned; do it now
-	lastScanResult := repo.Status.LastScanResult
-	if lastScanResult == nil {
-		return true, scanInterval, nil
-	}
-	lastScanTime := lastScanResult.ScanTime
-
-	// Is the controller seeing this because the reconcileAt
-	// annotation was tweaked? Despite the name of the annotation, all
-	// that matters is that it's different.
-	if syncAt, ok := meta.ReconcileAnnotationValue(repo.GetAnnotations()); ok {
-		if syncAt != repo.Status.GetLastHandledReconcileRequest() {
-			return true, scanInterval, nil
-		}
-	}
-
-	// when recovering, it's possible that the resource has a last
-	// scan time, but there's no records because the database has been
-	// dropped and created again.
-
-	// FIXME If the repo exists, has been
-	// scanned, and doesn't have any tags, this will mean a scan every
-	// time the resource comes up for reconciliation.
-	tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
-	if err != nil {
-		return false, scanInterval, err
-	}
-	if len(tags) == 0 {
-		return true, scanInterval, nil
-	}
-
-	when := scanInterval - now.Sub(lastScanTime.Time)
-	if when < time.Second {
-		return true, scanInterval, nil
-	}
-	return false, when, nil
-}
-
-func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
-	recoverPanic := true
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&imagev1.ImageRepository{}).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
-		WithOptions(controller.Options{
-			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
-			RateLimiter:             opts.RateLimiter,
-			RecoverPanic:            &recoverPanic,
-		}).
-		Complete(r)
-}
-
-// authFromSecret creates an Authenticator that can be given to the
-// `remote` funcs, from a Kubernetes secret. If the secret doesn't
-// have the right format or data, it returns an error.
-func authFromSecret(secret corev1.Secret, ref name.Reference) (authn.Authenticator, error) {
-	switch secret.Type {
-	case "kubernetes.io/dockerconfigjson":
-		var dockerconfig dockerConfig
-		configData := secret.Data[".dockerconfigjson"]
-		if err := json.NewDecoder(bytes.NewBuffer(configData)).Decode(&dockerconfig); err != nil {
-			return nil, err
-		}
-
-		authMap, err := parseAuthMap(dockerconfig)
-		if err != nil {
-			return nil, err
-		}
-		registry := ref.Context().RegistryStr()
-		auth, ok := authMap[registry]
-		if !ok {
-			return nil, fmt.Errorf("auth for %q not found in secret %v", registry, types.NamespacedName{Name: secret.GetName(), Namespace: secret.GetNamespace()})
-		}
-		return authn.FromConfig(auth), nil
-	default:
-		return nil, fmt.Errorf("unknown secret type %q", secret.Type)
-	}
-}
-
-// event emits a Kubernetes event and forwards the event to notification controller if configured
-func (r *ImageRepositoryReconciler) event(ctx context.Context, repo imagev1.ImageRepository, severity, msg string) {
-	eventtype := "Normal"
-	if severity == eventv1.EventSeverityError {
-		eventtype = "Warning"
-	}
-	r.EventRecorder.Eventf(&repo, eventtype, severity, msg)
-}
-
-func (r *ImageRepositoryReconciler) recordReadinessMetric(ctx context.Context, repo *imagev1.ImageRepository) {
-	if r.MetricsRecorder == nil {
+	// Was ready before and is ready now, but the scan results have changed.
+	if conditions.IsReady(oldObj) && conditions.IsReady(newObj) &&
+		(conditions.GetMessage(oldObj, meta.ReadyCondition)) != ready.Message {
+		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, ready.Message)
 		return
 	}
 
-	objRef, err := reference.GetReference(r.Scheme, repo)
-	if err != nil {
-		ctrl.LoggerFrom(ctx).Error(err, "unable to record readiness metric")
+	// Emit events when reconciliation fails or recovers from failure.
+
+	// Became ready from not ready.
+	if !conditions.IsReady(oldObj) && conditions.IsReady(newObj) {
+		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, ready.Message)
 		return
 	}
-	if rc := apimeta.FindStatusCondition(repo.Status.Conditions, meta.ReadyCondition); rc != nil {
-		r.MetricsRecorder.RecordCondition(*objRef, *rc, !repo.DeletionTimestamp.IsZero())
-	} else {
-		r.MetricsRecorder.RecordCondition(*objRef, metav1.Condition{
-			Type:   meta.ReadyCondition,
-			Status: metav1.ConditionUnknown,
-		}, !repo.DeletionTimestamp.IsZero())
-	}
-}
-
-func (r *ImageRepositoryReconciler) recordSuspension(ctx context.Context, imageRepo imagev1.ImageRepository) {
-	if r.MetricsRecorder == nil {
-		return
-	}
-	log := ctrl.LoggerFrom(ctx)
-
-	objRef, err := reference.GetReference(r.Scheme, &imageRepo)
-	if err != nil {
-		log.Error(err, "unable to record suspended metric")
+	// Not ready, failed.
+	if !conditions.IsReady(newObj) {
+		eventLogf(ctx, r, newObj, corev1.EventTypeWarning, ready.Reason, ready.Message)
 		return
 	}
 
-	if !imageRepo.DeletionTimestamp.IsZero() {
-		r.MetricsRecorder.RecordSuspend(*objRef, false)
-	} else {
-		r.MetricsRecorder.RecordSuspend(*objRef, imageRepo.Spec.Suspend)
-	}
-}
-
-func (r *ImageRepositoryReconciler) patchStatus(ctx context.Context, req ctrl.Request,
-	newStatus imagev1.ImageRepositoryStatus) error {
-	var res imagev1.ImageRepository
-	if err := r.Get(ctx, req.NamespacedName, &res); err != nil {
-		return err
-	}
-
-	patch := client.MergeFrom(res.DeepCopy())
-	res.Status = newStatus
-
-	return r.Status().Patch(ctx, &res, patch)
-}
-
-func parseAuthMap(config dockerConfig) (map[string]authn.AuthConfig, error) {
-	auth := map[string]authn.AuthConfig{}
-	for url, entry := range config.Auths {
-		host, err := getURLHost(url)
-		if err != nil {
-			return nil, err
-		}
-
-		auth[host] = entry
-	}
-
-	return auth, nil
-}
-
-func getURLHost(urlStr string) (string, error) {
-	if urlStr == "http://" || urlStr == "https://" {
-		return "", errors.New("Empty url")
-	}
-
-	// ensure url has https:// or http:// prefix
-	// url.Parse won't parse the ip:port format very well without the prefix.
-	if !strings.HasPrefix(urlStr, "http://") && !strings.HasPrefix(urlStr, "https://") {
-		urlStr = fmt.Sprintf("https://%s/", urlStr)
-	}
-
-	// Some users were passing in credentials in the form of
-	// http://docker.io and http://docker.io/v1/, etc.
-	// So strip everything down to the host.
-	// Also, the registry might be local and on a different port.
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return "", err
-	}
-
-	if u.Host == "" {
-		return "", errors.New(fmt.Sprintf(
-			"Invalid registry auth key: %s. Expected an HTTPS URL (e.g. 'https://index.docker.io/v2/' or 'https://index.docker.io'), or the same without the 'https://' (e.g., 'index.docker.io/v2/' or 'index.docker.io')",
-			urlStr))
-	}
-
-	return u.Host, nil
+	eventLogf(ctx, r, newObj, eventv1.EventTypeTrace, meta.SucceededReason, nextScanMsg)
 }

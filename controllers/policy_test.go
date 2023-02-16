@@ -20,22 +20,22 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fluxcd/pkg/apis/meta"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
+	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/acl"
+	"github.com/fluxcd/pkg/runtime/conditions"
+	conditionscheck "github.com/fluxcd/pkg/runtime/conditions/check"
+	"github.com/fluxcd/pkg/runtime/patch"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta1"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 	// +kubebuilder:scaffold:imports
@@ -110,26 +110,20 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 
 	r := &ImagePolicyReconciler{
 		Client:        builder.Build(),
-		Scheme:        scheme.Scheme,
 		Database:      database.NewBadgerDatabase(testBadgerDB),
 		EventRecorder: record.NewFakeRecorder(32),
 		ACLOptions: acl.Options{
 			NoCrossNamespaceRefs: true,
 		},
+		patchOptions: getPatchOptions(imagePolicyOwnedConditions, "irc"),
 	}
 
-	key := client.ObjectKeyFromObject(&imagePolicy)
-	res, err := r.Reconcile(context.TODO(), ctrl.Request{NamespacedName: key})
-	g.Expect(err).To(BeNil())
-	g.Expect(res.Requeue).ToNot(BeTrue())
+	sp := patch.NewSerialPatcher(&imagePolicy, r.Client)
 
-	var pol imagev1.ImagePolicy
-	g.Eventually(func() bool {
-		err := r.Get(ctx, imagePolicyName, &pol)
-		return err == nil && apimeta.IsStatusConditionFalse(pol.Status.Conditions, meta.ReadyCondition)
-	}, timeout, interval).Should(BeTrue())
-	ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
-	g.Expect(ready.Reason).To(Equal(aclapi.AccessDeniedReason))
+	res, err := r.reconcile(ctx, sp, &imagePolicy)
+	g.Expect(err).To(Not(BeNil()))
+	g.Expect(res.Requeue).ToNot(BeTrue())
+	g.Expect(conditions.GetReason(&imagePolicy, meta.ReadyCondition)).To(Equal(aclapi.AccessDeniedReason))
 }
 
 func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
@@ -236,6 +230,12 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
 				g.Expect(ready.Reason).To(ContainSubstring("InvalidPolicy"))
 			}
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &pol)
+
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
 	}
@@ -340,6 +340,12 @@ func TestImagePolicyReconciler_filterTags(t *testing.T) {
 				ready := apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition)
 				g.Expect(ready.Message).To(ContainSubstring("invalid regular expression pattern"))
 			}
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &pol)
+
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
 	}
@@ -509,6 +515,11 @@ func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
 				}, timeout, interval).Should(BeTrue())
 				g.Expect(apimeta.FindStatusCondition(pol.Status.Conditions, meta.ReadyCondition).Reason).To(Equal(aclapi.AccessDeniedReason))
 			}
+
+			// Check if the object status is valid.
+			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
+			checker := conditionscheck.NewChecker(testEnv.Client, condns)
+			checker.CheckErr(ctx, &pol)
 
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
