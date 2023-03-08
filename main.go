@@ -103,10 +103,10 @@ func main() {
 	aclOptions.BindFlags(flag.CommandLine)
 	rateLimiterOptions.BindFlags(flag.CommandLine)
 	featureGates.BindFlags(flag.CommandLine)
+
 	flag.Parse()
 
-	log := logger.NewLogger(logOptions)
-	ctrl.SetLogger(log)
+	logger.SetLogger(logger.NewLogger(logOptions))
 
 	if awsAutoLogin || gcpAutoLogin || azureAutoLogin {
 		setupLog.Error(errors.New("use of deprecated flags"),
