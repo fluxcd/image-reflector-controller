@@ -31,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -110,7 +111,7 @@ func main() {
 
 	if awsAutoLogin || gcpAutoLogin || azureAutoLogin {
 		setupLog.Error(errors.New("use of deprecated flags"),
-			"autologin flags have been deprecated and have no effect. These flags will be removed in a future release."+
+			"autologin flags have been deprecated. These flags will be removed in a future release."+
 				" Please update the respective ImageRepository objects with .spec.provider field.")
 	}
 
@@ -183,6 +184,11 @@ func main() {
 		Metrics:        metricsH,
 		Database:       db,
 		ControllerName: controllerName,
+		DeprecatedLoginOpts: login.ProviderOptions{
+			AwsAutoLogin:   awsAutoLogin,
+			AzureAutoLogin: azureAutoLogin,
+			GcpAutoLogin:   gcpAutoLogin,
+		},
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
 		MaxConcurrentReconciles: concurrent,
 		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
