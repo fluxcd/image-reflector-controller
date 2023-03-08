@@ -4,9 +4,9 @@ go 1.18
 
 require (
 	github.com/fluxcd/pkg/apis/acl v0.1.0
-	github.com/fluxcd/pkg/apis/meta v0.19.0
-	k8s.io/apimachinery v0.26.1
-	sigs.k8s.io/controller-runtime v0.14.4
+	github.com/fluxcd/pkg/apis/meta v0.19.1
+	k8s.io/apimachinery v0.26.2
+	sigs.k8s.io/controller-runtime v0.14.5
 )
 
 // Fix CVE-2022-28948
@@ -19,8 +19,8 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.80.1 // indirect
