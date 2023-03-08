@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.26.0
+
+**Release date:** 2023-03-08
+
+This prerelease re-instantiates the `--aws-autologin-for-ecr`,
+`--gcp-autologin-for-gcr` and `--azure-autologin-for-acr` flags which became
+deprecated in [`v0.25.0`](#0250), after receiving feedback of it complicating
+upgrading gradually. The flags will now be removed in the future, and at least
+one minor version after this release. We are sorry for any inconvenience this
+may have caused.
+
+In addition, `klog` is now configured to log using the same logger as the rest
+of the controller (providing a consistent log format).
+
+Lastly, the controller is now built with Go 1.20, and the dependencies have
+been updated to their latest versions.
+
+Improvements:
+- Update Go to 1.20
+  [#347](https://github.com/fluxcd/image-reflector-controller/pull/347)
+- Update dependencies
+  [#349](https://github.com/fluxcd/image-reflector-controller/pull/349)
+  [#351](https://github.com/fluxcd/image-reflector-controller/pull/351)
+- Use `logger.SetLogger` to also configure `klog`
+  [#350](https://github.com/fluxcd/image-reflector-controller/pull/350)
+- Fallback to autologin flags if no provider is specified
+  [#353](https://github.com/fluxcd/image-reflector-controller/pull/353)
+
+
 ## 0.25.0
 
 **Release date:** 2023-02-16
