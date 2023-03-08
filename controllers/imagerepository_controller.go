@@ -114,6 +114,7 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
+	DeprecatedLoginOpts login.ProviderOptions
 
 	patchOptions []patch.Option
 }
@@ -357,6 +358,8 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 			opts.AzureAutoLogin = true
 		case "gcp":
 			opts.GcpAutoLogin = true
+		default:
+			opts = r.DeprecatedLoginOpts
 		}
 		auth, authErr = login.NewManager().Login(ctx, obj.Spec.Image, ref, opts)
 	}
