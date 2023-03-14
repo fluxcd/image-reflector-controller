@@ -79,7 +79,7 @@ func TestImageRepositoryReconciler_canonicalImageName(t *testing.T) {
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -149,7 +149,7 @@ func TestImageRepositoryReconciler_fetchImageTags(t *testing.T) {
 			// Check if the object status is valid.
 			condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 			checker := conditionscheck.NewChecker(testEnv.Client, condns)
-			checker.CheckErr(ctx, &repo)
+			checker.WithT(g).CheckErr(ctx, &repo)
 
 			// Cleanup.
 			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -251,7 +251,7 @@ func TestImageRepositoryReconciler_reconcileAtAnnotation(t *testing.T) {
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -327,7 +327,7 @@ func TestImageRepositoryReconciler_authRegistry(t *testing.T) {
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -372,7 +372,7 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -417,7 +417,7 @@ func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -460,7 +460,7 @@ func TestImageRepositoryReconciler_imageAttribute_hostPort(t *testing.T) {
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 }
@@ -541,7 +541,7 @@ func TestImageRepositoryReconciler_authRegistryWithServiceAccount(t *testing.T) 
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 	checker := conditionscheck.NewChecker(testEnv.Client, condns)
-	checker.CheckErr(ctx, &repo)
+	checker.WithT(g).CheckErr(ctx, &repo)
 
 	// Cleanup.
 	g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
@@ -585,7 +585,7 @@ func TestImageRepositoryReconciler_ScanPublicRepos(t *testing.T) {
 			// Check if the object status is valid.
 			condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
 			checker := conditionscheck.NewChecker(testEnv.Client, condns)
-			checker.CheckErr(ctx, &repo)
+			checker.WithT(g).CheckErr(ctx, &repo)
 
 			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 		})
