@@ -552,7 +552,7 @@ func TestImageRepositoryReconciler_ScanPublicRepos(t *testing.T) {
 		name  string
 		image string
 	}{
-		{"gcr", "k8s.gcr.io/coredns/coredns"},
+		{"k8s", "registry.k8s.io/coredns/coredns"},
 		{"ghcr", "ghcr.io/stefanprodan/podinfo"},
 	}
 
