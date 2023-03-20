@@ -49,7 +49,6 @@ import (
 	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
-	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 	"github.com/fluxcd/pkg/runtime/reconcile"
@@ -108,9 +107,8 @@ type ImageRepositoryReconciler struct {
 	kuberecorder.EventRecorder
 	helper.Metrics
 
-	ControllerName        string
-	ExternalEventRecorder *events.Recorder
-	Database              interface {
+	ControllerName string
+	Database       interface {
 		DatabaseWriter
 		DatabaseReader
 	}
@@ -286,6 +284,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
 		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
 			result, retErr = ctrl.Result{}, err
+			return
 		}
 
 		tags, err := r.scan(ctx, obj, ref, opts)

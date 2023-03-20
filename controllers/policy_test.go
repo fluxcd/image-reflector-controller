@@ -234,7 +234,7 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 			// Check if the object status is valid.
 			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
 			checker := conditionscheck.NewChecker(testEnv.Client, condns)
-			checker.CheckErr(ctx, &pol)
+			checker.WithT(g).CheckErr(ctx, &pol)
 
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
@@ -344,7 +344,7 @@ func TestImagePolicyReconciler_filterTags(t *testing.T) {
 			// Check if the object status is valid.
 			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
 			checker := conditionscheck.NewChecker(testEnv.Client, condns)
-			checker.CheckErr(ctx, &pol)
+			checker.WithT(g).CheckErr(ctx, &pol)
 
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
@@ -519,7 +519,7 @@ func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
 			// Check if the object status is valid.
 			condns := &conditionscheck.Conditions{NegativePolarity: imagePolicyNegativeConditions}
 			checker := conditionscheck.NewChecker(testEnv.Client, condns)
-			checker.CheckErr(ctx, &pol)
+			checker.WithT(g).CheckErr(ctx, &pol)
 
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
 		})
