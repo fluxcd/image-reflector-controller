@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.26.1
+
+**Release date:** 2023-03-20
+
+This prerelease fixes a bug in the reconcilers due to which an error log due to
+some failure may contain previous successful reconciliation message.
+
+Fixes:
+- Fix error logs with stale success message
+  [#357](https://github.com/fluxcd/image-reflector-controller/pull/357)
+
+Improvements:
+- chore: migrate from k8s.gcr.io to registry.k8s.io
+  [#358](https://github.com/fluxcd/image-reflector-controller/pull/358)
+
 ## 0.26.0
 
 **Release date:** 2023-03-08
