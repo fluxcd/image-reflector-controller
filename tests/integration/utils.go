@@ -28,9 +28,9 @@ import (
 
 // updateAndBuildFluxInstallManifests assumes that ./build/flux/ already exists
 // with downloaded install.yaml and copied kustomization.yaml. It updates the
-// kustomization.yaml with new test images and builds a new install manifest
+// kustomization.yaml with new test images and patchkes. Then it builds a new install manifest
 // at ./build/flux.yaml.
-func updateAndBuildFluxInstallManifests(ctx context.Context, images map[string]string) error {
+func updateAndBuildFluxInstallManifests(ctx context.Context, images map[string]string, patches []string) error {
 	// Construct kustomize set image arguments.
 	setImgArgs := []string{}
 	for name, img := range images {
@@ -40,8 +40,8 @@ func updateAndBuildFluxInstallManifests(ctx context.Context, images map[string]s
 		arg := fmt.Sprintf("%s=%s", imageName, img)
 		setImgArgs = append(setImgArgs, arg)
 	}
-	log.Println("setting images:", setImgArgs)
 
+	log.Println("setting images:", setImgArgs)
 	// Update all the images in kustomization.
 	err := tftestenv.RunCommand(ctx, "./build/flux",
 		fmt.Sprintf("kustomize edit set image %s", strings.Join(setImgArgs, " ")),
@@ -49,6 +49,17 @@ func updateAndBuildFluxInstallManifests(ctx context.Context, images map[string]s
 	)
 	if err != nil {
 		return err
+	}
+
+	for _, patch := range patches {
+		// add patches to kustomization.
+		err := tftestenv.RunCommand(ctx, "./build/flux",
+			fmt.Sprintf("kustomize edit add patch --patch '%s'", patch),
+			tftestenv.RunCommandOptions{},
+		)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Build install manifest.

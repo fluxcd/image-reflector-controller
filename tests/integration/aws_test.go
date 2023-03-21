@@ -69,3 +69,9 @@ func pushFluxTestImagesECR(ctx context.Context, localImgs map[string]string, out
 	remoteImage := repo + ":test"
 	return tftestenv.PushTestAppImagesECR(ctx, localImgs, remoteImage)
 }
+
+// getKustomizePatchesAWS return the patches that should be added to the kustomization.yaml
+// before deploying Flux. It returns an empty array since no patches are needed
+func getKustomizePatchesAWS(output map[string]*tfjson.StateOutput) []string {
+	return nil
+}
