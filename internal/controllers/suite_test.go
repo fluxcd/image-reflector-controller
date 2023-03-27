@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 
 	utilruntime.Must(imagev1.AddToScheme(scheme.Scheme))
 
-	testEnv = testenv.New(testenv.WithCRDPath(filepath.Join("..", "config", "crd", "bases")))
+	testEnv = testenv.New(testenv.WithCRDPath(filepath.Join("..", "..", "config", "crd", "bases")))
 
 	var err error
 	var badgerDir string
