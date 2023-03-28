@@ -69,3 +69,9 @@ func pushFluxTestImagesGCR(ctx context.Context, localImgs map[string]string, out
 	repositoryID := output["gcp_artifact_repository"].Value.(string)
 	return tftestenv.PushTestAppImagesGCR(ctx, localImgs, project, region, repositoryID)
 }
+
+// getKustomizePatchesGCP return the patches that should be added to the kustomization.yaml
+// before deploying Flux. It returns an empty array since no patches are needed
+func getKustomizePatchesGCP(output map[string]*tfjson.StateOutput) []string {
+	return nil
+}

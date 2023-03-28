@@ -43,6 +43,11 @@ func registryLoginACR(ctx context.Context, output map[string]*tfjson.StateOutput
 	testRepos := map[string]string{}
 
 	registryURL := output["acr_registry_url"].Value.(string)
+	fluxRegistryURL := output["flux_acr_registry_url"].Value.(string)
+	if err := tftestenv.RegistryLoginACR(ctx, fluxRegistryURL); err != nil {
+		return nil, err
+	}
+
 	if err := tftestenv.RegistryLoginACR(ctx, registryURL); err != nil {
 		return nil, err
 	}
@@ -56,6 +61,40 @@ func registryLoginACR(ctx context.Context, output map[string]*tfjson.StateOutput
 // logged in and is capable of pushing the test images.
 func pushFluxTestImagesACR(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error) {
 	// Get the registry name and construct the image names accordingly.
-	registryURL := output["acr_registry_url"].Value.(string)
+	registryURL := output["flux_acr_registry_url"].Value.(string)
 	return tftestenv.PushTestAppImagesACR(ctx, localImgs, registryURL)
+}
+
+// getKustomizePatchesAzure return the patches that should be added to the kustomization.yaml
+// before deploying Flux. It returns two patches, one to annotate the image-reflector-controller
+// service account and the other for the image-reflector-controller deployment. These are needed
+// for workload identity to work properly on Azure
+func getKustomizePatchesAzure(output map[string]*tfjson.StateOutput) []string {
+	appClientId := output["spn_id"].Value.(string)
+	saAnnotation := `
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-reflector-controller
+  namespace: flux-system
+  annotations:
+    azure.workload.identity/client-id: "%s"
+  labels:
+    azure.workload.identity/use: "true"
+`
+	saPatch := fmt.Sprintf(saAnnotation, appClientId)
+	deployPatch := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-reflector-controller
+  namespace: flux-system
+  labels:
+    azure.workload.identity/use: "true"
+spec:
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+	`
+	return []string{deployPatch, saPatch}
 }

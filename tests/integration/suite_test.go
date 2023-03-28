@@ -98,6 +98,12 @@ type registryLoginFunc func(ctx context.Context, output map[string]*tfjson.State
 // pushed to a corresponding registry repository for the image.
 type pushTestImages func(ctx context.Context, localImgs map[string]string, output map[string]*tfjson.StateOutput) (map[string]string, error)
 
+// getKustomizePatches is used to return provider specific kustomize patches
+// that would be added to the kustomization.yaml before Flux is deployed. It takes
+// in a terraform state output as some value might be needed for
+// creating the patch,
+type getKustomizePatches func(output map[string]*tfjson.StateOutput) []string
+
 // ProviderConfig is the test configuration of a supported cloud provider to run
 // the tests against.
 type ProviderConfig struct {
@@ -110,6 +116,8 @@ type ProviderConfig struct {
 	createKubeconfig tftestenv.CreateKubeconfig
 	// pushFluxTestImages is used to push flux test images to a remote registry.
 	pushFluxTestImages pushTestImages
+	// getKustomizePatches is used to get provider specific kustomize patches
+	getKustomizePatches getKustomizePatches
 }
 
 func init() {
@@ -198,8 +206,10 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("Failed to create and push images: %v", err))
 	}
 
+	patches := providerCfg.getKustomizePatches(output)
+
 	// Update flux install manifests with the pushed test images.
-	if err := updateAndBuildFluxInstallManifests(ctx, pushedImages); err != nil {
+	if err := updateAndBuildFluxInstallManifests(ctx, pushedImages, patches); err != nil {
 		panic(fmt.Sprintf("Failed to update and build flux install manifests: %v", err))
 	}
 
@@ -224,24 +234,27 @@ func getProviderConfig(provider string) *ProviderConfig {
 	switch provider {
 	case "aws":
 		return &ProviderConfig{
-			terraformPath:      terraformPathAWS,
-			registryLogin:      registryLoginECR,
-			pushFluxTestImages: pushFluxTestImagesECR,
-			createKubeconfig:   createKubeconfigEKS,
+			terraformPath:       terraformPathAWS,
+			registryLogin:       registryLoginECR,
+			pushFluxTestImages:  pushFluxTestImagesECR,
+			createKubeconfig:    createKubeconfigEKS,
+			getKustomizePatches: getKustomizePatchesAWS,
 		}
 	case "azure":
 		return &ProviderConfig{
-			terraformPath:      terraformPathAzure,
-			registryLogin:      registryLoginACR,
-			pushFluxTestImages: pushFluxTestImagesACR,
-			createKubeconfig:   createKubeConfigAKS,
+			terraformPath:       terraformPathAzure,
+			registryLogin:       registryLoginACR,
+			pushFluxTestImages:  pushFluxTestImagesACR,
+			createKubeconfig:    createKubeConfigAKS,
+			getKustomizePatches: getKustomizePatchesAzure,
 		}
 	case "gcp":
 		return &ProviderConfig{
-			terraformPath:      terraformPathGCP,
-			registryLogin:      registryLoginGCR,
-			pushFluxTestImages: pushFluxTestImagesGCR,
-			createKubeconfig:   createKubeconfigGKE,
+			terraformPath:       terraformPathGCP,
+			registryLogin:       registryLoginGCR,
+			pushFluxTestImages:  pushFluxTestImagesGCR,
+			createKubeconfig:    createKubeconfigGKE,
+			getKustomizePatches: getKustomizePatchesGCP,
 		}
 	}
 	return nil
