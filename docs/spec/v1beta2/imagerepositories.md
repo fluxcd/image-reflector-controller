@@ -320,8 +320,14 @@ The `aws` provider can be used to authenticate automatically using the EKS
 worker node IAM role or IAM Role for Service Accounts (IRSA), and by extension
 gain access to ECR.
 
+##### Worker Node IAM
+
 When the worker node IAM role has access to ECR, image-reflector-controller
-running on it will also have access to ECR.
+running on it will also have access to ECR. Please take a look at this
+[documentation](https://docs.aws.amazon.com/eks/latest/userguide/create-node-role.html)
+for creating worker node IAM roles.
+
+##### IAM roles for service accounts(IRSA)
 
 When using IRSA to enable access to ECR, add the following patch to your
 bootstrap repository, in the `flux-system/kustomization.yaml` file:
@@ -346,16 +352,66 @@ patches:
 ```
 
 Note that you can attach the AWS managed policy `arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly`
-to the IAM role when using IRSA.
+to the IAM role when using IRSA and you have to configure the 
+`image-reflector-controller` to assume the IAM role. Please see 
+[documentation](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html).
 
 #### Azure
 
-The `azure` provider can be used to authenticate automatically using kubelet
-managed identity or Azure Active Directory pod-managed identity (aad-pod-identity),
-and by extension gain access to ACR.
+The `azure` provider can be used to authenticate automatically using Workload
+Identity, kubelet managed identity or Azure Active Directory pod-managed 
+identity (aad-pod-identity), and by extension gain access to ACR.
+
+##### Kubelet Identity
 
 When the kubelet managed identity has access to ACR, image-reflector-controller
 running on it will also have access to ACR.
+
+##### Workload Identity
+
+When using workload identity to enable access to ACR, add the following patch to
+properly annotate the image-reflector-controller pods and service account 
+in the `flux-system/kustomization.yaml` file:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - gotk-components.yaml
+  - gotk-sync.yaml
+patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: image-reflector-controller
+        namespace: flux-system
+        annotations:
+          azure.workload.identity/client-id: <AZURE_CLIENT_ID>
+        labels:
+          azure.workload.identity/use: "true"
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: image-reflector-controller
+        namespace: flux-system
+        labels:
+          azure.workload.identity/use: "true"
+      spec:
+        template:
+          metadata:
+            labels:
+              azure.workload.identity/use: "true"
+```
+
+To use workload identity on your cluster, you would have to install workload
+in your cluster, create an identity that has `AcrPull` role to ACR and establish 
+azure federated identity between the identity and the image-reflector-controller
+service account. Please, take a look at the
+[Azure documentation for Workload identity](https://azure.github.io/azure-workload-identity/docs/quick-start.html).
+
+##### AAD Pod Identity
 
 When using aad-pod-identity to enable access to ACR, add the following patch to
 your bootstrap repository, in the `flux-system/kustomization.yaml` file:
@@ -393,9 +449,13 @@ to use AKS pod-managed identities add-on that is in preview.
 The `gcp` provider can be used to authenticate automatically using OAuth scopes
 or Workload Identity, and by extension gain access to GCR or Artifact Registry.
 
+##### Access scopes
+
 When the GKE nodes have the appropriate OAuth scope for accessing GCR and
 Artifact Registry, image-reflector-controller running on it will also have
 access to them.
+
+##### Workload Identity
 
 When using Workload Identity to enable access to GCR or Artifact Registry, add
 the following patch to your bootstrap repository, in the
