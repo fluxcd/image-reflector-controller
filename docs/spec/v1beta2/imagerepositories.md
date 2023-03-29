@@ -320,8 +320,14 @@ The `aws` provider can be used to authenticate automatically using the EKS
 worker node IAM role or IAM Role for Service Accounts (IRSA), and by extension
 gain access to ECR.
 
+##### Worker Node IAM
+
 When the worker node IAM role has access to ECR, image-reflector-controller
-running on it will also have access to ECR.
+running on it will also have access to ECR. Please take a look at this
+[documentation](https://docs.aws.amazon.com/eks/latest/userguide/create-node-role.html)
+for creating worker node IAM roles.
+
+##### IAM roles for service accounts(IRSA)
 
 When using IRSA to enable access to ECR, add the following patch to your
 bootstrap repository, in the `flux-system/kustomization.yaml` file:
@@ -346,13 +352,17 @@ patches:
 ```
 
 Note that you can attach the AWS managed policy `arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly`
-to the IAM role when using IRSA.
+to the IAM role when using IRSA and you have to configure the 
+`image-reflector-controller` to assume the IAM role. Please see 
+[documentation](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html).
 
 #### Azure
 
 The `azure` provider can be used to authenticate automatically using Workload
 Identity, kubelet managed identity or Azure Active Directory pod-managed 
 identity (aad-pod-identity), and by extension gain access to ACR.
+
+##### Kubelet Identity
 
 When the kubelet managed identity has access to ACR, image-reflector-controller
 running on it will also have access to ACR.
@@ -439,9 +449,13 @@ to use AKS pod-managed identities add-on that is in preview.
 The `gcp` provider can be used to authenticate automatically using OAuth scopes
 or Workload Identity, and by extension gain access to GCR or Artifact Registry.
 
+##### Access scopes
+
 When the GKE nodes have the appropriate OAuth scope for accessing GCR and
 Artifact Registry, image-reflector-controller running on it will also have
 access to them.
+
+##### Workload Identity
 
 When using Workload Identity to enable access to GCR or Artifact Registry, add
 the following patch to your bootstrap repository, in the
