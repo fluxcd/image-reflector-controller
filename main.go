@@ -29,6 +29,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/oci/auth/login"
@@ -72,7 +73,7 @@ func main() {
 		clientOptions           client.Options
 		logOptions              logger.Options
 		leaderElectionOptions   leaderelection.Options
-		watchAllNamespaces      bool
+		watchOptions            helper.WatchOptions
 		storagePath             string
 		storageValueLogFileSize int64
 		concurrent              int
@@ -87,8 +88,6 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&eventsAddr, "events-addr", "", "The address of the events receiver.")
 	flag.StringVar(&healthAddr, "health-addr", ":9440", "The address the health endpoint binds to.")
-	flag.BoolVar(&watchAllNamespaces, "watch-all-namespaces", true,
-		"Watch for custom resources in all namespaces, if set to false it will only watch the runtime namespace.")
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
@@ -104,6 +103,7 @@ func main() {
 	aclOptions.BindFlags(flag.CommandLine)
 	rateLimiterOptions.BindFlags(flag.CommandLine)
 	featureGates.BindFlags(flag.CommandLine)
+	watchOptions.BindFlags(flag.CommandLine)
 
 	flag.Parse()
 
@@ -115,9 +115,7 @@ func main() {
 				" Please update the respective ImageRepository objects with .spec.provider field.")
 	}
 
-	err := featureGates.WithLogger(setupLog).
-		SupportedFeatures(features.FeatureGates())
-	if err != nil {
+	if err := featureGates.WithLogger(setupLog).SupportedFeatures(features.FeatureGates()); err != nil {
 		setupLog.Error(err, "unable to load feature gates")
 		os.Exit(1)
 	}
@@ -133,7 +131,7 @@ func main() {
 	db := database.NewBadgerDatabase(badgerDB)
 
 	watchNamespace := ""
-	if !watchAllNamespaces {
+	if !watchOptions.AllNamespaces {
 		watchNamespace = os.Getenv("RUNTIME_NAMESPACE")
 	}
 
@@ -148,6 +146,24 @@ func main() {
 	}
 
 	restConfig := client.GetConfigOrDie(clientOptions)
+
+	watchSelector, err := helper.GetWatchSelector(watchOptions)
+	if err != nil {
+		setupLog.Error(err, "unable to configure watch label selector for manager")
+		os.Exit(1)
+	}
+	selectingCacheFunc := cache.BuilderWithOptions(cache.Options{
+		SelectorsByObject: cache.SelectorsByObject{
+			&imagev1.ImageRepository{}: {Label: watchSelector},
+			&imagev1.ImagePolicy{}:     {Label: watchSelector},
+		},
+	})
+
+	leaderElectionID := fmt.Sprintf("%s-leader-election", controllerName)
+	if watchOptions.LabelSelector != "" {
+		leaderElectionID = leaderelection.GenerateID(leaderElectionID, watchOptions.LabelSelector)
+	}
+
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                        scheme,
 		MetricsBindAddress:            metricsAddr,
@@ -156,9 +172,11 @@ func main() {
 		LeaderElection:                leaderElectionOptions.Enable,
 		LeaderElectionReleaseOnCancel: leaderElectionOptions.ReleaseOnCancel,
 		LeaseDuration:                 &leaderElectionOptions.LeaseDuration,
+		Logger:                        ctrl.Log,
+		NewCache:                      selectingCacheFunc,
 		RenewDeadline:                 &leaderElectionOptions.RenewDeadline,
 		RetryPeriod:                   &leaderElectionOptions.RetryPeriod,
-		LeaderElectionID:              fmt.Sprintf("%s-leader-election", controllerName),
+		LeaderElectionID:              leaderElectionID,
 		Namespace:                     watchNamespace,
 		ClientDisableCacheFor:         disableCacheFor,
 	})
@@ -178,7 +196,7 @@ func main() {
 
 	metricsH := helper.MustMakeMetrics(mgr)
 
-	if err = (&controllers.ImageRepositoryReconciler{
+	if err := (&controllers.ImageRepositoryReconciler{
 		Client:         mgr.GetClient(),
 		EventRecorder:  eventRecorder,
 		Metrics:        metricsH,
@@ -196,7 +214,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
 	}
-	if err = (&controllers.ImagePolicyReconciler{
+	if err := (&controllers.ImagePolicyReconciler{
 		Client:         mgr.GetClient(),
 		EventRecorder:  eventRecorder,
 		Metrics:        metricsH,
