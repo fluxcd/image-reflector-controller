@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.27.0
+
+**Release date:** 2023-03-31
+
+This prerelease adds support for Azure Workload Identity when using
+`provider: azure` in `ImageRepository` objects.
+
+In addition, the controller now supports horizontal scaling
+using sharding based on a label selector.
+
+The new `--watch-label-selector` lets operators provide a label to the controller manager
+which in turn uses it to reconcile only those resources
+(`ImageRepositories` and `ImagePolicies`) that match the given label expression.
+
+This way operators can deploy multiple instances of IRC,
+each reconciling a distinct set of resources based on their labels
+and effectively scale the controller horizontally.
+
+If sharding is enabled, all `ImagePolicy` resources can only refer
+to those `ImageRepository` resources that are captured by the exact
+same label selector as the `ImagePolicies`.
+
+Improvements:
+- Add reconciler sharding capability based on label selector
+  [#365](https://github.com/fluxcd/image-reflector-controller/pull/365)
+- Enable Workload Identity for Azure
+  [#363](https://github.com/fluxcd/image-reflector-controller/pull/363)
+- Move `controllers` to `internal/controllers`
+  [#362](https://github.com/fluxcd/image-reflector-controller/pull/362)
+
 ## 0.26.1
 
 **Release date:** 2023-03-20
