@@ -32,7 +32,7 @@ func TestRegistryHandler(t *testing.T) {
 	defer srv.Close()
 
 	uploadedTags := []string{"tag1", "tag2"}
-	repoString, err := LoadImages(srv, "testimage", uploadedTags)
+	repoString, _, err := LoadImages(srv, "testimage", uploadedTags)
 	g.Expect(err).ToNot(HaveOccurred())
 	repo, _ := name.NewRepository(repoString)
 

@@ -21,6 +21,7 @@ metadata:
 spec:
   imageRepositoryRef:
     name: podinfo
+  digestReflectionPolicy: IfNotPresent
   policy:
     semver:
       range: 5.1.x
@@ -37,8 +38,8 @@ In the above example:
   the scanned tags from the internal database for the image name. The read tags
   are then used to select the latest tag based on the policy defined in
   `.spec.policy`.
-- The latest image is constructed with the ImageRepository image and the
-  selected tag, and reported in the `.status.latestImage`.
+- The latest image's name is derived from the ImageRepository image and reported
+  together with the selected tag and digest in the `.status.latestRef` object.
 
 This example can be run by saving the manifest into `imagepolicy.yaml`.
 
@@ -68,6 +69,10 @@ Status:
     Status:                True
     Type:                  Ready
   Latest Image:            ghcr.io/stefanprodan/podinfo:5.1.4
+  Latest Ref:
+    Digest:                 sha256:2d9a00b3981628a533ff43352193b1838b0a4bf6b0033444286f563205e51a2c
+    Image:                  ghcr.io/stefanprodan/podinfo
+    Tag:                    5.1.4
   Observed Generation:     1
 Events:
   Type    Reason     Age              From                        Message
@@ -250,6 +255,26 @@ spec:
 In the above example, the timestamp value from the tag pattern is extracted and
 used in the policy rule to determine the latest tag.
 
+### Digest Reflection
+
+`.spec.digestReflectionPolicy` is a field that governs the reflection of the selected image's
+digest in the ImagePolicy's `.status.latestRef.digest` field. The field has three possible values:
+
+- `Never`: If the field is set to `Never` (the default) the digest will not be reflected at all.
+- `Always`: This value leads to the digest of the latest tag to always be reflected in
+  `.status.latestRef.digest`. An existing, potentially different digest will be overwritten with the
+  most recent value retrieved from the image registry even if the tag didn't change. This may be useful
+  to track mutable tags like `latest`.
+- `IfNotPresent`: This value will only store the digest of the latest tag once and never overwrite an
+  existing value unless the tag has changed as well. This is the safest option to track immutable tags.
+
+### Interval
+
+`.spec.interval` specifies the interval at which the ImagePolicy must refresh the digest of the latest
+tag. The value must be in a [Go recognized duration string format](https://pkg.go.dev/time#ParseDuration),
+e.g. `10m0s` to reconcile the object every 10 minutes. This field must and can only be specified when
+`.spec.digestReflectionPolicy` is set to `Always`.
+
 ## Working with ImagePolicy
 
 ### Triggering a reconcile
@@ -333,6 +358,9 @@ specific ImagePolicy, e.g.
 
 ### Latest Image
 
+**Warning:** This field is deprecated in favor of `.status.latestRef.image` and will be
+removed in a future release.
+
 The ImagePolicy reports the latest select image from the ImageRepository tags in
 `.status.latestImage` for the resource.
 
@@ -350,6 +378,9 @@ status:
 
 ### Observed Previous Image
 
+**Warning:** This field is deprecated in favor of `.status.observedPreviousRef.image`
+and will be removed in a future release.
+
 The ImagePolicy reports the previously observed latest image in
 `.status.observedPreviousImage` for the resource. This is used by the
 ImagePolicy to determine an upgrade path of an ImagePolicy update. This field
@@ -366,6 +397,53 @@ metadata:
 status:
   latestImage: ghcr.io/stefanprodan/podinfo:6.2.1
   observedPreviousImage: ghcr.io/stefanprodan/podinfo:5.1.4
+```
+
+### Latest Ref
+
+The ImagePolicy reports the latest selected image from the ImageRepository tags in
+`.status.latestRef` for the resource. The field `.status.latestRef.digest` is dependent
+on the [chosen digest reflection policy](#digest-reflection) and is only set for the
+`Always` or `IfNotPresent` policies.
+
+Example:
+
+```yaml
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: <policy-name>
+status:
+  latestRef:
+    image: ghcr.io/stefanprodan/podinfo
+    tag: 5.1.4
+    digest: sha256:2d9a00b3981628a533ff43352193b1838b0a4bf6b0033444286f563205e51a2c
+[...]
+```
+
+### Observed Previous Ref
+
+The ImagePolicy reports the previously observed latest image in
+`.status.observedPreviousRef` for the resource. This is used by the
+ImagePolicy to determine an upgrade path of an ImagePolicy update. This field
+is reset when the ImagePolicy fails due to some reason to be able to distinguish
+between a failure recovery and a genuine latest image upgrade.
+
+Example:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: <policy-name>
+status:
+  latestRef:
+    image: ghcr.io/stefanprodan/podinfo
+    tag: 6.2.1
+  observedPreviousRef:
+    image: ghcr.io/stefanprodan/podinfo
+    tag: 5.1.4
 ```
 
 ### Conditions

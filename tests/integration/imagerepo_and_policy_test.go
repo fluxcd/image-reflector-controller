@@ -25,18 +25,20 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/fluxcd/pkg/apis/meta"
+
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 )
 
-func TestImageRepositoryScan(t *testing.T) {
+func TestImageRepositoryScanAndPolicyDigest(t *testing.T) {
 	for name, repo := range testRepos {
 		t.Run(name, func(t *testing.T) {
-			testImageRepositoryScan(t, repo)
+			testImageRepositoryScanAndPolicyDigest(t, repo)
 		})
 	}
 }
 
-func testImageRepositoryScan(t *testing.T, repoURL string) {
+func testImageRepositoryScanAndPolicyDigest(t *testing.T, repoURL string) {
 	g := NewWithT(t)
 	ctx := context.TODO()
 
@@ -66,4 +68,35 @@ func testImageRepositoryScan(t *testing.T, repoURL string) {
 	}, resultWaitTimeout).Should(BeTrue())
 	g.Expect(repo.Status.CanonicalImageName).To(Equal(repoURL))
 	g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(4))
+
+	policy := &imagev1.ImagePolicy{
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{
+				Name: repo.Name,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+			DigestReflectionPolicy: imagev1.ReflectIfNotPresent,
+		},
+	}
+	policyObjectKey := types.NamespacedName{
+		Name:      "test-policy-" + randStringRunes(5),
+		Namespace: "default",
+	}
+	policy.Name = policyObjectKey.Name
+	policy.Namespace = policyObjectKey.Namespace
+
+	g.Expect(testEnv.Client.Create(ctx, policy)).To(Succeed())
+	defer func() {
+		g.Expect(testEnv.Client.Delete(ctx, policy)).To(Succeed())
+	}()
+	g.Eventually(func() bool {
+		if err := testEnv.Client.Get(ctx, policyObjectKey, policy); err != nil {
+			return false
+		}
+		return policy.Status.LatestRef != nil && policy.Status.LatestRef.Digest != ""
+	}, resultWaitTimeout).Should(BeTrue())
+	g.Expect(policy.Status.LatestRef.Digest).To(HavePrefix("sha256:"))
+	g.Expect(policy.Status.LatestRef.Digest).To(HaveLen(71))
 }
