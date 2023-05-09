@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.1
+
+**Release date:** 2023-05-09
+
+This prerelease comes with updates to the OCI related packages.
+
+Improvements:
+* Update dependencies
+  [#372](https://github.com/fluxcd/image-reflector-controller/pull/372)
+
 ## 0.27.0
 
 **Release date:** 2023-03-31
