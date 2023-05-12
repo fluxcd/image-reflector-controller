@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.27.2
+
+**Release date:** 2023-05-12
+
+This prerelease comes with updates to the controller dependencies
+to patch CVE-2023-2253.
+
+In addition, the controller base image has been updated to Alpine 3.18.
+
+Improvements:
+- Update Alpine to 3.18
+  [#374](https://github.com/fluxcd/image-reflector-controller/pull/374)
+- Bump github.com/docker/distribution from 2.8.1+incompatible to 2.8.2+incompatible
+  [#376](https://github.com/fluxcd/image-reflector-controller/pull/376)
+
 ## 0.27.1
 
 **Release date:** 2023-05-09
