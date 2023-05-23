@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
@@ -115,8 +114,7 @@ type ImagePolicyReconciler struct {
 }
 
 type ImagePolicyReconcilerOptions struct {
-	MaxConcurrentReconciles int
-	RateLimiter             ratelimiter.RateLimiter
+	RateLimiter ratelimiter.RateLimiter
 }
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
@@ -140,17 +138,14 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 		return err
 	}
 
-	recoverPanic := true
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImagePolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(
-			&source.Kind{Type: &imagev1.ImageRepository{}},
+			&imagev1.ImageRepository{},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
 		).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
-			RateLimiter:             opts.RateLimiter,
-			RecoverPanic:            &recoverPanic,
+			RateLimiter: opts.RateLimiter,
 		}).
 		Complete(r)
 }
@@ -430,10 +425,11 @@ func (r *ImagePolicyReconciler) reconcileDelete(ctx context.Context, obj *imagev
 	return ctrl.Result{}, nil
 }
 
-func (r *ImagePolicyReconciler) imagePoliciesForRepository(obj client.Object) []reconcile.Request {
-	ctx := context.Background()
+func (r *ImagePolicyReconciler) imagePoliciesForRepository(ctx context.Context, obj client.Object) []reconcile.Request {
+	log := ctrl.LoggerFrom(ctx)
 	var policies imagev1.ImagePolicyList
 	if err := r.List(ctx, &policies, client.MatchingFields{imageRepoKey: client.ObjectKeyFromObject(obj).String()}); err != nil {
+		log.Error(err, "failed to list ImagePolcies while getting reconcile requests for the same")
 		return nil
 	}
 	reqs := make([]reconcile.Request, len(policies.Items))
