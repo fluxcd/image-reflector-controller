@@ -118,21 +118,17 @@ type ImageRepositoryReconciler struct {
 }
 
 type ImageRepositoryReconcilerOptions struct {
-	MaxConcurrentReconciles int
-	RateLimiter             ratelimiter.RateLimiter
+	RateLimiter ratelimiter.RateLimiter
 }
 
 func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts ImageRepositoryReconcilerOptions) error {
 	r.patchOptions = getPatchOptions(imageRepositoryOwnedConditions, r.ControllerName)
 
-	recoverPanic := true
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&imagev1.ImageRepository{}).
 		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: opts.MaxConcurrentReconciles,
-			RateLimiter:             opts.RateLimiter,
-			RecoverPanic:            &recoverPanic,
+			RateLimiter: opts.RateLimiter,
 		}).
 		Complete(r)
 }

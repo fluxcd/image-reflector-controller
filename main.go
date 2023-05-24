@@ -28,9 +28,11 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
+	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 
 	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/acl"
@@ -152,12 +154,6 @@ func main() {
 		setupLog.Error(err, "unable to configure watch label selector for manager")
 		os.Exit(1)
 	}
-	selectingCacheFunc := cache.BuilderWithOptions(cache.Options{
-		SelectorsByObject: cache.SelectorsByObject{
-			&imagev1.ImageRepository{}: {Label: watchSelector},
-			&imagev1.ImagePolicy{}:     {Label: watchSelector},
-		},
-	})
 
 	leaderElectionID := fmt.Sprintf("%s-leader-election", controllerName)
 	if watchOptions.LabelSelector != "" {
@@ -168,17 +164,29 @@ func main() {
 		Scheme:                        scheme,
 		MetricsBindAddress:            metricsAddr,
 		HealthProbeBindAddress:        healthAddr,
-		Port:                          9443,
 		LeaderElection:                leaderElectionOptions.Enable,
 		LeaderElectionReleaseOnCancel: leaderElectionOptions.ReleaseOnCancel,
 		LeaseDuration:                 &leaderElectionOptions.LeaseDuration,
 		Logger:                        ctrl.Log,
-		NewCache:                      selectingCacheFunc,
 		RenewDeadline:                 &leaderElectionOptions.RenewDeadline,
 		RetryPeriod:                   &leaderElectionOptions.RetryPeriod,
 		LeaderElectionID:              leaderElectionID,
-		Namespace:                     watchNamespace,
-		ClientDisableCacheFor:         disableCacheFor,
+		Controller: config.Controller{
+			RecoverPanic:            pointer.Bool(true),
+			MaxConcurrentReconciles: concurrent,
+		},
+		Client: ctrlclient.Options{
+			Cache: &ctrlclient.CacheOptions{
+				DisableFor: disableCacheFor,
+			},
+		},
+		Cache: ctrlcache.Options{
+			ByObject: map[ctrlclient.Object]ctrlcache.ByObject{
+				&imagev1.ImageRepository{}: {Label: watchSelector},
+				&imagev1.ImagePolicy{}:     {Label: watchSelector},
+			},
+			Namespaces: []string{watchNamespace},
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -208,8 +216,7 @@ func main() {
 			GcpAutoLogin:   gcpAutoLogin,
 		},
 	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
-		MaxConcurrentReconciles: concurrent,
-		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
+		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
@@ -222,8 +229,7 @@ func main() {
 		ACLOptions:     aclOptions,
 		ControllerName: controllerName,
 	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
-		MaxConcurrentReconciles: concurrent,
-		RateLimiter:             helper.GetRateLimiter(rateLimiterOptions),
+		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImagePolicyKind)
 		os.Exit(1)
