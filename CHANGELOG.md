@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.28.0
+
+**Release date:** 2023-05-26
+
+This prerelease comes with support for Kubernetes v1.27 and updates to the
+controller's dependencies.
+
+Improvements:
+
+- Update dependencies and Kubernetes to 1.27.2
+  [#378](https://github.com/fluxcd/image-reflector-controller/pull/378)
+- Remove the tini supervisor
+  [#379](https://github.com/fluxcd/image-reflector-controller/pull/379)
+- Update workflows and enable dependabot
+  [#380](https://github.com/fluxcd/image-reflector-controller/pull/380)
+- Bump github/codeql-action from 2.3.3 to 2.3.4
+  [#381](https://github.com/fluxcd/image-reflector-controller/pull/381)
+
 ## 0.27.2
 
 **Release date:** 2023-05-12
