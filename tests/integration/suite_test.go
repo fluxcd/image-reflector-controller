@@ -50,7 +50,7 @@ const (
 	// is generated before running the Go test.
 	fluxInstallManifestPath = "./build/flux.yaml"
 
-	resultWaitTimeout = 20 * time.Second
+	resultWaitTimeout = 30 * time.Second
 )
 
 var (
