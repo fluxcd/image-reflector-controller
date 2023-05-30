@@ -257,6 +257,24 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 			wantResult: "1.0.1",
 		},
 		{
+			name:       "semver with 'v' prefix, no tag filter",
+			policy:     imagev1.ImagePolicyChoice{SemVer: &imagev1.SemVerPolicy{Range: "v1.0.x"}},
+			db:         &mockDatabase{TagData: []string{"v1.0.0", "v2.0.0", "v1.0.1", "v1.2.0"}},
+			wantResult: "v1.0.1",
+		},
+		{
+			name:       "semver with 'v' prefix but data without 'v' prefix, no tag filter",
+			policy:     imagev1.ImagePolicyChoice{SemVer: &imagev1.SemVerPolicy{Range: "v1.0.x"}},
+			db:         &mockDatabase{TagData: []string{"1.0.0", "2.0.0", "1.0.1", "1.2.0"}},
+			wantResult: "1.0.1",
+		},
+		{
+			name:       "semver without 'v' prefix but data with 'v' prefix, no tag filter",
+			policy:     imagev1.ImagePolicyChoice{SemVer: &imagev1.SemVerPolicy{Range: "1.0.x"}},
+			db:         &mockDatabase{TagData: []string{"v1.0.0", "v2.0.0", "v1.0.1", "v1.2.0"}},
+			wantResult: "v1.0.1",
+		},
+		{
 			name:    "invalid tag filter",
 			policy:  imagev1.ImagePolicyChoice{SemVer: &imagev1.SemVerPolicy{Range: "1.0.x"}},
 			filter:  &imagev1.TagFilter{Pattern: "[="},
