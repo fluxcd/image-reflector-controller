@@ -28,4 +28,4 @@ build/
 data
 
 # CRDs for fuzzing tests.
-internal/controllers/testdata/crd
+internal/controller/testdata/crd
