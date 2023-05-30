@@ -204,7 +204,7 @@ func main() {
 
 	metricsH := helper.MustMakeMetrics(mgr)
 
-	if err := (&controllers.ImageRepositoryReconciler{
+	if err := (&controller.ImageRepositoryReconciler{
 		Client:         mgr.GetClient(),
 		EventRecorder:  eventRecorder,
 		Metrics:        metricsH,
@@ -215,20 +215,20 @@ func main() {
 			AzureAutoLogin: azureAutoLogin,
 			GcpAutoLogin:   gcpAutoLogin,
 		},
-	}).SetupWithManager(mgr, controllers.ImageRepositoryReconcilerOptions{
+	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImageRepositoryKind)
 		os.Exit(1)
 	}
-	if err := (&controllers.ImagePolicyReconciler{
+	if err := (&controller.ImagePolicyReconciler{
 		Client:         mgr.GetClient(),
 		EventRecorder:  eventRecorder,
 		Metrics:        metricsH,
 		Database:       db,
 		ACLOptions:     aclOptions,
 		ControllerName: controllerName,
-	}).SetupWithManager(mgr, controllers.ImagePolicyReconcilerOptions{
+	}).SetupWithManager(mgr, controller.ImagePolicyReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", imagev1.ImagePolicyKind)
