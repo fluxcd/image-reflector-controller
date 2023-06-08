@@ -1,0 +1,86 @@
+name: integration-gcp
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+  # push:
+  #   branches:
+  #     - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./tests/integration
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Set up Go
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+        with:
+          go-version: 1.20.x
+          cache-dependency-path: tests/integration/go.sum
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@35b0e87d162680511bf346c299f71c9c5c379033 # v1.1.1
+        id: 'auth'
+        with:
+          credentials_json: '${{ secrets.IRC_E2E_GOOGLE_CREDENTIALS }}'
+          token_format: 'access_token'
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@e30db14379863a8c79331b04a9969f4c1e225e0b # v1.1.1
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@e81a89b1732b9c48d79cd809d8d81d79c4647a18 # v2.1.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4b4e9c3e2d4531116a6f8ba8e71fc6e2cb6e6c8c  # v2.5.0
+      - name: Cache Docker layers
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        id: cache
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-ghcache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-ghcache-
+      - name: Log into gcr.io
+        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a # v2.1.0
+        with:
+          registry: gcr.io
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+      - name: Log into us-central1-docker.pkg.dev
+        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a # v2.1.0
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+      - name: Set dynamic variables in .env
+        run: |
+          cat > .env <<EOF
+          export TF_VAR_tags='{"environment"="github", "ci"="true", "repo"="image-reflector-controller", "createdat"="$(date -u +x%Y-%m-%d_%Hh%Mm%Ss)"}'
+          EOF
+      - name: Print .env for dynamic tag value reference
+        run: cat .env
+      - name: Build controller
+        run: |
+          make docker-build IMG=fluxcd/image-reflector-controller:dev \
+            BUILD_PLATFORMS=linux/amd64 \
+            BUILD_ARGS="--cache-from=type=local,src=/tmp/.buildx-cache \
+              --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max"
+        working-directory: ./
+      - # Temp fix
+        # https://github.com/docker/build-push-action/issues/252
+        # https://github.com/moby/buildkit/issues/1896
+        name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - name: Run tests
+        run: . .env && make test-gcp TEST_IMG=fluxcd/image-reflector-controller:dev
+        env:
+          TF_VAR_gcp_project_id: ${{ vars.TF_VAR_gcp_project_id }}
+          TF_VAR_gcp_region: ${{ vars.TF_VAR_gcp_region }}
+          TF_VAR_gcp_zone: ${{ vars.TF_VAR_gcp_zone }}

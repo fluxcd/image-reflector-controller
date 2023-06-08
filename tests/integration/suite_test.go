@@ -50,7 +50,7 @@ const (
 	// is generated before running the Go test.
 	fluxInstallManifestPath = "./build/flux.yaml"
 
-	resultWaitTimeout = 20 * time.Second
+	resultWaitTimeout = 30 * time.Second
 )
 
 var (
@@ -165,6 +165,10 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	// Initialize with non-zero exit code to indicate failure by default unless
+	// set by a successful test run.
+	exitCode := 1
+
 	// Create environment.
 	envOpts := []tftestenv.EnvironmentOption{
 		tftestenv.WithVerbose(*verbose),
@@ -176,6 +180,22 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(fmt.Sprintf("Failed to provision the test infrastructure: %v", err))
 	}
+
+	// Stop the environment before exit.
+	defer func() {
+		if err := testEnv.Stop(ctx); err != nil {
+			log.Printf("Failed to stop environment: %v", err)
+		}
+
+		// Calling exit on panic prevents logging of panic error.
+		// Exit only on normal return. Explicitly detect panic and log the error
+		// on panic.
+		if err := recover(); err == nil {
+			os.Exit(exitCode)
+		} else {
+			log.Printf("panic: %v", err)
+		}
+	}()
 
 	// Get terraform state output.
 	output, err := testEnv.StateOutput(ctx)
@@ -208,15 +228,10 @@ func TestMain(m *testing.M) {
 		log.Printf("Failed to install flux: %v", err)
 	}
 
-	code := m.Run()
+	exitCode = m.Run()
 
 	// log.Println("Uninstalling flux")
 	// uninstallFlux(ctx, kubeconfigPath, fluxInstallManifestPath)
-
-	if err := testEnv.Stop(ctx); err != nil {
-		log.Printf("Failed to stop environment: %v", err)
-	}
-	os.Exit(code)
 }
 
 // getProviderConfig returns the test configuration of supported providers.

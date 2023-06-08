@@ -1,0 +1,72 @@
+name: integration-azure
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 6 * * *"
+  # push:
+  #   branches:
+  #     - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./tests/integration
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - name: Set up Go
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+        with:
+          go-version: 1.20.x
+          cache-dependency-path: tests/integration/go.sum
+      - name: Authenticate to Azure
+        uses: Azure/login@92a5484dfaf04ca78a94597f4f19fea633851fa2 # v1.4.6
+        with:
+          creds: '{"clientId":"${{ secrets.IRC_E2E_AZ_ARM_CLIENT_ID }}","clientSecret":"${{ secrets.IRC_E2E_AZ_ARM_CLIENT_SECRET }}","subscriptionId":"${{ secrets.IRC_E2E_AZ_ARM_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.IRC_E2E_AZ_ARM_TENANT_ID }}"}'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@e81a89b1732b9c48d79cd809d8d81d79c4647a18 # v2.1.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4b4e9c3e2d4531116a6f8ba8e71fc6e2cb6e6c8c # v2.5.0
+      - name: Cache Docker layers
+        uses: actions/cache@88522ab9f39a2ea568f7027eddc7d8d8bc9d59c8 # v3.3.1
+        id: cache
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-ghcache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-ghcache-
+      - name: Set dynamic variables in .env
+        run: |
+          cat > .env <<EOF
+          export TF_VAR_tags='{"environment"="github", "ci"="true", "repo"="image-reflector-controller", "createdat"="$(date -u +x%Y-%m-%d_%Hh%Mm%Ss)"}'
+          EOF
+      - name: Print .env for dynamic tag value reference
+        run: cat .env
+      - name: Build controller
+        run: |
+          make docker-build IMG=fluxcd/image-reflector-controller:dev \
+            BUILD_PLATFORMS=linux/amd64 \
+            BUILD_ARGS="--cache-from=type=local,src=/tmp/.buildx-cache \
+              --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max"
+        working-directory: ./
+      - # Temp fix
+        # https://github.com/docker/build-push-action/issues/252
+        # https://github.com/moby/buildkit/issues/1896
+        name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - name: Run tests
+        run: . .env && make test-azure TEST_IMG=fluxcd/image-reflector-controller:dev
+        env:
+          ARM_CLIENT_ID: ${{ secrets.IRC_E2E_AZ_ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.IRC_E2E_AZ_ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.IRC_E2E_AZ_ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.IRC_E2E_AZ_ARM_TENANT_ID }}
+          TF_VAR_azure_location: ${{ vars.TF_VAR_azure_location }}
