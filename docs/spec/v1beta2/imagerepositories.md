@@ -318,6 +318,16 @@ spec:
     - "1.1.1|1.0.0"
 ```
 
+### Insecure
+
+`.spec.insecure` is an optional field to specify that the image registry is
+hosted at a non-TLS endpoint and thus the controller should use plain HTTP
+requests to communicate with the registry.
+
+> If an ImageRepository has `.spec.insecure` as `true` and the controller has
+  `--insecure-allow-http` set to `false`, then the object is marked as stalled.
+  For more details, see: https://github.com/fluxcd/flux2/tree/ddcc301ab6289e0640174cb9f3d46f1eeab57927/rfcs/0004-insecure-http#design-details
+
 ### Provider
 
 `.spec.provider` is an optional field that allows specifying an OIDC provider

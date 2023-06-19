@@ -104,6 +104,11 @@ type ImageRepositorySpec struct {
 	// +kubebuilder:default:=generic
 	// +optional
 	Provider string `json:"provider,omitempty"`
+
+	// Insecure, if set to true indicates that the image registry is hosted at an
+	// HTTP endpoint.
+	// +optional
+	Insecure bool `json:"insecure,omitempty"`
 }
 
 type ScanResult struct {

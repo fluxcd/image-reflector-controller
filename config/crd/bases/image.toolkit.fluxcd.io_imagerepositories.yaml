@@ -315,6 +315,10 @@ spec:
               image:
                 description: Image is the name of the image repository
                 type: string
+              insecure:
+                description: Insecure, if set to true indicates that the image registry
+                  is hosted at an HTTP endpoint.
+                type: boolean
               interval:
                 description: Interval is the length of time to wait between scans
                   of the image repository.
