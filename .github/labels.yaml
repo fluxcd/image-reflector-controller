@@ -1,6 +1,13 @@
 # Configuration file to declaratively configure labels
 # Ref: https://github.com/EndBug/label-sync#Config-files
 
+- name: area/oci
+  description: OCI related issues and pull requests
+  color: '#c739ff'
+- name: area/policy
+  description: (Image) policy related issues and pull requests
+  color: '#e99695'
+
 # TODO: enable this when we have a release/v1.0.x branch
 #- name: backport:release/v1.0.x
 #  description: To be backported to release/v1.0.x
