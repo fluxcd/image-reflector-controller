@@ -175,8 +175,8 @@ github.com/fluxcd/pkg/apis/meta v1.1.1 h1:sLAKLbEu7rRzJ+Mytffu3NcpfdbOBTa6hcpOQz
 github.com/fluxcd/pkg/apis/meta v1.1.1/go.mod h1:soCfzjFWbm1mqybDcOywWKTCEYlH3skpoNGTboVk234=
 github.com/fluxcd/pkg/oci v0.28.0 h1:E8VvMFzU/+9vgM4IFbiwmCwaMPCq1WXPiKUmHtDVSbc=
 github.com/fluxcd/pkg/oci v0.28.0/go.mod h1:eFP5sQH4yWghFbcLWxdo0eI6wZ4h3HiTW0UoG33S2pg=
-github.com/fluxcd/pkg/runtime v0.39.0 h1:vgmzYS+DT0w8ikX9MqGsOdmMagoiKys2RMGdl/EDbgc=
-github.com/fluxcd/pkg/runtime v0.39.0/go.mod h1:0A/0kZv/MPciAj5AoSEDKVeqUFEF6371q7o+zk6l81g=
+github.com/fluxcd/pkg/runtime v0.40.0 h1:uGiiEbMZwd7xmbKaVmcH7iilCFW9betWbz0r1taK3G0=
+github.com/fluxcd/pkg/runtime v0.40.0/go.mod h1:BqHEOVrZmt19p0q1OlGFWAYh3rZ28+IBpxLB2yPjjQ4=
 github.com/fluxcd/pkg/version v0.2.2 h1:ZpVXECeLA5hIQMft11iLp6gN3cKcz6UNuVTQPw/bRdI=
 github.com/fluxcd/pkg/version v0.2.2/go.mod h1:NGnh/no8S6PyfCDxRFrPY3T5BUnqP48MxfxNRU0z8C0=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
