@@ -2,6 +2,24 @@
 
 ## 0.28.0
 
+**Release date:** 2023-07-04
+
+This prerelease comes with support for Kubernetes v1.27.3 and updates to the
+controller's dependencies.
+
+Starting with this version, the build, release and provenance portions of the
+Flux project supply chain [provisionally meet SLSA Build Level 3](https://fluxcd.io/flux/security/slsa-assessment/).
+
+Improvements:
+
+- Update dependencies
+  [#405](https://github.com/fluxcd/image-reflector-controller/pull/405)
+- [#410](https://github.com/fluxcd/image-reflector-controller/pull/410)
+- Add tests for default `v` prefix with semver policy
+  [#385](https://github.com/fluxcd/image-reflector-controller/pull/385)
+
+## 0.28.0
+
 **Release date:** 2023-05-26
 
 This prerelease comes with support for Kubernetes v1.27 and updates to the
