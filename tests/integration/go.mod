@@ -1,6 +1,6 @@
 module github.com/fluxcd/image-reflector-controller/tests/integration
 
-go 1.18
+go 1.20
 
 replace github.com/fluxcd/image-reflector-controller/api => ../../api
 
@@ -9,7 +9,7 @@ require (
 	github.com/fluxcd/test-infra/tftestenv v0.0.0-20230530120643-bdcf7573fb2f
 	github.com/hashicorp/terraform-json v0.15.0
 	github.com/onsi/gomega v1.27.7
-	k8s.io/apimachinery v0.27.2
+	k8s.io/apimachinery v0.27.3
 )
 
 require (
@@ -23,7 +23,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fluxcd/pkg/apis/acl v0.1.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.1.0 // indirect
+	github.com/fluxcd/pkg/apis/meta v1.1.1 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/jsonreference v0.20.1 // indirect
