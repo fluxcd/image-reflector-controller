@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.29.1
+
+**Release date:** 2023-07-10
+
+This is a patch release that fixes the AWS authentication for cross-region ECR repositories.
+
+Fixes:
+- Update `fluxcd/pkg/oci` to fix ECR cross-region auth
+  [#417](https://github.com/fluxcd/image-reflector-controller/pull/417)
+
 ## 0.29.0
 
 **Release date:** 2023-07-04
