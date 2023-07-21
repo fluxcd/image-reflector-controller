@@ -1,5 +1,7 @@
 # Image Repositories
 
+<!-- menuweight:30 -->
+
 The `ImageRepository` API defines a repository to scan and store a specific set
 of tags in a database.
 

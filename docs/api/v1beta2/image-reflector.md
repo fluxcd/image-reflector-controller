@@ -1,4 +1,4 @@
-<h1>Image reflector API reference</h1>
+<h1>Image reflector API reference v1beta2</h1>
 <p>Packages:</p>
 <ul class="simple">
 <li>
