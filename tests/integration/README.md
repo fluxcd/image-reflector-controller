@@ -41,6 +41,48 @@ the tests:
 - `Microsoft.ContainerRegistry/*`
 - `Microsoft.ContainerService/*`
 
+#### IAM and CI setup
+
+To create the necessary IAM role with all the permissions, set up CI secrets and
+variables using
+[azure-gh-actions](https://github.com/fluxcd/test-infra/tree/main/tf-modules/azure/github-actions)
+use the terraform configuration below. Please make sure all the requirements of
+azure-gh-actions are followed before running it.
+
+```hcl
+provider "github" {
+  owner = "fluxcd"
+}
+
+module "azure_gh_actions" {
+  source = "git::https://github.com/fluxcd/test-infra.git//tf-modules/azure/github-actions"
+
+  azure_owners          = ["owner-id-1", "owner-id-2"]
+  azure_app_name        = "irc-e2e"
+  azure_app_description = "irc e2e"
+  azure_permissions = [
+    "Microsoft.Kubernetes/*",
+    "Microsoft.Resources/*",
+    "Microsoft.Authorization/roleAssignments/Read",
+    "Microsoft.Authorization/roleAssignments/Write",
+    "Microsoft.Authorization/roleAssignments/Delete",
+    "Microsoft.ContainerRegistry/*",
+    "Microsoft.ContainerService/*"
+  ]
+  azure_location = "eastus"
+
+  github_project = "image-reflector-controller"
+
+  github_secret_client_id_name       = "IRC_E2E_AZ_ARM_CLIENT_ID"
+  github_secret_client_secret_name   = "IRC_E2E_AZ_ARM_CLIENT_SECRET"
+  github_secret_subscription_id_name = "IRC_E2E_AZ_ARM_SUBSCRIPTION_ID"
+  github_secret_tenant_id_name       = "IRC_E2E_AZ_ARM_TENANT_ID"
+}
+```
+
+**NOTE:** The environment variables used above are for the GitHub workflow that
+runs the tests. Change the variable names if needed accordingly.
+
 ### Google Cloud Platform
 
 - GCP account with project and GKE, GCR and Artifact Registry services enabled
@@ -90,14 +132,54 @@ $ gcrgc gcr.io/<project-name>
 
 Following roles are needed for provisioning the infrastructure and running the
 tests:
-- `Artifact Registry Administrator`
-- `Compute Instance Admin (v1)`
-- `Compute Storage Admin`
-- `Kubernetes Engine Admin`
-- `Service Account Admin`
-- `Service Account Token Creator`
-- `Service Account User`
-- `Storage Admin`
+- Artifact Registry Administrator - `roles/artifactregistry.admin`
+- Compute Instance Admin (v1) - `roles/compute.instanceAdmin.v1`
+- Compute Storage Admin - `roles/compute.storageAdmin`
+- Kubernetes Engine Admin - `roles/container.admin`
+- Service Account Admin - `roles/iam.serviceAccountAdmin`
+- Service Account Token Creator - `roles/iam.serviceAccountTokenCreator`
+- Service Account User - `roles/iam.serviceAccountUser`
+- Storage Admin - `roles/storage.admin`
+
+#### IAM and CI setup
+
+To create the necessary IAM role with all the permissions, set up CI secrets and
+variables using
+[gcp-gh-actions](https://github.com/fluxcd/test-infra/tree/main/tf-modules/gcp/github-actions)
+use the terraform configuration below. Please make sure all the requirements of
+gcp-gh-actions are followed before running it.
+
+```hcl
+provider "google" {}
+
+provider "github" {
+  owner = "fluxcd"
+}
+
+module "gcp_gh_actions" {
+  source = "git::https://github.com/fluxcd/test-infra.git//tf-modules/gcp/github-actions"
+
+  gcp_service_account_id   = "irc-e2e"
+  gcp_service_account_name = "irc-e2e"
+  gcp_roles = [
+    "roles/artifactregistry.admin",
+    "roles/compute.instanceAdmin.v1",
+    "roles/compute.storageAdmin",
+    "roles/container.admin",
+    "roles/iam.serviceAccountAdmin",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/iam.serviceAccountUser",
+    "roles/storage.admin"
+  ]
+
+  github_project = "image-reflector-controller"
+
+  github_secret_credentials_name = "IRC_E2E_GOOGLE_CREDENTIALS"
+}
+```
+
+**NOTE:** The environment variables used above are for the GitHub workflow that
+runs the tests. Change the variable names if needed accordingly.
 
 ## Test setup
 
