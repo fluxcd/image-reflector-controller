@@ -179,16 +179,18 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		r.Metrics.RecordDuration(ctx, obj, start)
 	}()
 
-	// Add finalizer first if it doesn't exist to avoid the race condition
-	// between init and delete.
-	if !controllerutil.ContainsFinalizer(obj, imagev1.ImagePolicyFinalizer) {
-		controllerutil.AddFinalizer(obj, imagev1.ImagePolicyFinalizer)
-		return ctrl.Result{Requeue: true}, nil
-	}
-
 	// Examine if the object is under deletion.
 	if !obj.ObjectMeta.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, obj)
+	}
+
+	// Add finalizer first if it doesn't exist to avoid the race condition
+	// between init and delete.
+	// Note: Finalizers in general can only be added when the deletionTimestamp
+	// is not set.
+	if !controllerutil.ContainsFinalizer(obj, imagev1.ImagePolicyFinalizer) {
+		controllerutil.AddFinalizer(obj, imagev1.ImagePolicyFinalizer)
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	// Call subreconciler.

@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -61,6 +62,40 @@ func (db mockDatabase) Tags(repo string) ([]string, error) {
 		return nil, db.ReadError
 	}
 	return db.TagData, nil
+}
+
+func TestImageRepositoryReconciler_deleteBeforeFinalizer(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagerepo-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imagerepo := &imagev1.ImageRepository{}
+	imagerepo.Name = "test-gitrepo"
+	imagerepo.Namespace = namespaceName
+	imagerepo.Spec = imagev1.ImageRepositorySpec{
+		Interval: metav1.Duration{Duration: interval},
+		Image:    "test-image",
+	}
+	// Add a test finalizer to prevent the object from getting deleted.
+	imagerepo.SetFinalizers([]string{"test-finalizer"})
+	g.Expect(k8sClient.Create(ctx, imagerepo)).NotTo(HaveOccurred())
+	// Add deletion timestamp by deleting the object.
+	g.Expect(k8sClient.Delete(ctx, imagerepo)).NotTo(HaveOccurred())
+
+	r := &ImageRepositoryReconciler{
+		Client:        k8sClient,
+		EventRecorder: record.NewFakeRecorder(32),
+	}
+	// NOTE: Only a real API server responds with an error in this scenario.
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(imagerepo)})
+	g.Expect(err).NotTo(HaveOccurred())
 }
 
 func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
