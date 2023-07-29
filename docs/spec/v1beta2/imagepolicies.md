@@ -1,5 +1,7 @@
 # Image Policies
 
+<!-- menuweight:20 -->
+
 The `ImagePolicies` API defines rules for selecting a "latest" image from
 `ImageRepositories`.
 
