@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/testenv"
@@ -53,6 +54,7 @@ const (
 )
 
 var (
+	k8sClient    client.Client
 	testEnv      *testenv.Environment
 	testBadgerDB *badger.DB
 	ctx          = ctrl.SetupSignalHandler()
@@ -69,6 +71,12 @@ func TestMain(m *testing.M) {
 	testEnv = testenv.New(testenv.WithCRDPath(filepath.Join("..", "..", "config", "crd", "bases")))
 
 	var err error
+	// Initialize a cacheless client for tests that need the latest objects.
+	k8sClient, err = client.New(testEnv.Config, client.Options{Scheme: scheme.Scheme})
+	if err != nil {
+		panic(fmt.Sprintf("failed to create k8s client: %v", err))
+	}
+
 	var badgerDir string
 	badgerDir, err = os.MkdirTemp("", "badger")
 	if err != nil {

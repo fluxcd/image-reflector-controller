@@ -28,11 +28,49 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 )
+
+func TestImagePolicyReconciler_deleteBeforeFinalizer(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imagePolicy := &imagev1.ImagePolicy{}
+	imagePolicy.Name = "test-imagepolicy"
+	imagePolicy.Namespace = namespaceName
+	imagePolicy.Spec = imagev1.ImagePolicySpec{
+		ImageRepositoryRef: meta.NamespacedObjectReference{
+			Name: "foo",
+		},
+		Policy: imagev1.ImagePolicyChoice{},
+	}
+	// Add a test finalizer to prevent the object from getting deleted.
+	imagePolicy.SetFinalizers([]string{"test-finalizer"})
+	g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+	// Add deletion timestamp by deleting the object.
+	g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+
+	r := &ImagePolicyReconciler{
+		Client:        k8sClient,
+		EventRecorder: record.NewFakeRecorder(32),
+	}
+	// NOTE: Only a real API server responds with an error in this scenario.
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(imagePolicy)})
+	g.Expect(err).NotTo(HaveOccurred())
+}
 
 func TestImagePolicyReconciler_getImageRepository(t *testing.T) {
 	testImageRepoName := "test-repo"
