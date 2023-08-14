@@ -42,6 +42,7 @@ import (
 	feathelper "github.com/fluxcd/pkg/runtime/features"
 	"github.com/fluxcd/pkg/runtime/leaderelection"
 	"github.com/fluxcd/pkg/runtime/logger"
+	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 
@@ -202,7 +203,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	metricsH := helper.MustMakeMetrics(mgr)
+	metricsH := helper.NewMetrics(mgr, metrics.MustMakeRecorder(), imagev1.ImageRepositoryFinalizer)
 
 	if err := (&controller.ImageRepositoryReconciler{
 		Client:         mgr.GetClient(),

@@ -143,9 +143,6 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Record suspended status metric.
-	r.RecordSuspend(ctx, obj, obj.Spec.Suspend)
-
 	// Initialize the patch helper with the current version of the object.
 	serialPatcher := patch.NewSerialPatcher(obj, r.Client)
 
@@ -161,7 +158,8 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			retErr = kerrors.NewAggregate([]error{retErr, err})
 		}
 
-		// Always record readiness and duration metrics.
+		// Always record suspend, readiness and duration metrics.
+		r.Metrics.RecordSuspend(ctx, obj, obj.Spec.Suspend)
 		r.Metrics.RecordReadiness(ctx, obj)
 		r.Metrics.RecordDuration(ctx, obj, start)
 	}()
