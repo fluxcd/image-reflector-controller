@@ -16,6 +16,8 @@ limitations under the License.
 
 package v1beta2
 
+const ImageFinalizer = "finalizers.fluxcd.io"
+
 const (
 	// ImageURLInvalidReason represents the fact that a given repository has an invalid image URL.
 	ImageURLInvalidReason string = "ImageURLInvalid"

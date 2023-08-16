@@ -176,7 +176,7 @@ func TestImageRepositoryReconciler_repositorySuspended(t *testing.T) {
 	repo.Namespace = imageRepoName.Namespace
 
 	// Add finalizer so that reconciliation reaches suspend check.
-	controllerutil.AddFinalizer(&repo, imagev1.ImageRepositoryFinalizer)
+	controllerutil.AddFinalizer(&repo, imagev1.ImageFinalizer)
 
 	builder := fakeclient.NewClientBuilder().WithScheme(testEnv.GetScheme())
 	builder.WithObjects(&repo)

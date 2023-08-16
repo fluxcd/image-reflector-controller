@@ -188,8 +188,8 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// between init and delete.
 	// Note: Finalizers in general can only be added when the deletionTimestamp
 	// is not set.
-	if !controllerutil.ContainsFinalizer(obj, imagev1.ImagePolicyFinalizer) {
-		controllerutil.AddFinalizer(obj, imagev1.ImagePolicyFinalizer)
+	if !controllerutil.ContainsFinalizer(obj, imagev1.ImageFinalizer) {
+		controllerutil.AddFinalizer(obj, imagev1.ImageFinalizer)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
@@ -421,7 +421,7 @@ func (r *ImagePolicyReconciler) applyPolicy(ctx context.Context, obj *imagev1.Im
 // reconcileDelete handles the deletion of the object.
 func (r *ImagePolicyReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImagePolicy) (reconcile.Result, error) {
 	// Remove our finalizer from the list.
-	controllerutil.RemoveFinalizer(obj, imagev1.ImagePolicyFinalizer)
+	controllerutil.RemoveFinalizer(obj, imagev1.ImageFinalizer)
 
 	// Stop reconciliation as the object is being deleted.
 	return ctrl.Result{}, nil

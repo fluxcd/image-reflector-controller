@@ -203,7 +203,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	metricsH := helper.NewMetrics(mgr, metrics.MustMakeRecorder(), imagev1.ImageRepositoryFinalizer)
+	metricsH := helper.NewMetrics(mgr, metrics.MustMakeRecorder(), imagev1.ImageFinalizer)
 
 	if err := (&controller.ImageRepositoryReconciler{
 		Client:         mgr.GetClient(),

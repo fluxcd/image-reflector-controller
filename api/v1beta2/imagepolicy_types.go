@@ -22,6 +22,8 @@ import (
 )
 
 const ImagePolicyKind = "ImagePolicy"
+
+// Deprecated: Use ImageFinalizer.
 const ImagePolicyFinalizer = "finalizers.fluxcd.io"
 
 // ImagePolicySpec defines the parameters for calculating the
