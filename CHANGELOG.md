@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.30.0
+
+**Release date:** 2023-08-23
+
+This prerelease adds support for Secrets of type 
+[`kubernetes.io/tls`](https://kubernetes.io/docs/concepts/configuration/secret/#tls-secrets) ImageRepositories'
+`.spec.certSecretRef`. Note: Support for the `caFile`, `certFile` and `keyFile` keys has
+been deprecated and will be removed in upcoming releases. After upgrading the controller to version 0.30.0, please
+change all Secrets referenced in `.spec.certSecretRef` to follow the new format.
+
+Starting with this version, the controller now stops exporting an object's metrics as soon as the object has been
+deleted.
+
+In addition, this version fixes handling of finalizers and updates the controller's dependencies.
+
+Improvements:
+
+- Update dependencies
+  [#441](https://github.com/fluxcd/image-reflector-controller/pull/431)
+- imagerepo: adopt Kubernetes style TLS secrets
+  [#434](https://github.com/fluxcd/image-reflector-controller/pull/434)
+- Delete stale metrics on object delete
+  [#430](https://github.com/fluxcd/image-reflector-controller/pull/430)
+- Update pkg/oci to support Azure China and US gov
+  [438](https://github.com/fluxcd/image-reflector-controller/pull/438)
+
 ## 0.29.1
 
 **Release date:** 2023-07-10
