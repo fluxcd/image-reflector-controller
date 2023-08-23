@@ -384,9 +384,19 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 			}
 		}
 
-		tr, err := secret.TransportFromSecret(&certSecret)
+		tr, err := secret.TransportFromKubeTLSSecret(&certSecret)
 		if err != nil {
 			return nil, err
+		}
+		if tr.TLSClientConfig == nil {
+			tr, err = secret.TransportFromSecret(&certSecret)
+			if err != nil {
+				return nil, err
+			}
+			if tr.TLSClientConfig != nil {
+				ctrl.LoggerFrom(ctx).
+					Info("warning: specifying TLS auth data via `certFile`/`keyFile`/`caFile` is deprecated, please use `tls.crt`/`tls.key`/`ca.crt` instead")
+			}
 		}
 		options = append(options, remote.WithTransport(tr))
 	}

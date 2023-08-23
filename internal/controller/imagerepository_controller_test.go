@@ -102,6 +102,7 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 	testImg := "example.com/foo/bar"
 	testSecretName := "test-secret"
 	testTLSSecretName := "test-tls-secret"
+	testDeprecatedTLSSecretName := "test-deprecated-tls-secret"
 	testServiceAccountName := "test-service-account"
 	testNamespace := "test-ns"
 
@@ -132,18 +133,27 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 	testTLSSecret.Namespace = testNamespace
 	testTLSSecret.Type = corev1.SecretTypeTLS
 	testTLSSecret.Data = map[string][]byte{
+		secret.CACrtKey:         rootCertPEM,
+		corev1.TLSCertKey:       clientCertPEM,
+		corev1.TLSPrivateKeyKey: clientKeyPEM,
+	}
+
+	testDeprecatedTLSSecret := &corev1.Secret{}
+	testDeprecatedTLSSecret.Name = testDeprecatedTLSSecretName
+	testDeprecatedTLSSecret.Namespace = testNamespace
+	testDeprecatedTLSSecret.Type = corev1.SecretTypeTLS
+	testDeprecatedTLSSecret.Data = map[string][]byte{
 		secret.CACert:     rootCertPEM,
 		secret.ClientCert: clientCertPEM,
 		secret.ClientKey:  clientKeyPEM,
 	}
 
-	// Secret with docker config and TLS secrets.
-	testSecretWithTLS := testSecret.DeepCopy()
-	testSecretWithTLS.Data = map[string][]byte{
-		".dockerconfigjson": dockerconfigjson,
-		secret.CACert:       rootCertPEM,
-		secret.ClientCert:   clientCertPEM,
-		secret.ClientKey:    clientKeyPEM,
+	// Docker config secret with TLS data.
+	testDockerCfgSecretWithTLS := testSecret.DeepCopy()
+	testDockerCfgSecretWithTLS.Data = map[string][]byte{
+		secret.CACrtKey:         rootCertPEM,
+		corev1.TLSCertKey:       clientCertPEM,
+		corev1.TLSPrivateKeyKey: clientKeyPEM,
 	}
 
 	// ServiceAccount without image pull secret.
@@ -212,6 +222,16 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 			},
 		},
 		{
+			name:     "cert secret ref with existing secret using deprecated keys",
+			mockObjs: []client.Object{testDeprecatedTLSSecret},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image: testImg,
+				CertSecretRef: &meta.LocalObjectReference{
+					Name: testDeprecatedTLSSecretName,
+				},
+			},
+		},
+		{
 			name: "cert secret ref with non-existing secret",
 			imageRepoSpec: imagev1.ImageRepositorySpec{
 				Image: testImg,
@@ -235,17 +255,15 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 			},
 		},
 		{
-			name:     "same secret ref and cert secret ref",
-			mockObjs: []client.Object{testSecretWithTLS},
+			name:     "cert secret ref of type docker config",
+			mockObjs: []client.Object{testDockerCfgSecretWithTLS},
 			imageRepoSpec: imagev1.ImageRepositorySpec{
 				Image: testImg,
-				SecretRef: &meta.LocalObjectReference{
-					Name: testSecretName,
-				},
 				CertSecretRef: &meta.LocalObjectReference{
 					Name: testSecretName,
 				},
 			},
+			wantErr: true,
 		},
 		{
 			name:     "service account without pull secret",

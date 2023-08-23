@@ -175,40 +175,59 @@ secret to a ServiceAccount, see [Add image pull secret to service account](https
 
 ### Certificate secret reference
 
-`.spec.certSecretRef` is an optional field to specify a name reference to a
-Secret in the same namespace as the ImageRepository containing TLS certificate
-data. This is for two separate purposes:
-- to provide a client certificate and private key, if you use a certificate to authenticate with the image registry; and,
-- to provide a CA certificate, if the registry uses a self-signed certificate
+`.spec.certSecretRef.name` is an optional field to specify a secret containing
+TLS certificate data. The secret can contain the following keys:
 
-These will often go together in case of self-hosted image registry. All the
-files in the secret are expected to be [PEM-encoded][pem-encoding]. This is an
-ASCII format for certificates and keys; `openssl` and such tools typically
-provide an option for PEM output.
+* `tls.crt` and `tls.key`, to specify the client certificate and private key used
+for TLS client authentication. These must be used in conjunction, i.e.
+specifying one without the other will lead to an error.
+* `ca.crt`, to specify the CA certificate used to verify the server, which is
+required if the server is using a self-signed certificate.
 
-Assuming that a certificate file and private key are in files `client.crt` and
-`client.key` respectively, a secret can be created with `kubectl`:
+If the server is using a self-signed certificate and has TLS client
+authentication enabled, all three values are required.
 
-```sh
-kubectl create secret generic tls-certs \
-  --from-file=certFile=client.crt \
-  --from-file=keyFile=client.key
-```
-
-An [encrypted secret](sops-guide) can also be used; the important bit is that
-the data keys in the secret are `certFile` and `keyFile`.
-
-In case of a CA certificate for the client to use, the data key for it is
-`caFile`. Adapting the previous example, if the certificate is in the file
-`ca.crt`, and the client certificate and key are as before, the whole command
-would be:
+The Secret should be of type `Opaque` or `kubernetes.io/tls`. All the files in
+the Secret are expected to be [PEM-encoded][pem-encoding]. Assuming you have
+three files; `client.key`, `client.crt` and `ca.crt` for the client private key,
+client certificate and the CA certificate respectively, you can generate the
+required Secret using the `flux create secret tls` command:
 
 ```sh
-kubectl create secret generic tls-certs \
-  --from-file=certFile=client.crt \
-  --from-file=keyFile=client.key \
-  --from-file=caFile=ca.crt
+flux create secret tls --tls-key-file=client.key --tls-crt-file=client.crt --ca-crt-file=ca.crt
 ```
+
+Example usage:
+
+```yaml
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: example
+  namespace: default
+spec:
+  interval: 5m0s
+  url: example.com
+  certSecretRef:
+    name: example-tls
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-tls
+  namespace: default
+type: kubernetes.io/tls # or Opaque
+data:
+  tls.crt: <BASE64>
+  tls.key: <BASE64>
+  # NOTE: Can be supplied without the above values
+  ca.crt: <BASE64>
+```
+
+**Warning:** Support for the `caFile`, `certFile` and `keyFile` keys have been
+deprecated. If you have any Secrets using these keys and specified in an
+ImageRepository, the controller will log a deprecation warning.
 
 ### Suspend
 
