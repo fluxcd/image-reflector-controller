@@ -19,7 +19,6 @@ package policy
 import (
 	"math/rand"
 	"testing"
-	"time"
 )
 
 func TestNewNumerical(t *testing.T) {
@@ -146,7 +145,6 @@ func TestNumerical_Latest(t *testing.T) {
 }
 
 func shuffle(list []string) []string {
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(list), func(i, j int) { list[i], list[j] = list[j], list[i] })
 	return list
 }

@@ -60,10 +60,6 @@ var (
 	ctx          = ctrl.SetupSignalHandler()
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 func TestMain(m *testing.M) {
 
 	utilruntime.Must(imagev1.AddToScheme(scheme.Scheme))
