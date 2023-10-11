@@ -201,7 +201,7 @@ func parseAuthMap(config dockerConfig) (map[string]authn.AuthConfig, error) {
 
 func getURLHost(urlStr string) (string, error) {
 	if urlStr == "http://" || urlStr == "https://" {
-		return "", errors.New("Empty url")
+		return "", errors.New("empty url")
 	}
 
 	// ensure url has https:// or http:// prefix
@@ -220,9 +220,9 @@ func getURLHost(urlStr string) (string, error) {
 	}
 
 	if u.Host == "" {
-		return "", errors.New(fmt.Sprintf(
-			"Invalid registry auth key: %s. Expected an HTTPS URL (e.g. 'https://index.docker.io/v2/' or 'https://index.docker.io'), or the same without the 'https://' (e.g., 'index.docker.io/v2/' or 'index.docker.io')",
-			urlStr))
+		return "", fmt.Errorf(
+			"expected an HTTPS URL instead of '%s' (e.g. 'https://index.docker.io/v2/' or 'https://index.docker.io'), or the same without 'https://' (e.g., 'index.docker.io/v2/' or 'index.docker.io')",
+			urlStr)
 	}
 
 	return u.Host, nil
