@@ -17,9 +17,10 @@ limitations under the License.
 package policy
 
 import (
-	"reflect"
 	"sort"
 	"testing"
+
+	. "github.com/onsi/gomega"
 )
 
 func TestRegexFilter(t *testing.T) {
@@ -48,20 +49,64 @@ func TestRegexFilter(t *testing.T) {
 			extract:  `$1`,
 			expected: []string{"1", "2", "3"},
 		},
+		{
+			label: "valid pattern (complex regex 1)",
+			tags: []string{
+				"123-123.123.abcd123-debug",
+				"123-123.123.abcd123",
+				"123-123.123.abcd456-debug",
+				"123-123.123.abcd456",
+			},
+			pattern: `^(123-[0-9]+\.[0-9]+\.[a-z0-9]+-debug)`,
+			expected: []string{
+				"123-123.123.abcd123-debug",
+				"123-123.123.abcd456-debug",
+			},
+		},
+		{
+			label: "valid pattern with capture group (complex regex 2)",
+			tags: []string{
+				"123-123.123.abcd123-debug",
+				"123-123.123.abcd123",
+				"123-123.123.abcd456-debug",
+				"123-123.123.abcd456",
+			},
+			pattern: `^(?P<tag>123-[0-9]+\.[0-9]+\.[a-z0-9]+[^-debug])`,
+			extract: `$tag`,
+			expected: []string{
+				"123-123.123.abcd123",
+				"123-123.123.abcd456",
+			},
+		},
+		{
+			label: "valid pattern with capture group (complex regex 3)",
+			tags: []string{
+				"123-123.123.abcd123-debug",
+				"123-123.123.abcd123",
+				"123-123.123.abcd456-debug",
+				"123-123.123.abcd456",
+			},
+			pattern: `^(?P<tag>123-[0-9]+\.[0-9]+\.[a-z0-9]+$)`,
+			extract: `$tag`,
+			expected: []string{
+				"123-123.123.abcd123",
+				"123-123.123.abcd456",
+			},
+		},
 	}
+
 	for _, tt := range cases {
 		t.Run(tt.label, func(t *testing.T) {
-			filter := newRegexFilter(tt.pattern, tt.extract)
-			filter.Apply(tt.tags)
-			r := sort.StringSlice(filter.Items())
-			if reflect.DeepEqual(r, tt.expected) {
-				t.Errorf("incorrect value returned, got '%s', expected '%s'", r, tt.expected)
-			}
+			g := NewWithT(t)
+
+			f, err := NewRegexFilter(tt.pattern, tt.extract)
+			g.Expect(err).ToNot(HaveOccurred())
+
+			f.Apply(tt.tags)
+			r := f.Items()
+			sort.Strings(r)
+
+			g.Expect(r).To(Equal(tt.expected))
 		})
 	}
-}
-
-func newRegexFilter(pattern string, extract string) *RegexFilter {
-	f, _ := NewRegexFilter(pattern, extract)
-	return f
 }
