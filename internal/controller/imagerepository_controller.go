@@ -113,6 +113,7 @@ type ImageRepositoryReconciler struct {
 		DatabaseReader
 	}
 	DeprecatedLoginOpts login.ProviderOptions
+	AllowInsecureHTTP   bool
 
 	patchOptions []patch.Option
 }
@@ -249,9 +250,15 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 
 	// Parse image reference.
-	ref, err := parseImageReference(obj.Spec.Image)
+	ref, err := r.parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
-		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, err.Error())
+		var reason string
+		if errors.Is(err, helper.ErrInsecureHTTPBlocked) {
+			reason = meta.InsecureConnectionsDisallowedReason
+		} else {
+			reason = imagev1.ImageURLInvalidReason
+		}
+		conditions.MarkStalled(obj, reason, err.Error())
 		result, retErr = ctrl.Result{}, nil
 		return
 	}
@@ -268,11 +275,18 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	// Check if it can be scanned now.
 	ok, when, reasonMsg, err := r.shouldScan(*obj, startTime)
 	if err != nil {
-		e := fmt.Errorf("failed to determine if it's scan time: %w", err)
-		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, e.Error())
+		var e error
+		if errors.Is(err, helper.ErrInsecureHTTPBlocked) {
+			e = err
+			conditions.MarkStalled(obj, meta.InsecureConnectionsDisallowedReason, e.Error())
+		} else {
+			e = fmt.Errorf("failed to determine if it's scan time: %w", err)
+			conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, e.Error())
+		}
 		result, retErr = ctrl.Result{}, e
 		return
 	}
+	conditions.Delete(obj, meta.StalledCondition)
 
 	// Scan the repository if it's scan time. No scan is a no-op reconciliation.
 	// The next scan time is not reset in case of no-op reconciliation.
@@ -468,7 +482,7 @@ func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now 
 
 	// If the canonical image name of the image is different from the last
 	// observed name, scan now.
-	ref, err := parseImageReference(obj.Spec.Image)
+	ref, err := r.parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
 		return false, scanInterval, "", err
 	}
@@ -570,13 +584,23 @@ func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Ob
 }
 
 // parseImageReference parses the given URL into a container registry repository
-// reference.
-func parseImageReference(url string) (name.Reference, error) {
+// reference. If insecure is set to true, then the registry is deemed to be
+// located at an HTTP endpoint.
+func (r *ImageRepositoryReconciler) parseImageReference(url string, insecure bool) (name.Reference, error) {
 	if s := strings.Split(url, "://"); len(s) > 1 {
 		return nil, fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
 	}
 
-	ref, err := name.ParseReference(url)
+	var opts []name.Option
+	if insecure {
+		if r.AllowInsecureHTTP {
+			opts = append(opts, name.Insecure)
+		} else {
+			return nil, helper.ErrInsecureHTTPBlocked
+		}
+	}
+
+	ref, err := name.ParseReference(url, opts...)
 	if err != nil {
 		return nil, err
 	}

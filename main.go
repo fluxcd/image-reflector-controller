@@ -77,6 +77,7 @@ func main() {
 		logOptions              logger.Options
 		leaderElectionOptions   leaderelection.Options
 		watchOptions            helper.WatchOptions
+		connOptions             helper.ConnectionOptions
 		storagePath             string
 		storageValueLogFileSize int64
 		concurrent              int
@@ -107,10 +108,17 @@ func main() {
 	rateLimiterOptions.BindFlags(flag.CommandLine)
 	featureGates.BindFlags(flag.CommandLine)
 	watchOptions.BindFlags(flag.CommandLine)
+	connOptions.BindFlags(flag.CommandLine)
 
 	flag.Parse()
 
 	logger.SetLogger(logger.NewLogger(logOptions))
+
+	if err := connOptions.CheckEnvironmentCompatibility(); err != nil {
+		setupLog.Error(err,
+			"please verify that your controller flag settings are compatible with the controller's environment")
+		os.Exit(1)
+	}
 
 	if awsAutoLogin || gcpAutoLogin || azureAutoLogin {
 		setupLog.Error(errors.New("use of deprecated flags"),
@@ -216,6 +224,7 @@ func main() {
 			AzureAutoLogin: azureAutoLogin,
 			GcpAutoLogin:   gcpAutoLogin,
 		},
+		AllowInsecureHTTP: connOptions.AllowHTTP,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

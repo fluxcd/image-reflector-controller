@@ -543,6 +543,19 @@ string
 When not specified, defaults to &lsquo;generic&rsquo;.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>insecure</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Insecure, if set to true indicates that the image registry is hosted at an
+HTTP endpoint.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -729,6 +742,19 @@ string
 <em>(Optional)</em>
 <p>The provider used for authentication, can be &lsquo;aws&rsquo;, &lsquo;azure&rsquo;, &lsquo;gcp&rsquo; or &lsquo;generic&rsquo;.
 When not specified, defaults to &lsquo;generic&rsquo;.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>insecure</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Insecure, if set to true indicates that the image registry is hosted at an
+HTTP endpoint.</p>
 </td>
 </tr>
 </tbody>
