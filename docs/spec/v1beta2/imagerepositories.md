@@ -318,6 +318,11 @@ spec:
     - "1.1.1|1.0.0"
 ```
 
+### Insecure
+
+`.spec.insecure` is an optional field to allow connecting to a non-TLS HTTP
+container registry.
+
 ### Provider
 
 `.spec.provider` is an optional field that allows specifying an OIDC provider
