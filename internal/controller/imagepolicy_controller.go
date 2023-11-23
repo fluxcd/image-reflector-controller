@@ -20,9 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,6 +50,7 @@ import (
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )
 
 // errAccessDenied is returned when an ImageRepository reference in ImagePolicy
@@ -106,9 +109,10 @@ type ImagePolicyReconciler struct {
 	kuberecorder.EventRecorder
 	helper.Metrics
 
-	ControllerName string
-	Database       DatabaseReader
-	ACLOptions     acl.Options
+	ControllerName    string
+	Database          DatabaseReader
+	ACLOptions        acl.Options
+	AuthOptionsGetter registry.AuthOptionsGetter
 
 	patchOptions []patch.Option
 }
@@ -213,9 +217,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 
 	var resultImage, resultTag, previousTag string
 
-	// If there's no error and no requeue is requested, it's a success. Unlike
-	// other reconcilers, this reconciler doesn't requeue on its own with a
-	// RequeueAfter value.
+	// If there's no error and no requeue is requested, it's a success.
 	isSuccess := func(res ctrl.Result, err error) bool {
 		if err != nil || res.Requeue {
 			return false
@@ -256,6 +258,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 
 	// Cleanup the last result.
 	obj.Status.LatestImage = ""
+	obj.Status.LatestRef = nil
 
 	// Get ImageRepository from reference.
 	repo, err := r.getImageRepository(ctx, obj)
@@ -315,21 +318,33 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 
 	// Write the observations on status.
 	obj.Status.LatestImage = repo.Spec.Image + ":" + latest
+	lr := imagev1.ImageRef{Name: repo.Spec.Image, Tag: latest}
+	obj.Status.LatestRef = &lr
+
+	if err := r.updateDigest(ctx, repo, obj, oldObj, latest); err != nil {
+		result, retErr = ctrl.Result{}, err
+		return
+	}
+
 	// If the old latest image and new latest image don't match, set the old
 	// image as the observed previous image.
 	// NOTE: The following allows the previous image to be set empty when
 	// there's a failure and a subsequent recovery from it. This behavior helps
 	// avoid creating an update event as there's no previous image to infer
 	// from. Recovery from a failure shouldn't result in an update event.
-	if oldObj.Status.LatestImage != obj.Status.LatestImage {
+	if oldObj.Status.LatestRef != nil &&
+		*oldObj.Status.LatestRef != *obj.Status.LatestRef {
 		obj.Status.ObservedPreviousImage = oldObj.Status.LatestImage
+		obj.Status.ObservedPreviousRef = oldObj.Status.LatestRef.DeepCopy()
 	}
+
 	// Parse the observed previous image if any and extract previous tag. This
 	// is used to determine image tag update path.
-	if obj.Status.ObservedPreviousImage != "" {
-		prevRef, err := name.NewTag(obj.Status.ObservedPreviousImage)
+	if obj.Status.ObservedPreviousRef != nil {
+		img := obj.Status.ObservedPreviousRef.Name + ":" + obj.Status.ObservedPreviousRef.Tag
+		prevRef, err := name.NewTag(img)
 		if err != nil {
-			e := fmt.Errorf("failed to parse previous image '%s': %w", obj.Status.ObservedPreviousImage, err)
+			e := fmt.Errorf("failed to parse previous image '%s': %w", img, err)
 			conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, e.Error())
 			result, retErr = ctrl.Result{}, e
 		}
@@ -343,6 +358,47 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 
 	result, retErr = ctrl.Result{}, nil
 	return
+}
+
+func (r *ImagePolicyReconciler) updateDigest(ctx context.Context, repo *imagev1.ImageRepository, obj, oldObj *imagev1.ImagePolicy, tag string) error {
+	if obj.GetDigestReflectionPolicy() == imagev1.ReflectNever {
+		obj.Status.LatestRef.Digest = ""
+		return nil
+	}
+
+	if obj.GetDigestReflectionPolicy() == imagev1.ReflectIfNotPresent &&
+		oldObj.Status.LatestRef != nil &&
+		oldObj.Status.LatestRef.Digest != "" &&
+		obj.Status.LatestRef.Name == oldObj.Status.LatestRef.Name &&
+		obj.Status.LatestRef.Tag == oldObj.Status.LatestRef.Tag {
+		obj.Status.LatestRef.Digest = oldObj.Status.LatestRef.Digest
+		return nil
+	}
+
+	var err error
+	obj.Status.LatestRef.Digest, err = r.fetchDigest(ctx, repo, tag, obj)
+	if err != nil {
+		return fmt.Errorf("failed fetching digest of %s: %w", obj.Status.LatestRef.String(), err)
+	}
+
+	return nil
+}
+
+func (r *ImagePolicyReconciler) fetchDigest(ctx context.Context, repo *imagev1.ImageRepository, latest string, obj *imagev1.ImagePolicy) (string, error) {
+	ref := strings.Join([]string{repo.Spec.Image, latest}, ":")
+	tagRef, err := name.ParseReference(ref)
+	if err != nil {
+		return "", fmt.Errorf("failed parsing reference %q: %w", ref, err)
+	}
+	opts, err := r.AuthOptionsGetter(ctx, *repo)
+	if err != nil {
+		return "", fmt.Errorf("failed to configure authentication options: %w", err)
+	}
+	desc, err := remote.Head(tagRef, opts...)
+	if err != nil {
+		return "", fmt.Errorf("failed fetching descriptor for %q: %w", tagRef.String(), err)
+	}
+	return desc.Digest.String(), nil
 }
 
 // getImageRepository tries to fetch an ImageRepository referenced by the given

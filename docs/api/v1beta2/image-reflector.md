@@ -131,6 +131,19 @@ rules. If no rules are provided, all the tags from the repository will be
 ordered and compared.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>digestReflectionPolicy</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta2.ReflectionPolicy">
+ReflectionPolicy
+</a>
+</em>
+</td>
+<td>
+<p>DigestReflectionPolicy governs the setting of the <code>.status.latestRef.digest</code> field.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -277,6 +290,19 @@ rules. If no rules are provided, all the tags from the repository will be
 ordered and compared.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>digestReflectionPolicy</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta2.ReflectionPolicy">
+ReflectionPolicy
+</a>
+</em>
+</td>
+<td>
+<p>DigestReflectionPolicy governs the setting of the <code>.status.latestRef.digest</code> field.</p>
+</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -308,7 +334,8 @@ string
 <td>
 <p>LatestImage gives the first in the list of images scanned by
 the image repository, when filtered and ordered according to
-the policy.</p>
+the policy.
+Deprecated: Replaced by the composite &ldquo;latestRef&rdquo; field.</p>
 </td>
 </tr>
 <tr>
@@ -321,6 +348,37 @@ string
 <td>
 <em>(Optional)</em>
 <p>ObservedPreviousImage is the observed previous LatestImage. It is used
+to keep track of the previous and current images.
+Deprecated: Replaced by the composite &ldquo;observedPreviousRef&rdquo; field.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>latestRef</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRef">
+ImageRef
+</a>
+</em>
+</td>
+<td>
+<p>LatestRef gives the first in the list of images scanned by
+the image repository, when filtered and ordered according
+to the policy.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>observedPreviousRef</code><br>
+<em>
+<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRef">
+ImageRef
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ObservedPreviousRef is the observed previous LatestRef. It is used
 to keep track of the previous and current images.</p>
 </td>
 </tr>
@@ -346,6 +404,61 @@ int64
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<h3 id="image.toolkit.fluxcd.io/v1beta2.ImageRef">ImageRef
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyStatus">ImagePolicyStatus</a>)
+</p>
+<p>ImageRef represents an image reference.</p>
+<div class="md-typeset__scrollwrap">
+<div class="md-typeset__table">
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>image</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name is the bare image&rsquo;s name.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>tag</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Tag is the image&rsquo;s tag.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>digest</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Digest is the image&rsquo;s digest.</p>
 </td>
 </tr>
 </tbody>
@@ -872,6 +985,13 @@ would select 0.</p>
 </table>
 </div>
 </div>
+<h3 id="image.toolkit.fluxcd.io/v1beta2.ReflectionPolicy">ReflectionPolicy
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicySpec">ImagePolicySpec</a>)
+</p>
+<p>ReflectionPolicy describes a policy for if/when to reflect a value from the registry in a certain resource field.</p>
 <h3 id="image.toolkit.fluxcd.io/v1beta2.ScanResult">ScanResult
 </h3>
 <p>

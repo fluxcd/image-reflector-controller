@@ -53,6 +53,7 @@ import (
 	"github.com/fluxcd/image-reflector-controller/internal/controller"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/features"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )
 
 const controllerName = "image-reflector-controller"
@@ -215,17 +216,20 @@ func main() {
 
 	metricsH := helper.NewMetrics(mgr, metrics.MustMakeRecorder(), imagev1.ImageFinalizer)
 
+	deprecatedLoginOptions := login.ProviderOptions{
+		AwsAutoLogin:   awsAutoLogin,
+		AzureAutoLogin: azureAutoLogin,
+		GcpAutoLogin:   gcpAutoLogin,
+	}
+	authOptionsGetter := registry.NewAuthOptionsGetter(mgr.GetClient(), deprecatedLoginOptions)
+
 	if err := (&controller.ImageRepositoryReconciler{
-		Client:         mgr.GetClient(),
-		EventRecorder:  eventRecorder,
-		Metrics:        metricsH,
-		Database:       db,
-		ControllerName: controllerName,
-		DeprecatedLoginOpts: login.ProviderOptions{
-			AwsAutoLogin:   awsAutoLogin,
-			AzureAutoLogin: azureAutoLogin,
-			GcpAutoLogin:   gcpAutoLogin,
-		},
+		Client:            mgr.GetClient(),
+		EventRecorder:     eventRecorder,
+		Metrics:           metricsH,
+		Database:          db,
+		ControllerName:    controllerName,
+		AuthOptionsGetter: authOptionsGetter,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
@@ -233,12 +237,13 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ImagePolicyReconciler{
-		Client:         mgr.GetClient(),
-		EventRecorder:  eventRecorder,
-		Metrics:        metricsH,
-		Database:       db,
-		ACLOptions:     aclOptions,
-		ControllerName: controllerName,
+		Client:            mgr.GetClient(),
+		EventRecorder:     eventRecorder,
+		Metrics:           metricsH,
+		Database:          db,
+		ACLOptions:        aclOptions,
+		ControllerName:    controllerName,
+		AuthOptionsGetter: authOptionsGetter,
 	}).SetupWithManager(mgr, controller.ImagePolicyReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

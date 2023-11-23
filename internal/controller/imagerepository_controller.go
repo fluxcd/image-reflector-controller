@@ -22,18 +22,14 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/authn/k8schain"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,8 +41,6 @@ import (
 
 	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/oci"
-	"github.com/fluxcd/pkg/oci/auth/login"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/patch"
@@ -54,7 +48,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/reconcile"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
-	"github.com/fluxcd/image-reflector-controller/internal/secret"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )
 
 // latestTagsCount is the number of tags to use as latest tags.
@@ -112,7 +106,8 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
-	DeprecatedLoginOpts login.ProviderOptions
+
+	AuthOptionsGetter registry.AuthOptionsGetter
 
 	patchOptions []patch.Option
 }
@@ -249,7 +244,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 
 	// Parse image reference.
-	ref, err := parseImageReference(obj.Spec.Image)
+	ref, err := registry.ParseImageReference(obj.Spec.Image)
 	if err != nil {
 		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, err.Error())
 		result, retErr = ctrl.Result{}, nil
@@ -257,7 +252,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 	conditions.Delete(obj, meta.StalledCondition)
 
-	opts, err := r.setAuthOptions(ctx, obj, ref)
+	opts, err := r.AuthOptionsGetter(ctx, *obj)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
 		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, e.Error())
@@ -323,117 +318,6 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	return
 }
 
-// setAuthOptions returns authentication options required to scan a repository.
-func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference) ([]remote.Option, error) {
-	timeout := obj.GetTimeout()
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Configure authentication strategy to access the registry.
-	var options []remote.Option
-	var authSecret corev1.Secret
-	var auth authn.Authenticator
-	var authErr error
-
-	if obj.Spec.SecretRef != nil {
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.Spec.SecretRef.Name,
-		}, &authSecret); err != nil {
-			return nil, err
-		}
-		auth, authErr = secret.AuthFromSecret(authSecret, ref)
-	} else {
-		// Build login provider options and use it to attempt registry login.
-		opts := login.ProviderOptions{}
-		switch obj.GetProvider() {
-		case "aws":
-			opts.AwsAutoLogin = true
-		case "azure":
-			opts.AzureAutoLogin = true
-		case "gcp":
-			opts.GcpAutoLogin = true
-		default:
-			opts = r.DeprecatedLoginOpts
-		}
-		auth, authErr = login.NewManager().Login(ctx, obj.Spec.Image, ref, opts)
-	}
-	if authErr != nil {
-		// If it's not unconfigured provider error, abort reconciliation.
-		// Continue reconciliation if it's unconfigured providers for scanning
-		// public repositories.
-		if !errors.Is(authErr, oci.ErrUnconfiguredProvider) {
-			return nil, authErr
-		}
-	}
-	if auth != nil {
-		options = append(options, remote.WithAuth(auth))
-	}
-
-	// Load any provided certificate.
-	if obj.Spec.CertSecretRef != nil {
-		var certSecret corev1.Secret
-		if obj.Spec.SecretRef != nil && obj.Spec.SecretRef.Name == obj.Spec.CertSecretRef.Name {
-			certSecret = authSecret
-		} else {
-			if err := r.Get(ctx, types.NamespacedName{
-				Namespace: obj.GetNamespace(),
-				Name:      obj.Spec.CertSecretRef.Name,
-			}, &certSecret); err != nil {
-				return nil, err
-			}
-		}
-
-		tr, err := secret.TransportFromKubeTLSSecret(&certSecret)
-		if err != nil {
-			return nil, err
-		}
-		if tr.TLSClientConfig == nil {
-			tr, err = secret.TransportFromSecret(&certSecret)
-			if err != nil {
-				return nil, err
-			}
-			if tr.TLSClientConfig != nil {
-				ctrl.LoggerFrom(ctx).
-					Info("warning: specifying TLS auth data via `certFile`/`keyFile`/`caFile` is deprecated, please use `tls.crt`/`tls.key`/`ca.crt` instead")
-			}
-		}
-		options = append(options, remote.WithTransport(tr))
-	}
-
-	if obj.Spec.ServiceAccountName != "" {
-		serviceAccount := corev1.ServiceAccount{}
-		// Lookup service account
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.Spec.ServiceAccountName,
-		}, &serviceAccount); err != nil {
-			return nil, err
-		}
-
-		if len(serviceAccount.ImagePullSecrets) > 0 {
-			imagePullSecrets := make([]corev1.Secret, len(serviceAccount.ImagePullSecrets))
-			for i, ips := range serviceAccount.ImagePullSecrets {
-				var saAuthSecret corev1.Secret
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: obj.GetNamespace(),
-					Name:      ips.Name,
-				}, &saAuthSecret); err != nil {
-					return nil, err
-				}
-				imagePullSecrets[i] = saAuthSecret
-			}
-			keychain, err := k8schain.NewFromPullSecrets(ctx, imagePullSecrets)
-			if err != nil {
-				return nil, err
-			}
-			options = append(options, remote.WithAuthFromKeychain(keychain))
-		}
-	}
-
-	return options, nil
-}
-
 // shouldScan takes an image repo and the time now, and returns whether
 // the repository should be scanned now, and how long to wait for the
 // next scan. It also returns the reason for the scan.
@@ -468,7 +352,7 @@ func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now 
 
 	// If the canonical image name of the image is different from the last
 	// observed name, scan now.
-	ref, err := parseImageReference(obj.Spec.Image)
+	ref, err := registry.ParseImageReference(obj.Spec.Image)
 	if err != nil {
 		return false, scanInterval, "", err
 	}
@@ -567,26 +451,6 @@ func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Ob
 		ctrl.LoggerFrom(ctx).Info(msg)
 	}
 	r.Eventf(obj, eventType, reason, msg)
-}
-
-// parseImageReference parses the given URL into a container registry repository
-// reference.
-func parseImageReference(url string) (name.Reference, error) {
-	if s := strings.Split(url, "://"); len(s) > 1 {
-		return nil, fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
-	}
-
-	ref, err := name.ParseReference(url)
-	if err != nil {
-		return nil, err
-	}
-
-	imageName := strings.TrimPrefix(url, ref.Context().RegistryStr())
-	if s := strings.Split(imageName, ":"); len(s) > 1 {
-		return nil, fmt.Errorf(".spec.image value should not contain a tag; remove ':%s'", s[1])
-	}
-
-	return ref, nil
 }
 
 // filterOutTags filters the given tags through the given regular expression
