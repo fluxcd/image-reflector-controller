@@ -249,7 +249,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 
 	// Parse image reference.
-	ref, err := parseImageReference(obj.Spec.Image)
+	ref, err := parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
 		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, err.Error())
 		result, retErr = ctrl.Result{}, nil
@@ -468,7 +468,7 @@ func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now 
 
 	// If the canonical image name of the image is different from the last
 	// observed name, scan now.
-	ref, err := parseImageReference(obj.Spec.Image)
+	ref, err := parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
 		return false, scanInterval, "", err
 	}
@@ -570,13 +570,19 @@ func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Ob
 }
 
 // parseImageReference parses the given URL into a container registry repository
-// reference.
-func parseImageReference(url string) (name.Reference, error) {
+// reference. If insecure is set to true, then the registry is deemed to be
+// located at an HTTP endpoint.
+func parseImageReference(url string, insecure bool) (name.Reference, error) {
 	if s := strings.Split(url, "://"); len(s) > 1 {
 		return nil, fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
 	}
 
-	ref, err := name.ParseReference(url)
+	var opts []name.Option
+	if insecure {
+		opts = append(opts, name.Insecure)
+	}
+
+	ref, err := name.ParseReference(url, opts...)
 	if err != nil {
 		return nil, err
 	}
