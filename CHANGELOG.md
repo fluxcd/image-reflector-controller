@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.31.0
+
+**Release date:** 2023-12-08
+
+This prerelease comes with support for insecure HTTP registries using the
+new `.spec.insecure` field on `ImageRepository` objects. This field is
+optional and defaults to `false`.
+
+In addition, the Kubernetes dependencies have been updated to v1.28.4 in
+combination with an update of the controller's dependencies.
+
+Lastly, tiny improvements have been made to some of the error messages the
+controller emits.
+
+Improvements:
+- Address miscellaneous issues throughout code base
+  [#452](https://github.com/fluxcd/image-reflector-controller/pull/452)
+- Update dependencies to Kubernetes v1.28
+  [#471](https://github.com/fluxcd/image-reflector-controller/pull/471)
+- imagerepo: add `.spec.insecure` to `ImageRepository`
+  [#472](https://github.com/fluxcd/image-reflector-controller/pull/472)
+- Various dependency updates
+  [#453](https://github.com/fluxcd/image-reflector-controller/pull/453)
+  [#454](https://github.com/fluxcd/image-reflector-controller/pull/454)
+  [#455](https://github.com/fluxcd/image-reflector-controller/pull/455)
+  [#459](https://github.com/fluxcd/image-reflector-controller/pull/459)
+  [#460](https://github.com/fluxcd/image-reflector-controller/pull/460)
+  [#477](https://github.com/fluxcd/image-reflector-controller/pull/477)
+
 ## 0.30.0
 
 **Release date:** 2023-08-23
