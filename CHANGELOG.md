@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.31.1
+
+**Release date:** 2023-12-11
+
+This prerelease comes with updates to AWS dependencies to fix an issue with ECR authentication.
+
+In addition, the container base image was updated to Alpine 3.19.
+
+Improvements:
+- build: update Alpine to 3.19
+  [#480](https://github.com/fluxcd/image-reflector-controller/pull/480)
+- Update dependencies
+  [#481](https://github.com/fluxcd/image-reflector-controller/pull/481)
+
 ## 0.31.0
 
 **Release date:** 2023-12-08
