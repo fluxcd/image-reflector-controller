@@ -6,7 +6,8 @@ replace github.com/fluxcd/image-reflector-controller/api => ../../api
 
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.0.0
-	github.com/fluxcd/test-infra/tftestenv v0.0.0-20230530120643-bdcf7573fb2f
+	github.com/fluxcd/test-infra/tftestenv v0.0.0-20240108135005-b58e0c4e0cfa
+	github.com/hashicorp/terraform-exec v0.18.1
 	github.com/hashicorp/terraform-json v0.15.0
 	github.com/onsi/gomega v1.30.0
 	k8s.io/apimachinery v0.28.4
@@ -40,7 +41,6 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hc-install v0.5.0 // indirect
-	github.com/hashicorp/terraform-exec v0.18.1 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect

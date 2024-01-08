@@ -49,6 +49,10 @@ variables using
 use the terraform configuration below. Please make sure all the requirements of
 azure-gh-actions are followed before running it.
 
+**NOTE:** When running the following for a repo under an organization, set the
+environment variable `GITHUB_ORGANIZATION` if setting the `owner` in the
+`github` provider doesn't work.
+
 ```hcl
 provider "github" {
   owner = "fluxcd"
@@ -148,6 +152,10 @@ variables using
 [gcp-gh-actions](https://github.com/fluxcd/test-infra/tree/main/tf-modules/gcp/github-actions)
 use the terraform configuration below. Please make sure all the requirements of
 gcp-gh-actions are followed before running it.
+
+**NOTE:** When running the following for a repo under an organization, set the
+environment variable `GITHUB_ORGANIZATION` if setting the `owner` in the
+`github` provider doesn't work.
 
 ```hcl
 provider "google" {}
@@ -256,9 +264,13 @@ using the initial `build/flux.yaml` manifest.
 Once the environment is ready, the individual go tests are executed. After the
 tests end, the environment is destroyed automatically.
 
-**IMPORTANT**: In case the terraform infrastructure results in a bad state,
-maybe due to a crash during the apply, the whole infrastructure can be destroyed
-by running `terraform destroy` in `terraform/<provider>` directory.
+If not configured explicitly to retain the infrastructure, at the end of the
+test, the test infrastructure is deleted. In case of any failure due to which
+the resources don't get deleted, the `make destroy-*` commands can be run for
+the respective provider. This will run terraform destroy in the respective
+provider's terraform configuration directory. This can be used to quickly
+destroy the infrastructure without going through the provision-test-destroy
+steps.
 
 ## Debugging the tests
 

@@ -32,3 +32,15 @@ test-azure:
 
 test-gcp:
 	$(MAKE) test PROVIDER_ARG="-provider gcp"
+
+destroy:
+	go test -timeout $(TEST_TIMEOUT) -v $(GO_TEST_PATH) $(GO_TEST_ARGS) $(PROVIDER_ARG) -destroy-only
+
+destroy-aws:
+	$(MAKE) destroy PROVIDER_ARG="-provider aws"
+
+destroy-azure:
+	$(MAKE) destroy PROVIDER_ARG="-provider azure"
+
+destroy-gcp:
+	$(MAKE) destroy PROVIDER_ARG="-provider gcp"

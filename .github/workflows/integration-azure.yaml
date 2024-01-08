@@ -70,3 +70,12 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.IRC_E2E_AZ_ARM_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.IRC_E2E_AZ_ARM_TENANT_ID }}
           TF_VAR_azure_location: ${{ vars.TF_VAR_azure_location }}
+      - name: Ensure resource cleanup
+        if: ${{ always() }}
+        run: . .env && make destroy-azure
+        env:
+          ARM_CLIENT_ID: ${{ secrets.IRC_E2E_AZ_ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.IRC_E2E_AZ_ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.IRC_E2E_AZ_ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.IRC_E2E_AZ_ARM_TENANT_ID }}
+          TF_VAR_azure_location: ${{ vars.TF_VAR_azure_location }}
