@@ -84,3 +84,10 @@ jobs:
           TF_VAR_gcp_project_id: ${{ vars.TF_VAR_gcp_project_id }}
           TF_VAR_gcp_region: ${{ vars.TF_VAR_gcp_region }}
           TF_VAR_gcp_zone: ${{ vars.TF_VAR_gcp_zone }}
+      - name: Ensure resource cleanup
+        if: ${{ always() }}
+        run: . .env && make destroy-gcp
+        env:
+          TF_VAR_gcp_project_id: ${{ vars.TF_VAR_gcp_project_id }}
+          TF_VAR_gcp_region: ${{ vars.TF_VAR_gcp_region }}
+          TF_VAR_gcp_zone: ${{ vars.TF_VAR_gcp_zone }}
