@@ -18,11 +18,17 @@ package controller
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -34,6 +40,7 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
+	"github.com/fluxcd/pkg/runtime/patch"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/secret"
@@ -873,4 +880,83 @@ func TestNotify(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestImageRepositoryReconciler_TLS(t *testing.T) {
+	g := NewWithT(t)
+
+	// Run test registry server.
+	srv, rootCertPEM, clientCertPEM, clientKeyPEM, clientTLSCert, err := test.CreateTLSServer()
+	g.Expect(err).To(Not(HaveOccurred()))
+	srv.StartTLS()
+	defer srv.Close()
+
+	// Construct a test repository reference.
+	u, err := url.Parse(srv.URL)
+	g.Expect(err).ToNot(HaveOccurred())
+	repoURL := fmt.Sprintf("%s/foo", u.Host)
+	ref, err := name.ParseReference(repoURL)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	// Push a test image.
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	remoteOpts := []remote.Option{remote.WithTransport(&http.Transport{
+		TLSClientConfig: &tls.Config{
+			RootCAs:      pool,
+			Certificates: []tls.Certificate{clientTLSCert},
+		},
+	})}
+	img, err := random.Image(1024, 1)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(remote.Write(ref, img, remoteOpts...)).ToNot(HaveOccurred())
+	dst := ref.Context().Tag("v1.2.3")
+	desc, err := remote.Get(ref, remoteOpts...)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(remote.Tag(dst, desc, remoteOpts...))
+
+	// Construct cert secret.
+	testSecretName := "test-secret"
+	testNamespace := "test-ns" + randStringRunes(5)
+
+	testTLSSecret := &corev1.Secret{}
+	testTLSSecret.Name = testSecretName
+	testTLSSecret.Namespace = testNamespace
+	testTLSSecret.Type = corev1.SecretTypeTLS
+	testTLSSecret.Data = map[string][]byte{
+		secret.CACrtKey:         rootCertPEM,
+		corev1.TLSCertKey:       clientCertPEM,
+		corev1.TLSPrivateKeyKey: clientKeyPEM,
+	}
+
+	// Construct ImageRepository.
+	obj := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "repo-" + randStringRunes(5),
+			Namespace: testNamespace,
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: repoURL,
+			CertSecretRef: &meta.LocalObjectReference{
+				Name: testSecretName,
+			},
+		},
+	}
+
+	clientBuilder := fake.NewClientBuilder().
+		WithScheme(testEnv.GetScheme()).
+		WithObjects(testTLSSecret, obj).
+		WithStatusSubresource(&imagev1.ImageRepository{})
+
+	r := &ImageRepositoryReconciler{
+		EventRecorder: record.NewFakeRecorder(32),
+		Client:        clientBuilder.Build(),
+		patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
+		Database:      &mockDatabase{},
+	}
+
+	sp := patch.NewSerialPatcher(obj, r.Client)
+	_, err = r.reconcile(ctx, sp, obj, time.Now())
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(conditions.IsReady(obj)).To(BeTrue())
 }
