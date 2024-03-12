@@ -13,7 +13,7 @@ BUILD_PLATFORMS ?= linux/amd64
 FUZZ_TIME ?= 1m
 
 # API (doc) generation utilities
-CONTROLLER_GEN_VERSION ?= v0.12.0
+CONTROLLER_GEN_VERSION ?= v0.14.0
 GEN_API_REF_DOCS_VERSION ?= e327d0730470cbd61b06300f81c5fcf91c23c113
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -107,23 +107,23 @@ docker-deploy:
 	kubectl -n flux-system set image deployment/image-reflector-controller manager=${IMG}
 
 # Find or download controller-gen
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
+CONTROLLER_GEN = $(GOBIN)/controller-gen
 .PHONY: controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION))
 
 # Find or download gen-crd-api-reference-docs
-GEN_CRD_API_REFERENCE_DOCS = $(shell pwd)/bin/gen-crd-api-reference-docs
+GEN_CRD_API_REFERENCE_DOCS = $(GOBIN)/gen-crd-api-reference-docs
 .PHONY: gen-crd-api-reference-docs
 gen-crd-api-reference-docs:
 	$(call go-install-tool,$(GEN_CRD_API_REFERENCE_DOCS),github.com/ahmetb/gen-crd-api-reference-docs@$(GEN_API_REF_DOCS_VERSION))
 
-ENVTEST = $(shell pwd)/bin/setup-envtest
+ENVTEST = $(GOBIN)/setup-envtest
 .PHONY: envtest
 setup-envtest: ## Download envtest-setup locally if necessary.
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
 
-ENVTEST_ASSETS_DIR=$(shell pwd)/build/testbin
+ENVTEST_ASSETS_DIR=$(GOBIN)/build/testbin
 ENVTEST_KUBERNETES_VERSION?=latest
 install-envtest: setup-envtest
 	mkdir -p ${ENVTEST_ASSETS_DIR}
@@ -138,7 +138,7 @@ TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
+GOBIN=$(GOBIN) go install $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
