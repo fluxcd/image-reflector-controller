@@ -15,12 +15,12 @@ require (
 	github.com/fluxcd/pkg/oci v0.35.0
 	github.com/fluxcd/pkg/runtime v0.44.1
 	github.com/fluxcd/pkg/version v0.2.2
-	github.com/google/go-containerregistry v0.19.0
+	github.com/google/go-containerregistry v0.19.1
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20231202142526-55ffb0092afd
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.31.1
 	github.com/spf13/pflag v1.0.5
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	k8s.io/api v0.28.6
 	k8s.io/apimachinery v0.28.6
 	k8s.io/client-go v0.28.6
