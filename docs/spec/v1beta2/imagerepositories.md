@@ -382,6 +382,14 @@ to the IAM role when using IRSA and you have to configure the
 `image-reflector-controller` to assume the IAM role. Please see 
 [documentation](https://docs.aws.amazon.com/eks/latest/userguide/associate-service-account-role.html).
 
+Note when you change the IAM role for the service account, you will need to
+restart the `image-reflector-controller` pod to use the new role. This is 
+always true for any controller running on EKS.
+
+```bash
+kubectl rollout restart deployment -n flux-system image-reflector-controller
+```
+
 #### Azure
 
 The `azure` provider can be used to authenticate automatically using Workload
