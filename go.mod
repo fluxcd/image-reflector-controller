@@ -15,12 +15,12 @@ require (
 	github.com/fluxcd/pkg/oci v0.35.0
 	github.com/fluxcd/pkg/runtime v0.44.1
 	github.com/fluxcd/pkg/version v0.2.2
-	github.com/google/go-containerregistry v0.19.0
+	github.com/google/go-containerregistry v0.19.1
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20231202142526-55ffb0092afd
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.31.1
+	github.com/onsi/gomega v1.32.0
 	github.com/spf13/pflag v1.0.5
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	k8s.io/api v0.28.6
 	k8s.io/apimachinery v0.28.6
 	k8s.io/client-go v0.28.6
@@ -153,7 +153,7 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/evanphx/json-patch.v5 v5.7.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
