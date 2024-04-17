@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.32.0
+
+**Release date:** 2024-05-06
+
+This prerelease comes with an update to the Kubernetes dependencies to v1.30.0
+and various other controller dependencies have been updated to their latest
+version. In addition, the controller is now built with Go 1.22.
+
+Improvements:
+- docs: Remove references to aad pod identity
+  [#557](https://github.com/fluxcd/image-reflector-controller/pull/557)
+- Update dependencies to Kubernetes 1.30
+  [#551](https://github.com/fluxcd/image-reflector-controller/pull/551)
+- Add note to restart image-reflector-controller after AWS IAM role change
+  [#508](https://github.com/fluxcd/image-reflector-controller/pull/508)
+- Update dependencies to Go 1.22 and Kubernetes 1.29.3
+  [#535](https://github.com/fluxcd/image-reflector-controller/pull/535)
+- updating controller-gen to v0.14.0
+  [#519](https://github.com/fluxcd/image-reflector-controller/pull/519)
+- Add ImageRepository TLS test
+  [#511](https://github.com/fluxcd/image-reflector-controller/pull/511)
+- Various dependency updates
+  [#504](https://github.com/fluxcd/image-reflector-controller/pull/504)
+  [#515](https://github.com/fluxcd/image-reflector-controller/pull/515)
+  [#529](https://github.com/fluxcd/image-reflector-controller/pull/529)
+  [#534](https://github.com/fluxcd/image-reflector-controller/pull/534)
+  [#538](https://github.com/fluxcd/image-reflector-controller/pull/538)
+  [#549](https://github.com/fluxcd/image-reflector-controller/pull/549)
+  [#546](https://github.com/fluxcd/image-reflector-controller/pull/546)
+  [#545](https://github.com/fluxcd/image-reflector-controller/pull/545)
+  [#544](https://github.com/fluxcd/image-reflector-controller/pull/544)
+  [#553](https://github.com/fluxcd/image-reflector-controller/pull/553)
+  [#555](https://github.com/fluxcd/image-reflector-controller/pull/555)
+
 ## 0.31.2
 
 **Release date:** 2024-02-01
