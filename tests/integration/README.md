@@ -9,6 +9,278 @@
 - AWS CLI, does not need to be configured with the AWS account.
 - Docker CLI for registry login.
 - kubectl for applying certain install manifests.
+- jq for parsing JSON response from AWS.
+
+#### Permissions
+
+The following policy document can be used to create an IAM Policy for
+provisioning the infrastructure and running the tests:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "testinfra",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:AllocateAddress",
+                "ec2:AssociateRouteTable",
+                "ec2:AttachInternetGateway",
+                "ec2:AuthorizeSecurityGroupEgress",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:CreateInternetGateway",
+                "ec2:CreateLaunchTemplate",
+                "ec2:CreateLaunchTemplateVersion",
+                "ec2:CreateNatGateway",
+                "ec2:CreateNetworkAcl",
+                "ec2:CreateNetworkAclEntry",
+                "ec2:CreateRoute",
+                "ec2:CreateRouteTable",
+                "ec2:CreateSecurityGroup",
+                "ec2:CreateSubnet",
+                "ec2:CreateTags",
+                "ec2:CreateVpc",
+                "ec2:DeleteInternetGateway",
+                "ec2:DeleteLaunchTemplate",
+                "ec2:DeleteNatGateway",
+                "ec2:DeleteNetworkAcl",
+                "ec2:DeleteNetworkAclEntry",
+                "ec2:DeleteRoute",
+                "ec2:DeleteRouteTable",
+                "ec2:DeleteSecurityGroup",
+                "ec2:DeleteSubnet",
+                "ec2:DeleteTags",
+                "ec2:DeleteVolume",
+                "ec2:DeleteVpc",
+                "ec2:DescribeAddresses",
+                "ec2:DescribeAddressesAttribute",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeInternetGateways",
+                "ec2:DescribeLaunchTemplates",
+                "ec2:DescribeLaunchTemplateVersions",
+                "ec2:DescribeNatGateways",
+                "ec2:DescribeNetworkAcls",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DescribeRouteTables",
+                "ec2:DescribeSecurityGroupRules",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeTags",
+                "ec2:DescribeVpcAttribute",
+                "ec2:DescribeVpcs",
+                "ec2:DetachInternetGateway",
+                "ec2:DisassociateAddress",
+                "ec2:DisassociateRouteTable",
+                "ec2:ModifyVpcAttribute",
+                "ec2:ReleaseAddress",
+                "ec2:RevokeSecurityGroupEgress",
+                "ec2:RevokeSecurityGroupIngress",
+                "ec2:RunInstances",
+                "ecr:BatchGetImage",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:CreateRepository",
+                "ecr:CompleteLayerUpload",
+                "ecr:DeleteRepository",
+                "ecr:DescribeRepositories",
+                "ecr:GetAuthorizationToken",
+                "ecr:InitiateLayerUpload",
+                "ecr:ListTagsForResource",
+                "ecr:PutImage",
+                "ecr:TagResource",
+                "ecr:UploadLayerPart",
+                "eks:AssociateAccessPolicy",
+                "eks:CreateAccessEntry",
+                "eks:CreateAddon",
+                "eks:CreateCluster",
+                "eks:CreateNodegroup",
+                "eks:DeleteAccessEntry",
+                "eks:DeleteAddon",
+                "eks:DeleteCluster",
+                "eks:DeleteNodegroup",
+                "eks:DescribeAccessEntry",
+                "eks:DescribeAddon",
+                "eks:DescribeAddonVersions",
+                "eks:DescribeCluster",
+                "eks:DescribeNodegroup",
+                "eks:DisassociateAccessPolicy",
+                "eks:ListAssociatedAccessPolicies",
+                "eks:ListNodegroups",
+                "eks:TagResource",
+                "eks:UpdateNodegroupConfig",
+                "eks:UpdateNodegroupVersion",
+                "iam:AttachRolePolicy",
+                "iam:CreateOpenIDConnectProvider",
+                "iam:CreateRole",
+                "iam:DeleteOpenIDConnectProvider",
+                "iam:DeleteRole",
+                "iam:DetachRolePolicy",
+                "iam:GetOpenIDConnectProvider",
+                "iam:GetRole",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListInstanceProfilesForRole",
+                "iam:ListRolePolicies",
+                "iam:TagOpenIDConnectProvider",
+                "iam:TagRole",
+                "ssm:GetParameters"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "clusterperms",
+            "Effect": "Allow",
+            "Action": [
+                "iam:PassRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::<account-id>:role/flux-test-*",
+                "arn:aws:iam::<account-id>:role/blue-eks-node-group-*",
+                "arn:aws:iam::<account-id>:role/green-eks-node-group-*"
+            ]
+        }
+    ]
+}
+```
+
+#### IAM and CI Setup
+
+To create all the necessary IAM role and policy with all the permissions, set up
+CI secrets and variables using
+[aws-gh-actions](https://github.com/fluxcd/test-infra/tree/main/tf-modules/aws/github-actions)
+with the terraform configuration below. Please make sure all the requirements of
+aws-gh-actions are followed before running it, especially registering GitHub
+OIDC as an identity provider in the AWS account.
+
+**NOTE:** When running the following for a repo under an organization, set the
+environment variable `GITHUB_ORGANIZATION` if setting the `owner` in the
+`github` provider doesn't work.
+
+```hcl
+module "aws_gh_actions" {
+  source = "git::https://github.com/fluxcd/test-infra.git//tf-modules/aws/github-actions"
+
+  aws_region             = "us-east-2"
+  aws_policy_name        = "irc-e2e"
+  aws_policy_description = "policy for image-reflector-controller e2e tests"
+  aws_provision_perms = [
+    "ec2:AllocateAddress",
+    "ec2:AssociateRouteTable",
+    "ec2:AttachInternetGateway",
+    "ec2:AuthorizeSecurityGroupEgress",
+    "ec2:AuthorizeSecurityGroupIngress",
+    "ec2:CreateInternetGateway",
+    "ec2:CreateLaunchTemplate",
+    "ec2:CreateLaunchTemplateVersion",
+    "ec2:CreateNatGateway",
+    "ec2:CreateNetworkAcl",
+    "ec2:CreateNetworkAclEntry",
+    "ec2:CreateRoute",
+    "ec2:CreateRouteTable",
+    "ec2:CreateSecurityGroup",
+    "ec2:CreateSubnet",
+    "ec2:CreateTags",
+    "ec2:CreateVpc",
+    "ec2:DeleteInternetGateway",
+    "ec2:DeleteLaunchTemplate",
+    "ec2:DeleteNatGateway",
+    "ec2:DeleteNetworkAcl",
+    "ec2:DeleteNetworkAclEntry",
+    "ec2:DeleteRoute",
+    "ec2:DeleteRouteTable",
+    "ec2:DeleteSecurityGroup",
+    "ec2:DeleteSubnet",
+    "ec2:DeleteTags",
+    "ec2:DeleteVolume",
+    "ec2:DeleteVpc",
+    "ec2:DescribeAddresses",
+    "ec2:DescribeAddressesAttribute",
+    "ec2:DescribeAvailabilityZones",
+    "ec2:DescribeInternetGateways",
+    "ec2:DescribeLaunchTemplates",
+    "ec2:DescribeLaunchTemplateVersions",
+    "ec2:DescribeNatGateways",
+    "ec2:DescribeNetworkAcls",
+    "ec2:DescribeNetworkInterfaces",
+    "ec2:DescribeRouteTables",
+    "ec2:DescribeSecurityGroupRules",
+    "ec2:DescribeSecurityGroups",
+    "ec2:DescribeSubnets",
+    "ec2:DescribeTags",
+    "ec2:DescribeVpcAttribute",
+    "ec2:DescribeVpcs",
+    "ec2:DetachInternetGateway",
+    "ec2:DisassociateAddress",
+    "ec2:DisassociateRouteTable",
+    "ec2:ModifyVpcAttribute",
+    "ec2:ReleaseAddress",
+    "ec2:RevokeSecurityGroupEgress",
+    "ec2:RevokeSecurityGroupIngress",
+    "ec2:RunInstances",
+    "ecr:BatchGetImage",
+    "ecr:BatchCheckLayerAvailability",
+    "ecr:CreateRepository",
+    "ecr:CompleteLayerUpload",
+    "ecr:DeleteRepository",
+    "ecr:DescribeRepositories",
+    "ecr:GetAuthorizationToken",
+    "ecr:InitiateLayerUpload",
+    "ecr:ListTagsForResource",
+    "ecr:PutImage",
+    "ecr:TagResource",
+    "ecr:UploadLayerPart",
+    "eks:AssociateAccessPolicy",
+    "eks:CreateAccessEntry",
+    "eks:CreateAddon",
+    "eks:CreateCluster",
+    "eks:CreateNodegroup",
+    "eks:DeleteAccessEntry",
+    "eks:DeleteAddon",
+    "eks:DeleteCluster",
+    "eks:DeleteNodegroup",
+    "eks:DescribeAccessEntry",
+    "eks:DescribeAddon",
+    "eks:DescribeAddonVersions",
+    "eks:DescribeCluster",
+    "eks:DescribeNodegroup",
+    "eks:DisassociateAccessPolicy",
+    "eks:ListAssociatedAccessPolicies",
+    "eks:ListNodegroups",
+    "eks:TagResource",
+    "eks:UpdateNodegroupConfig",
+    "eks:UpdateNodegroupVersion",
+    "iam:AttachRolePolicy",
+    "iam:CreateOpenIDConnectProvider",
+    "iam:CreateRole",
+    "iam:DeleteOpenIDConnectProvider",
+    "iam:DeleteRole",
+    "iam:DetachRolePolicy",
+    "iam:GetOpenIDConnectProvider",
+    "iam:GetRole",
+    "iam:ListAttachedRolePolicies",
+    "iam:ListInstanceProfilesForRole",
+    "iam:ListRolePolicies",
+    "iam:TagOpenIDConnectProvider",
+    "iam:TagRole",
+    "ssm:GetParameters"
+  ]
+  aws_cluster_role_prefix = [
+    "flux-test-",
+    "blue-eks-node-group-",
+    "green-eks-node-group-"
+  ]
+  aws_role_name          = "irc-e2e"
+  aws_role_description   = "role to assume in image-reflector-controller e2e test"
+  github_repo_owner      = "fluxcd"
+  github_project         = "image-reflector-controller"
+  github_repo_branch_ref = "*"
+
+  github_secret_accound_id_name  = "IRC_E2E_AWS_ACCOUNT_ID"
+  github_secret_assume_role_name = "IRC_E2E_AWS_ASSUME_ROLE_NAME"
+  github_variable_region_name    = "IRC_E2E_AWS_REGION"
+}
+```
+
+**NOTE:** Change the various names and environment variables above as necessary.
 
 ### Microsoft Azure
 

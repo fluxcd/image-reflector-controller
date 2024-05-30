@@ -1,0 +1,77 @@
+name: integration-aws
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+  # push:
+  #   branches:
+  #     - main
+
+permissions:
+  contents: read
+  id-token: write # Required for obtaining AWS OIDC federated credential.
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./tests/integration
+    steps:
+      - name: Checkout
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
+      - name: Set up Go
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        with:
+          go-version-file: 'tests/integration/go.mod'
+          cache-dependency-path: tests/integration/go.sum
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.IRC_E2E_AWS_ACCOUNT_ID }}:role/${{ secrets.IRC_E2E_AWS_ASSUME_ROLE_NAME }}
+          role-session-name: IRC_GH_Actions
+          aws-region: ${{ vars.IRC_E2E_AWS_REGION }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb  # v3.3.0
+      - name: Cache Docker layers
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
+        id: cache
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-ghcache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-ghcache-
+      - name: Set dynamic variables in .env
+        run: |
+          cat > .env <<EOF
+          export TF_VAR_rand=${RANDOM}
+          export TF_VAR_tags='{"environment"="github", "ci"="true", "repo"="image-reflector-controller", "createdat"="$(date -u +x%Y-%m-%d_%Hh%Mm%Ss)"}'
+          EOF
+      - name: Print .env for dynamic tag value reference
+        run: cat .env
+      - name: Build controller
+        run: |
+          make docker-build IMG=fluxcd/image-reflector-controller:dev \
+            BUILD_PLATFORMS=linux/amd64 \
+            BUILD_ARGS="--cache-from=type=local,src=/tmp/.buildx-cache \
+              --cache-to=type=local,dest=/tmp/.buildx-cache-new,mode=max"
+        working-directory: ./
+      - # Temp fix
+        # https://github.com/docker/build-push-action/issues/252
+        # https://github.com/moby/buildkit/issues/1896
+        name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+      - name: Run tests
+        run: . .env && make test-aws TEST_IMG=fluxcd/image-reflector-controller:dev
+        env:
+          AWS_REGION: ${{ vars.IRC_E2E_AWS_REGION }}
+      - name: Ensure resource cleanup
+        if: ${{ always() }}
+        run: . .env && make destroy-aws
+        env:
+          AWS_REGION: ${{ vars.IRC_E2E_AWS_REGION }}
