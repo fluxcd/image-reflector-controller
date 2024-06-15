@@ -393,8 +393,7 @@ kubectl rollout restart deployment -n flux-system image-reflector-controller
 #### Azure
 
 The `azure` provider can be used to authenticate automatically using Workload
-Identity, kubelet managed identity or Azure Active Directory pod-managed 
-identity (aad-pod-identity), and by extension gain access to ACR.
+Identity or kubelet managed identity and by extension gain access to ACR.
 
 ##### Kubelet Identity
 
@@ -444,39 +443,6 @@ in your cluster, create an identity that has `AcrPull` role to ACR and establish
 azure federated identity between the identity and the image-reflector-controller
 service account. Please, take a look at the
 [Azure documentation for Workload identity](https://azure.github.io/azure-workload-identity/docs/quick-start.html).
-
-##### AAD Pod Identity
-
-When using aad-pod-identity to enable access to ACR, add the following patch to
-your bootstrap repository, in the `flux-system/kustomization.yaml` file:
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - gotk-components.yaml
-  - gotk-sync.yaml
-patches:
-  - patch: |
-      - op: add
-        path: /spec/template/metadata/labels/aadpodidbinding
-        value: <identity-name>
-    target:
-      kind: Deployment
-      name: image-reflector-controller
-```
-
-When using pod-managed identity on an AKS cluster, AAD Pod Identity
-has to be used to give the `image-reflector-controller` pod access to the ACR.
-To do this, you have to install `aad-pod-identity` on your cluster, create a
-managed identity that has access to the container registry (this can also be the
-Kubelet identity if it has `AcrPull` role assignment on the ACR), create an
-`AzureIdentity` and `AzureIdentityBinding` that describe the managed identity
-and then label the `image-reflector-controller` pods with the name of the
-AzureIdentity as shown in the patch above. Please take a look at
-[this guide](https://azure.github.io/aad-pod-identity/docs/) or
-[this one](https://docs.microsoft.com/en-us/azure/aks/use-azure-ad-pod-identity)
-to use AKS pod-managed identities add-on that is in preview.
 
 #### GCP
 

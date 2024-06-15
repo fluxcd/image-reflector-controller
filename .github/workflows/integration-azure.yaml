@@ -19,14 +19,14 @@ jobs:
         working-directory: ./tests/integration
     steps:
       - name: Checkout
-        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Set up Go
-        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
           go-version-file: 'tests/integration/go.mod'
           cache-dependency-path: tests/integration/go.sum
       - name: Authenticate to Azure
-        uses: Azure/login@8c334a195cbb38e46038007b304988d888bf676a # v1.4.6
+        uses: Azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v1.4.6
         with:
           creds: '{"clientId":"${{ secrets.IRC_E2E_AZ_ARM_CLIENT_ID }}","clientSecret":"${{ secrets.IRC_E2E_AZ_ARM_CLIENT_SECRET }}","subscriptionId":"${{ secrets.IRC_E2E_AZ_ARM_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.IRC_E2E_AZ_ARM_TENANT_ID }}"}'
       - name: Set up QEMU
