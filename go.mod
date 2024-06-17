@@ -15,7 +15,7 @@ require (
 	github.com/fluxcd/pkg/oci v0.37.1
 	github.com/fluxcd/pkg/runtime v0.47.1
 	github.com/fluxcd/pkg/version v0.4.0
-	github.com/google/go-containerregistry v0.19.1
+	github.com/google/go-containerregistry v0.19.2
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20240418155129-98dd3e91704f
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.33.1
