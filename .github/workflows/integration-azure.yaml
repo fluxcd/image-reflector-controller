@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Set up Go
-        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
           go-version-file: 'tests/integration/go.mod'
           cache-dependency-path: tests/integration/go.sum
@@ -30,9 +30,9 @@ jobs:
         with:
           creds: '{"clientId":"${{ secrets.IRC_E2E_AZ_ARM_CLIENT_ID }}","clientSecret":"${{ secrets.IRC_E2E_AZ_ARM_CLIENT_SECRET }}","subscriptionId":"${{ secrets.IRC_E2E_AZ_ARM_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.IRC_E2E_AZ_ARM_TENANT_ID }}"}'
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
+        uses: docker/setup-qemu-action@5927c834f5b4fdf503fca6f4c7eccda82949e1ee # v3.1.0
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
+        uses: docker/setup-buildx-action@4fd812986e6c8c2a69e18311145f9371337f27d4 # v3.4.0
       - name: Cache Docker layers
         uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         id: cache
