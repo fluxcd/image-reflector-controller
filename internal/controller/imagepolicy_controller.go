@@ -274,7 +274,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		// watched by this reconciler, like the namespace that ImageRepository
 		// allows access from.
 		e := fmt.Errorf("failed to get the referred ImageRepository: %w", err)
-		conditions.MarkFalse(obj, meta.ReadyCondition, reason, e.Error())
+		conditions.MarkFalse(obj, meta.ReadyCondition, reason, "%s", e)
 		result, retErr = ctrl.Result{}, e
 		return
 	}
@@ -296,19 +296,19 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	if err != nil {
 		// Stall if it's an invalid policy.
 		if _, ok := err.(errInvalidPolicy); ok {
-			conditions.MarkStalled(obj, "InvalidPolicy", err.Error())
+			conditions.MarkStalled(obj, "InvalidPolicy", "%s", err)
 			result, retErr = ctrl.Result{}, nil
 			return
 		}
 
 		// If there's no tag in the database, mark not ready and retry.
 		if err == errNoTagsInDatabase {
-			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, err.Error())
+			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "%s", err)
 			result, retErr = ctrl.Result{}, err
 			return
 		}
 
-		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, err.Error())
+		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, "%s", err)
 		result, retErr = ctrl.Result{}, err
 		return
 	}
@@ -330,7 +330,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		prevRef, err := name.NewTag(obj.Status.ObservedPreviousImage)
 		if err != nil {
 			e := fmt.Errorf("failed to parse previous image '%s': %w", obj.Status.ObservedPreviousImage, err)
-			conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, e.Error())
+			conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, "%s", e)
 			result, retErr = ctrl.Result{}, e
 		}
 		previousTag = prevRef.TagStr()
