@@ -251,7 +251,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	// Parse image reference.
 	ref, err := parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
-		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, err.Error())
+		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, "%s", err)
 		result, retErr = ctrl.Result{}, nil
 		return
 	}
@@ -260,7 +260,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	opts, err := r.setAuthOptions(ctx, obj, ref)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
-		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, e.Error())
+		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, "%s", e)
 		result, retErr = ctrl.Result{}, e
 		return
 	}
@@ -269,7 +269,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	ok, when, reasonMsg, err := r.shouldScan(*obj, startTime)
 	if err != nil {
 		e := fmt.Errorf("failed to determine if it's scan time: %w", err)
-		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, e.Error())
+		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, "%s", e)
 		result, retErr = ctrl.Result{}, e
 		return
 	}
@@ -286,7 +286,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		tags, err := r.scan(ctx, obj, ref, opts)
 		if err != nil {
 			e := fmt.Errorf("scan failed: %w", err)
-			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.ReadOperationFailedReason, e.Error())
+			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.ReadOperationFailedReason, "%s", e)
 			result, retErr = ctrl.Result{}, e
 			return
 		}
