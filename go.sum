@@ -169,8 +169,10 @@ github.com/fluxcd/pkg/apis/event v0.9.0 h1:iKxU+3v/3bAuC1C1iXg1mjbIiaEQet7WETh8l
 github.com/fluxcd/pkg/apis/event v0.9.0/go.mod h1:5LjcTeppPMEyOgtTbIP7q2GbVwIRUfujIxynIjHBV/k=
 github.com/fluxcd/pkg/apis/meta v1.5.0 h1:/G82d2Az5D9op3F+wJUpD8jw/eTV0suM6P7+cSURoUM=
 github.com/fluxcd/pkg/apis/meta v1.5.0/go.mod h1:Y3u7JomuuKtr5fvP1Iji2/50FdRe5GcBug2jawNVkdM=
-github.com/fluxcd/pkg/oci v0.37.1 h1:p4rfCHZlBWL+Q5Xey51iiBRmoje0IevCBT0/r8iae3M=
-github.com/fluxcd/pkg/oci v0.37.1/go.mod h1:LrVuX6VACenJ5ycQJxec+I7YJegCsE4nzRUV+6RuxcY=
+github.com/fluxcd/pkg/cache v0.0.1 h1:aeDQm4D37btj6I01p6ZKW6JNOZm3CIYN5PaVzyhHr38=
+github.com/fluxcd/pkg/cache v0.0.1/go.mod h1:R3TJIK9XaohHNc3BeqfZX/UivMrx8Xz6ihGoVAjh75k=
+github.com/fluxcd/pkg/oci v0.38.1 h1:JIiZvi8WS5eoLIieJqL2kI8R875pK1PiVVijYlMTpNg=
+github.com/fluxcd/pkg/oci v0.38.1/go.mod h1:mYVSxnpVutRmWu6mpwxm7hXFn6qdhLEjspL04ej/WZU=
 github.com/fluxcd/pkg/runtime v0.47.1 h1:Q1tAFsp92uurWyoEe52AmMC4k+6DYTPBrUQDs+nz/9c=
 github.com/fluxcd/pkg/runtime v0.47.1/go.mod h1:97a+PqpWMgQsoqh91uH3EQz+/DC7Uxc8xcu/rDHFC5c=
 github.com/fluxcd/pkg/version v0.4.0 h1:3F6oeIZ+ug/f7pALIBhcUhfURel37EPPOn7nsGfsnOg=
@@ -245,8 +247,8 @@ github.com/google/go-cmp v0.5.8/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeN
 github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/google/go-containerregistry v0.19.1 h1:yMQ62Al6/V0Z7CqIrrS1iYoA5/oQCm88DeNujc7C1KY=
-github.com/google/go-containerregistry v0.19.1/go.mod h1:YCMFNQeeXeLF+dnhhWkqDItx/JSkH01j1Kis4PsjzFI=
+github.com/google/go-containerregistry v0.20.1 h1:eTgx9QNYugV4DN5mz4U8hiAGTi1ybXn0TPi4Smd8du0=
+github.com/google/go-containerregistry v0.20.1/go.mod h1:YCMFNQeeXeLF+dnhhWkqDItx/JSkH01j1Kis4PsjzFI=
 github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20240418155129-98dd3e91704f h1:HqnjbuZokjLKB/qgZi3jXPM74jvpots2u4YvsBmzlng=
 github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20240418155129-98dd3e91704f/go.mod h1:5UXYZJNyCPf2YD+6J76geTiLAXA8fJbDy7mGQa5m5Vc=
 github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20230522195908-1d535e24741c h1:woVEpUoKp19jSiFufK9hSEfFctfWqq1MUCg3VAHfQ6Y=
@@ -388,8 +390,9 @@ github.com/spf13/pflag v1.0.5/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An
 github.com/spf13/viper v1.3.2/go.mod h1:ZiWeW+zYFKm7srdB9IoDzzZXaJaI5eL9QjNiN/DMA2s=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
-github.com/stretchr/objx v0.5.0 h1:1zr/of2m5FGMsad5YfcqgdqdWrIhu+EBEJRhR1U7z/c=
 github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
+github.com/stretchr/objx v0.5.2 h1:xuMeJ0Sdp5ZMRXx/aWO6RZxdr3beISkG5/G/aIRr3pY=
+github.com/stretchr/objx v0.5.2/go.mod h1:FRsXN1f5AsAjCGJKqEizvkpNtU+EGNCLh3NxZ/8L+MA=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
