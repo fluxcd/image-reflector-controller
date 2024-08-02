@@ -29,9 +29,9 @@ jobs:
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.IRC_E2E_AWS_ACCOUNT_ID }}:role/${{ secrets.IRC_E2E_AWS_ASSUME_ROLE_NAME }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.IRC_E2E_AWS_ASSUME_ROLE_NAME }}
           role-session-name: IRC_GH_Actions
-          aws-region: ${{ vars.IRC_E2E_AWS_REGION }}
+          aws-region: ${{ vars.AWS_REGION }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
       - name: Set up Docker Buildx
@@ -69,9 +69,9 @@ jobs:
       - name: Run tests
         run: . .env && make test-aws TEST_IMG=fluxcd/image-reflector-controller:dev
         env:
-          AWS_REGION: ${{ vars.IRC_E2E_AWS_REGION }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
       - name: Ensure resource cleanup
         if: ${{ always() }}
         run: . .env && make destroy-aws
         env:
-          AWS_REGION: ${{ vars.IRC_E2E_AWS_REGION }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
