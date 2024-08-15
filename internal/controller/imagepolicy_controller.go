@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
@@ -114,7 +114,7 @@ type ImagePolicyReconciler struct {
 }
 
 type ImagePolicyReconcilerOptions struct {
-	RateLimiter ratelimiter.RateLimiter
+	RateLimiter workqueue.TypedRateLimiter[reconcile.Request]
 }
 
 func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePolicyReconcilerOptions) error {
