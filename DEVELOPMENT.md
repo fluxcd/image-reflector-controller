@@ -14,7 +14,7 @@ There are a number of dependencies required to be able to run image-reflector-co
 ## How to run the test suite
 
 Prerequisites:
-* go >= 1.16
+* go >= 1.23
 * kustomize >= 3.1
 
 You can run them by simply doing
