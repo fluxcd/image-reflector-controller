@@ -248,6 +248,11 @@ func (in *ImageRepositorySpec) DeepCopyInto(out *ImageRepositorySpec) {
 		*out = new(meta.LocalObjectReference)
 		**out = **in
 	}
+	if in.ProxySecretRef != nil {
+		in, out := &in.ProxySecretRef, &out.ProxySecretRef
+		*out = new(meta.LocalObjectReference)
+		**out = **in
+	}
 	if in.CertSecretRef != nil {
 		in, out := &in.CertSecretRef, &out.CertSecretRef
 		*out = new(meta.LocalObjectReference)

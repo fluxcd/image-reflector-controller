@@ -145,6 +145,17 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 		corev1.TLSPrivateKeyKey: clientKeyPEM,
 	}
 
+	testProxySecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-proxy-secret",
+			Namespace: testNamespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"address": []byte("http://proxy.example.com"),
+		},
+	}
+
 	testDeprecatedTLSSecret := &corev1.Secret{}
 	testDeprecatedTLSSecret.Name = testDeprecatedTLSSecretName
 	testDeprecatedTLSSecret.Namespace = testNamespace
@@ -249,8 +260,28 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:     "secret ref and cert secret ref",
-			mockObjs: []client.Object{testSecret, testTLSSecret},
+			name:     "proxy secret ref with existing secret",
+			mockObjs: []client.Object{testProxySecret},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image: testImg,
+				ProxySecretRef: &meta.LocalObjectReference{
+					Name: testProxySecret.Name,
+				},
+			},
+		},
+		{
+			name: "proxy secret ref with non-existing secret",
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image: testImg,
+				ProxySecretRef: &meta.LocalObjectReference{
+					Name: "non-existing-secret",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:     "secret, cert secret and proxy secret refs",
+			mockObjs: []client.Object{testSecret, testTLSSecret, testProxySecret},
 			imageRepoSpec: imagev1.ImageRepositorySpec{
 				Image: testImg,
 				SecretRef: &meta.LocalObjectReference{
@@ -258,6 +289,9 @@ func TestImageRepositoryReconciler_setAuthOptions(t *testing.T) {
 				},
 				CertSecretRef: &meta.LocalObjectReference{
 					Name: testTLSSecretName,
+				},
+				ProxySecretRef: &meta.LocalObjectReference{
+					Name: testProxySecret.Name,
 				},
 			},
 		},
@@ -498,24 +532,44 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
 
+	proxyAddr, proxyPort := test.NewProxy(t)
+
 	tests := []struct {
 		name           string
 		tags           []string
 		exclusionList  []string
 		annotation     string
 		db             *mockDatabase
-		wantErr        bool
+		proxyURL       *url.URL
+		wantErr        string
 		wantTags       []string
 		wantLatestTags []string
 	}{
 		{
 			name:    "no tags",
-			wantErr: true,
+			wantErr: "404 Not Found",
 		},
 		{
 			name:           "simple tags",
 			tags:           []string{"a", "b", "c", "d"},
 			db:             &mockDatabase{},
+			wantTags:       []string{"a", "b", "c", "d"},
+			wantLatestTags: []string{"d", "c", "b", "a"},
+		},
+		{
+			name:           "simple tags with proxy",
+			tags:           []string{"a", "b", "c", "d"},
+			db:             &mockDatabase{},
+			proxyURL:       &url.URL{Scheme: "http", Host: proxyAddr},
+			wantTags:       []string{"a", "b", "c", "d"},
+			wantLatestTags: []string{"d", "c", "b", "a"},
+		},
+		{
+			name:           "simple tags with incorrect proxy",
+			tags:           []string{"a", "b", "c", "d"},
+			db:             &mockDatabase{},
+			proxyURL:       &url.URL{Scheme: "http", Host: fmt.Sprintf("localhost:%d", proxyPort+1)},
+			wantErr:        "connection refused",
 			wantTags:       []string{"a", "b", "c", "d"},
 			wantLatestTags: []string{"d", "c", "b", "a"},
 		},
@@ -546,13 +600,13 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			name:          "bad exclusion pattern",
 			tags:          []string{"a"}, // Ensure repo isn't empty to prevent 404.
 			exclusionList: []string{"[="},
-			wantErr:       true,
+			wantErr:       "failed to compile regex",
 		},
 		{
 			name:    "db write fails",
 			tags:    []string{"a", "b"},
 			db:      &mockDatabase{WriteError: errors.New("fail")},
-			wantErr: true,
+			wantErr: "failed to set tags",
 		},
 		{
 			name:           "with reconcile annotation",
@@ -592,8 +646,18 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 
 			opts := []remote.Option{}
 
+			if tt.proxyURL != nil {
+				tr := &http.Transport{Proxy: http.ProxyURL(tt.proxyURL)}
+				opts = append(opts, remote.WithTransport(tr))
+			}
+
 			tagCount, err := r.scan(context.TODO(), repo, ref, opts)
-			g.Expect(err != nil).To(Equal(tt.wantErr))
+			if tt.wantErr != "" {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(tt.wantErr))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
 			if err == nil {
 				g.Expect(tagCount).To(Equal(len(tt.wantTags)))
 				g.Expect(r.Database.Tags(imgRepo)).To(Equal(tt.wantTags))
@@ -602,6 +666,191 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 				if tt.annotation != "" {
 					g.Expect(repo.Status.LastHandledReconcileAt).To(Equal(tt.annotation))
 				}
+			}
+		})
+	}
+}
+
+func TestImageRepositoryReconciler_getProxyURL(t *testing.T) {
+	tests := []struct {
+		name    string
+		repo    *imagev1.ImageRepository
+		objects []client.Object
+		wantURL string
+		wantErr string
+	}{
+		{
+			name: "empty proxySecretRef",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: nil,
+				},
+			},
+		},
+		{
+			name: "non-existing proxySecretRef",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "non-existing",
+					},
+				},
+			},
+			wantErr: "secrets \"non-existing\" not found",
+		},
+		{
+			name: "missing address in proxySecretRef",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
+			},
+			objects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "dummy",
+					},
+					Data: map[string][]byte{},
+				},
+			},
+			wantErr: "invalid proxy secret '/dummy': key 'address' is missing",
+		},
+		{
+			name: "invalid address in proxySecretRef",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
+			},
+			objects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "dummy",
+					},
+					Data: map[string][]byte{
+						"address": {0x7f},
+					},
+				},
+			},
+			wantErr: "failed to parse proxy address '\x7f': parse \"\\x7f\": net/url: invalid control character in URL",
+		},
+		{
+			name: "no user, no password",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
+			},
+			objects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "dummy",
+					},
+					Data: map[string][]byte{
+						"address": []byte("http://proxy.example.com"),
+					},
+				},
+			},
+			wantURL: "http://proxy.example.com",
+		},
+		{
+			name: "user, no password",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
+			},
+			objects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "dummy",
+					},
+					Data: map[string][]byte{
+						"address":  []byte("http://proxy.example.com"),
+						"username": []byte("user"),
+					},
+				},
+			},
+			wantURL: "http://user:@proxy.example.com",
+		},
+		{
+			name: "no user, password",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
+			},
+			objects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "dummy",
+					},
+					Data: map[string][]byte{
+						"address":  []byte("http://proxy.example.com"),
+						"password": []byte("password"),
+					},
+				},
+			},
+			wantURL: "http://:password@proxy.example.com",
+		},
+		{
+			name: "user, password",
+			repo: &imagev1.ImageRepository{
+				Spec: imagev1.ImageRepositorySpec{
+					ProxySecretRef: &meta.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
+			},
+			objects: []client.Object{
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "dummy",
+					},
+					Data: map[string][]byte{
+						"address":  []byte("http://proxy.example.com"),
+						"username": []byte("user"),
+						"password": []byte("password"),
+					},
+				},
+			},
+			wantURL: "http://user:password@proxy.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			c := fake.NewClientBuilder().
+				WithScheme(testEnv.Scheme()).
+				WithObjects(tt.objects...).
+				Build()
+
+			r := &ImageRepositoryReconciler{
+				Client: c,
+			}
+
+			u, err := r.getProxyURL(ctx, tt.repo)
+			if tt.wantErr == "" {
+				g.Expect(err).To(BeNil())
+			} else {
+				g.Expect(err.Error()).To(ContainSubstring(tt.wantErr))
+			}
+			if tt.wantURL == "" {
+				g.Expect(u).To(BeNil())
+			} else {
+				g.Expect(u.String()).To(Equal(tt.wantURL))
 			}
 		})
 	}
