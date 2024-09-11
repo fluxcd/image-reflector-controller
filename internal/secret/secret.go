@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -45,54 +44,30 @@ type dockerConfig struct {
 	Auths map[string]authn.AuthConfig
 }
 
-// TransportFromSecret reads the TLS data specified in the provided Secret
-// and returns a transport configured with the appropriate TLS settings.
+// TLSConfigFromSecret reads the TLS data specified in the provided Secret
+// and returns a tls.Config with the appropriate TLS settings.
 // It checks for the following keys in the Secret:
 // - `caFile`,  for the CA certificate
 // - `certFile` and `keyFile`, for the certificate and private key
 //
-// If none of these keys exists in the Secret then an empty transport is
+// If none of these keys exists in the Secret then nil is
 // returned. If only a certificate OR private key is found, an error is
 // returned.
-func TransportFromSecret(certSecret *corev1.Secret) (*http.Transport, error) {
-	// It's possible the secret doesn't contain any certs after
-	// all and the default transport could be used; but it's
-	// simpler here to assume a fresh transport is needed.
-	transport := &http.Transport{}
-	config, err := tlsConfigFromSecret(certSecret, false)
-	if err != nil {
-		return nil, err
-	}
-	if config != nil {
-		transport.TLSClientConfig = config
-	}
-
-	return transport, nil
+func TLSConfigFromSecret(certSecret *corev1.Secret) (*tls.Config, error) {
+	return tlsConfigFromSecret(certSecret, false)
 }
 
-// TransportFromKubeTLSSecret reads the TLS data specified in the provided
-// Secret and returns a transport configured with the appropriate TLS settings.
+// TLSConfigFromKubeTLSSecret reads the TLS data specified in the provided
+// Secret and returns a tls.Config with the appropriate TLS settings.
 // It checks for the following keys in the Secret:
 // - `ca.crt`,  for the CA certificate
 // - `tls.crt` and `tls.key`, for the certificate and private key
 //
-// If none of these keys exists in the Secret then an empty transport is
+// If none of these keys exists in the Secret then nil is
 // returned. If only a certificate OR private key is found, an error is
 // returned.
-func TransportFromKubeTLSSecret(certSecret *corev1.Secret) (*http.Transport, error) {
-	// It's possible the secret doesn't contain any certs after
-	// all and the default transport could be used; but it's
-	// simpler here to assume a fresh transport is needed.
-	transport := &http.Transport{}
-	config, err := tlsConfigFromSecret(certSecret, true)
-	if err != nil {
-		return nil, err
-	}
-	if config != nil {
-		transport.TLSClientConfig = config
-	}
-
-	return transport, nil
+func TLSConfigFromKubeTLSSecret(certSecret *corev1.Secret) (*tls.Config, error) {
+	return tlsConfigFromSecret(certSecret, true)
 }
 
 // tlsClientConfigFromSecret attempts to construct and return a TLS client

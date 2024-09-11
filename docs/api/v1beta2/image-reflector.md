@@ -451,6 +451,21 @@ equivalent.</p>
 </tr>
 <tr>
 <td>
+<code>proxySecretRef</code><br>
+<em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ProxySecretRef specifies the Secret containing the proxy configuration
+to use while communicating with the container registry.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>serviceAccountName</code><br>
 <em>
 string
@@ -647,6 +662,21 @@ github.com/fluxcd/pkg/apis/meta.LocalObjectReference
 credentials to use for the image registry. The secret should be
 created with <code>kubectl create secret docker-registry</code>, or the
 equivalent.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>proxySecretRef</code><br>
+<em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#LocalObjectReference">
+github.com/fluxcd/pkg/apis/meta.LocalObjectReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ProxySecretRef specifies the Secret containing the proxy configuration
+to use while communicating with the container registry.</p>
 </td>
 </tr>
 <tr>

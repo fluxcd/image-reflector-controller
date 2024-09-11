@@ -57,6 +57,11 @@ type ImageRepositorySpec struct {
 	// +optional
 	SecretRef *meta.LocalObjectReference `json:"secretRef,omitempty"`
 
+	// ProxySecretRef specifies the Secret containing the proxy configuration
+	// to use while communicating with the container registry.
+	// +optional
+	ProxySecretRef *meta.LocalObjectReference `json:"proxySecretRef,omitempty"`
+
 	// ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
 	// the image pull if the service account has attached pull secrets.
 	// +kubebuilder:validation:MaxLength=253

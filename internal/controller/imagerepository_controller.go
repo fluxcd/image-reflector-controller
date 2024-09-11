@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -330,6 +332,23 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	var transportOptions []func(*http.Transport)
+
+	// Load proxy configuration.
+	var proxyURL *url.URL
+	var err error
+	if obj.Spec.ProxySecretRef != nil {
+		proxyURL, err = r.getProxyURL(ctx, obj)
+		if err != nil {
+			return nil, err
+		}
+		if proxyURL != nil {
+			transportOptions = append(transportOptions, func(t *http.Transport) {
+				t.Proxy = http.ProxyURL(proxyURL)
+			})
+		}
+	}
+
 	// Configure authentication strategy to access the registry.
 	var options []remote.Option
 	var authSecret corev1.Secret
@@ -357,7 +376,12 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 		default:
 			opts = r.DeprecatedLoginOpts
 		}
-		auth, authErr = login.NewManager().Login(ctx, obj.Spec.Image, ref, opts)
+		var managerOpts []login.Option
+		if proxyURL != nil {
+			managerOpts = append(managerOpts, login.WithProxyURL(proxyURL))
+		}
+		manager := login.NewManager(managerOpts...)
+		auth, authErr = manager.Login(ctx, obj.Spec.Image, ref, opts)
 	}
 	if authErr != nil {
 		// If it's not unconfigured provider error, abort reconciliation.
@@ -385,19 +409,32 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 			}
 		}
 
-		tr, err := secret.TransportFromKubeTLSSecret(&certSecret)
+		tlsConfig, err := secret.TLSConfigFromKubeTLSSecret(&certSecret)
 		if err != nil {
 			return nil, err
 		}
-		if tr.TLSClientConfig == nil {
-			tr, err = secret.TransportFromSecret(&certSecret)
+		if tlsConfig == nil {
+			tlsConfig, err = secret.TLSConfigFromSecret(&certSecret)
 			if err != nil {
 				return nil, err
 			}
-			if tr.TLSClientConfig != nil {
+			if tlsConfig != nil {
 				ctrl.LoggerFrom(ctx).
 					Info("warning: specifying TLS auth data via `certFile`/`keyFile`/`caFile` is deprecated, please use `tls.crt`/`tls.key`/`ca.crt` instead")
 			}
+		}
+		if tlsConfig != nil {
+			transportOptions = append(transportOptions, func(t *http.Transport) {
+				t.TLSClientConfig = tlsConfig
+			})
+		}
+	}
+
+	// Specify any transport options.
+	if len(transportOptions) > 0 {
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		for _, opt := range transportOptions {
+			opt(tr)
 		}
 		options = append(options, remote.WithTransport(tr))
 	}
@@ -433,6 +470,40 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 	}
 
 	return options, nil
+}
+
+// getProxyURL gets the proxy configuration for the transport based on the
+// specified proxy secret reference in the ImageRepository object.
+func (r *ImageRepositoryReconciler) getProxyURL(ctx context.Context, obj *imagev1.ImageRepository) (*url.URL, error) {
+	if obj.Spec.ProxySecretRef == nil || obj.Spec.ProxySecretRef.Name == "" {
+		return nil, nil
+	}
+
+	proxySecretName := types.NamespacedName{
+		Namespace: obj.Namespace,
+		Name:      obj.Spec.ProxySecretRef.Name,
+	}
+	var proxySecret corev1.Secret
+	if err := r.Get(ctx, proxySecretName, &proxySecret); err != nil {
+		return nil, err
+	}
+
+	proxyData := proxySecret.Data
+	address, ok := proxyData["address"]
+	if !ok {
+		return nil, fmt.Errorf("invalid proxy secret '%s/%s': key 'address' is missing",
+			obj.Namespace, obj.Spec.ProxySecretRef.Name)
+	}
+	proxyURL, err := url.Parse(string(address))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse proxy address '%s': %w", address, err)
+	}
+	user, hasUser := proxyData["username"]
+	password, hasPassword := proxyData["password"]
+	if hasUser || hasPassword {
+		proxyURL.User = url.UserPassword(string(user), string(password))
+	}
+	return proxyURL, nil
 }
 
 // shouldScan takes an image repo and the time now, and returns whether

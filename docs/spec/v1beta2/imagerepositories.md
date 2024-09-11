@@ -229,6 +229,49 @@ data:
 deprecated. If you have any Secrets using these keys and specified in an
 ImageRepository, the controller will log a deprecation warning.
 
+### Proxy secret reference
+
+`.spec.proxySecretRef.name` is an optional field used to specify the name of a
+Secret that contains the proxy settings for the object. These settings are used
+for all the remote operations related to the ImageRepository.
+The Secret may contain three keys:
+
+- `address`, to specify the address of the proxy server. This is a required key.
+- `username`, to specify the username to use if the proxy server is protected by
+   basic authentication. This is an optional key.
+- `password`, to specify the password to use if the proxy server is protected by
+   basic authentication. This is an optional key.
+
+Example:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: example
+  namespace: default
+spec:
+  interval: 5m0s
+  url: example.com
+  proxySecretRef:
+    name: http-proxy
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: http-proxy
+type: Opaque
+stringData:
+  address: http://proxy.com
+  username: mandalorian
+  password: grogu
+```
+
+Proxying can also be configured in the image-reflector-controller Deployment directly by
+using the standard environment variables such as `HTTPS_PROXY`, `ALL_PROXY`, etc.
+
+`.spec.proxySecretRef.name` takes precedence over all environment variables.
+
 ### Suspend
 
 `.spec.suspend` is an optional field to suspend the reconciliation of an
