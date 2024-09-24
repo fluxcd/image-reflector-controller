@@ -9,7 +9,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/elazarl/goproxy v0.0.0-20240726154733-8b0c20506380
-	github.com/fluxcd/image-reflector-controller/api v0.32.0
+	github.com/fluxcd/image-reflector-controller/api v0.33.0
 	github.com/fluxcd/pkg/apis/acl v0.3.0
 	github.com/fluxcd/pkg/apis/event v0.10.1
 	github.com/fluxcd/pkg/apis/meta v1.6.1

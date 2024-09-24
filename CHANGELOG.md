@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.33.0
+
+**Release date:** 2024-09-26
+
+This prerelease comes with support for using proxy for communications with the
+container registry using the new `.spec.proxySecretRef` field on
+`ImageRepository` objects.
+
+In addition, the Kubernetes dependencies have been updated to v1.31.1
+and various other controller dependencies have been updated to their latest
+version. The controller is now built with Go 1.23.
+
+Fixes:
+- Fix incorrect use of format strings with the conditions package
+  [#598](https://github.com/fluxcd/image-reflector-controller/pull/598)
+
+Improvements:
+- Add proxy support for ImageRepository API
+  [#627](https://github.com/fluxcd/image-reflector-controller/pull/627)
+- Build with Go 1.23
+  [#623](https://github.com/fluxcd/image-reflector-controller/pull/623)
+- Add workflow for AWS tests & document the setup
+  [#570](https://github.com/fluxcd/image-reflector-controller/pull/570)
+- Various dependency updates
+  [#566](https://github.com/fluxcd/image-reflector-controller/pull/566)
+  [#567](https://github.com/fluxcd/image-reflector-controller/pull/567)
+  [#576](https://github.com/fluxcd/image-reflector-controller/pull/576)
+  [#578](https://github.com/fluxcd/image-reflector-controller/pull/578)
+  [#589](https://github.com/fluxcd/image-reflector-controller/pull/589)
+  [#599](https://github.com/fluxcd/image-reflector-controller/pull/599)
+  [#600](https://github.com/fluxcd/image-reflector-controller/pull/600)
+  [#601](https://github.com/fluxcd/image-reflector-controller/pull/601)
+  [#615](https://github.com/fluxcd/image-reflector-controller/pull/615)
+  [#618](https://github.com/fluxcd/image-reflector-controller/pull/618)
+  [#620](https://github.com/fluxcd/image-reflector-controller/pull/620)
+  [#622](https://github.com/fluxcd/image-reflector-controller/pull/622)
+  [#621](https://github.com/fluxcd/image-reflector-controller/pull/621)
+  [#625](https://github.com/fluxcd/image-reflector-controller/pull/625)
+  [#633](https://github.com/fluxcd/image-reflector-controller/pull/633)
+  [#639](https://github.com/fluxcd/image-reflector-controller/pull/639)
+  [#640](https://github.com/fluxcd/image-reflector-controller/pull/640)
+
 ## 0.32.0
 
 **Release date:** 2024-05-06
