@@ -25,6 +25,8 @@ jobs:
         with:
           go-version-file: 'tests/integration/go.mod'
           cache-dependency-path: tests/integration/go.sum
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@8254fb75a33b976a221574d287e93919e6a36f70 # v2.1.6
         id: 'auth'
