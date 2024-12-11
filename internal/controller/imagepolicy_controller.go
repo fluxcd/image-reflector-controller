@@ -174,8 +174,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			retErr = kerrors.NewAggregate([]error{retErr, err})
 		}
 
-		// Always record readiness and duration metrics.
-		r.Metrics.RecordReadiness(ctx, obj)
+		// Always record duration metrics.
 		r.Metrics.RecordDuration(ctx, obj, start)
 	}()
 
