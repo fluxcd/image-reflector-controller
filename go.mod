@@ -11,10 +11,10 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20241211082540-3df585cdee79
 	github.com/fluxcd/image-reflector-controller/api v0.33.0
 	github.com/fluxcd/pkg/apis/acl v0.5.0
-	github.com/fluxcd/pkg/apis/event v0.12.0
+	github.com/fluxcd/pkg/apis/event v0.13.0
 	github.com/fluxcd/pkg/apis/meta v1.9.0
 	github.com/fluxcd/pkg/oci v0.43.0
-	github.com/fluxcd/pkg/runtime v0.51.0
+	github.com/fluxcd/pkg/runtime v0.52.0
 	github.com/fluxcd/pkg/version v0.6.0
 	github.com/google/go-containerregistry v0.20.2
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20241111191718-6bce25ecf029
