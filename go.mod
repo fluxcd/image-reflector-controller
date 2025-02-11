@@ -14,7 +14,7 @@ require (
 	github.com/fluxcd/pkg/apis/event v0.16.0
 	github.com/fluxcd/pkg/apis/meta v1.10.0
 	github.com/fluxcd/pkg/oci v0.45.0
-	github.com/fluxcd/pkg/runtime v0.53.0
+	github.com/fluxcd/pkg/runtime v0.53.1
 	github.com/fluxcd/pkg/version v0.6.0
 	github.com/google/go-containerregistry v0.20.3
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20250115185438-c4dd792fa06c
