@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.34.0
+
+**Release date:** 2025-02-13
+
+This prerelease comes with various bug fixes and improvements.
+
+In addition, the Kubernetes dependencies have been updated to v1.32.1
+and various other controller dependencies have been updated to their latest
+version.
+
+Fixes:
+- Remove deprecated object metrics from controllers
+  [#677](https://github.com/fluxcd/image-reflector-controller/pull/677)
+- Various CI fixes
+  [#678](https://github.com/fluxcd/image-reflector-controller/pull/678)
+  [#688](https://github.com/fluxcd/image-reflector-controller/pull/688)
+
+Improvements:
+- Various dependency updates
+  [#647](https://github.com/fluxcd/image-reflector-controller/pull/647)
+  [#682](https://github.com/fluxcd/image-reflector-controller/pull/682)
+  [#683](https://github.com/fluxcd/image-reflector-controller/pull/683)
+  [#687](https://github.com/fluxcd/image-reflector-controller/pull/687)
+  [#698](https://github.com/fluxcd/image-reflector-controller/pull/698)
+  [#717](https://github.com/fluxcd/image-reflector-controller/pull/717)
+  [#725](https://github.com/fluxcd/image-reflector-controller/pull/725)
+  [#728](https://github.com/fluxcd/image-reflector-controller/pull/728)
+
 ## 0.33.0
 
 **Release date:** 2024-09-26
