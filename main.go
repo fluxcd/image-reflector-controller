@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	flag "github.com/spf13/pflag"
@@ -60,6 +61,7 @@ const controllerName = "image-reflector-controller"
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+	gcLog    = ctrl.Log.WithName("badger-gc")
 )
 
 func init() {
@@ -132,6 +134,11 @@ func main() {
 		os.Exit(1)
 	}
 	defer badgerDB.Close()
+
+	badgerGC := database.NewBadgerGarbageCollector(badgerDB, 1*time.Minute, &gcLog)
+	go badgerGC.Run()
+	defer badgerGC.Stop()
+
 	db := database.NewBadgerDatabase(badgerDB)
 
 	watchNamespace := ""
