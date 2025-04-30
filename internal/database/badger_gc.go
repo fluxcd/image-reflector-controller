@@ -17,6 +17,7 @@ package database
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v3"
@@ -31,8 +32,8 @@ type BadgerGarbageCollector struct {
 	db  *badger.DB
 	log *logr.Logger
 	// flow control
-	timer *time.Timer
-	stop  chan struct{}
+	timer   *time.Timer
+	running sync.Mutex
 }
 
 // NewBadgerGarbageCollector creates and returns a new
@@ -43,31 +44,22 @@ func NewBadgerGarbageCollector(db *badger.DB, interval time.Duration, log *logr.
 
 		db:  db,
 		log: log,
-
-		timer: time.NewTimer(interval),
-		stop:  make(chan struct{}),
 	}
 }
 
-// Run repeatedly runs the BadgerDB garbage collector with a delay inbetween
+// Start repeatedly runs the BadgerDB garbage collector with a delay inbetween
 // runs.
 //
-// This is a blocking operation, so it should be run as a separate goroutine.
+// This is a non-blocking operation.
 // To stop the garbage collector, call Stop().
-func (gc *BadgerGarbageCollector) Run() {
+func (gc *BadgerGarbageCollector) Start() {
 	gc.log.Info("Starting Badger GC")
-	for {
-		select {
-		case <-gc.timer.C:
-			gc.discardValueLogFiles()
-			gc.timer.Reset(gc.Interval)
-		case <-gc.stop:
-			gc.timer.Stop()
-			gc.log.Info("Stopped Badger GC")
-			gc.stop <- struct{}{}
-			return
-		}
-	}
+	gc.timer = time.AfterFunc(gc.Interval, func() {
+		gc.running.Lock()
+		gc.discardValueLogFiles()
+		gc.running.Unlock()
+		gc.timer.Reset(gc.Interval)
+	})
 }
 
 // Stop blocks until the garbage collector has been stopped.
@@ -75,8 +67,10 @@ func (gc *BadgerGarbageCollector) Run() {
 // To avoid GC Errors, call Stop() before closing the database.
 func (gc *BadgerGarbageCollector) Stop() {
 	gc.log.Info("Sending stop to Badger GC")
-	gc.stop <- struct{}{}
-	<-gc.stop
+	gc.timer.Stop()
+	gc.running.Lock()
+	gc.running.Unlock()
+	gc.log.Info("Stopped Badger GC")
 }
 
 // upper bound for loop

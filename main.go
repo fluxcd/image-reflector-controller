@@ -136,7 +136,7 @@ func main() {
 	defer badgerDB.Close()
 
 	badgerGC := database.NewBadgerGarbageCollector(badgerDB, 1*time.Minute, &gcLog)
-	go badgerGC.Run()
+	badgerGC.Start()
 	defer badgerGC.Stop()
 
 	db := database.NewBadgerDatabase(badgerDB)
