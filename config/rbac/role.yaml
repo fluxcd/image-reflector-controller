@@ -1,11 +1,16 @@
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: manager-role
 rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -19,33 +24,13 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - events
+  - serviceaccounts/token
   verbs:
   - create
-  - patch
 - apiGroups:
   - image.toolkit.fluxcd.io
   resources:
   - imagepolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - image.toolkit.fluxcd.io
-  resources:
-  - imagepolicies/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - image.toolkit.fluxcd.io
-  resources:
   - imagerepositories
   verbs:
   - create
@@ -58,6 +43,7 @@ rules:
 - apiGroups:
   - image.toolkit.fluxcd.io
   resources:
+  - imagepolicies/status
   - imagerepositories/status
   verbs:
   - get

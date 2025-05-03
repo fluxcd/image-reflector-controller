@@ -48,8 +48,9 @@ import (
 
 	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/oci"
-	"github.com/fluxcd/pkg/oci/auth/login"
+	"github.com/fluxcd/pkg/auth"
+	authutils "github.com/fluxcd/pkg/auth/utils"
+	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/patch"
@@ -111,11 +112,12 @@ type ImageRepositoryReconciler struct {
 	helper.Metrics
 
 	ControllerName string
+	TokenCache     *cache.TokenCache
 	Database       interface {
 		DatabaseWriter
 		DatabaseReader
 	}
-	DeprecatedLoginOpts login.ProviderOptions
+	DeprecatedLoginOpts []auth.Provider
 
 	patchOptions []patch.Option
 }
@@ -350,7 +352,7 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 	// Configure authentication strategy to access the registry.
 	var options []remote.Option
 	var authSecret corev1.Secret
-	var auth authn.Authenticator
+	var authenticator authn.Authenticator
 	var authErr error
 
 	if obj.Spec.SecretRef != nil {
@@ -360,37 +362,49 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 		}, &authSecret); err != nil {
 			return nil, err
 		}
-		auth, authErr = secret.AuthFromSecret(authSecret, ref)
+		authenticator, authErr = secret.AuthFromSecret(authSecret, ref)
 	} else {
 		// Build login provider options and use it to attempt registry login.
-		opts := login.ProviderOptions{}
-		switch obj.GetProvider() {
-		case "aws":
-			opts.AwsAutoLogin = true
-		case "azure":
-			opts.AzureAutoLogin = true
-		case "gcp":
-			opts.GcpAutoLogin = true
-		default:
-			opts = r.DeprecatedLoginOpts
-		}
-		var managerOpts []login.Option
+		var opts []auth.Option
 		if proxyURL != nil {
-			managerOpts = append(managerOpts, login.WithProxyURL(proxyURL))
+			opts = append(opts, auth.WithProxyURL(*proxyURL))
 		}
-		manager := login.NewManager(managerOpts...)
-		auth, authErr = manager.Login(ctx, obj.Spec.Image, ref, opts)
+		switch provider := obj.GetProvider(); provider {
+		case "aws", "azure", "gcp":
+			// Support new features (service account and cache) only for non-deprecated code paths.
+			if obj.Spec.ServiceAccountName != "" {
+				serviceAccount := client.ObjectKey{
+					Name:      obj.Spec.ServiceAccountName,
+					Namespace: obj.GetNamespace(),
+				}
+				opts = append(opts, auth.WithServiceAccount(serviceAccount, r.Client))
+			}
+			if r.TokenCache != nil {
+				involvedObject := cache.InvolvedObject{
+					Kind:      imagev1.ImageRepositoryKind,
+					Name:      obj.GetName(),
+					Namespace: obj.GetNamespace(),
+					Operation: cache.OperationReconcile,
+				}
+				opts = append(opts, auth.WithCache(*r.TokenCache, involvedObject))
+			}
+			authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx, provider, obj.Spec.Image, opts...)
+		default:
+			// Handle deprecated auto-login controller flags.
+			for _, provider := range r.DeprecatedLoginOpts {
+				if _, err := provider.ParseArtifactRepository(obj.Spec.Image); err == nil {
+					authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx,
+						provider.GetName(), obj.Spec.Image, opts...)
+					break
+				}
+			}
+		}
 	}
 	if authErr != nil {
-		// If it's not unconfigured provider error, abort reconciliation.
-		// Continue reconciliation if it's unconfigured providers for scanning
-		// public repositories.
-		if !errors.Is(authErr, oci.ErrUnconfiguredProvider) {
-			return nil, authErr
-		}
+		return nil, authErr
 	}
-	if auth != nil {
-		options = append(options, remote.WithAuth(auth))
+	if authenticator != nil {
+		options = append(options, remote.WithAuth(authenticator))
 	}
 
 	// Load any provided certificate.
@@ -437,7 +451,7 @@ func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *ima
 		options = append(options, remote.WithTransport(tr))
 	}
 
-	if obj.Spec.ServiceAccountName != "" {
+	if authenticator == nil && obj.Spec.ServiceAccountName != "" {
 		serviceAccount := corev1.ServiceAccount{}
 		// Lookup service account
 		if err := r.Get(ctx, types.NamespacedName{
@@ -618,6 +632,10 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 func (r *ImageRepositoryReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImageRepository) (ctrl.Result, error) {
 	// Remove our finalizer from the list.
 	controllerutil.RemoveFinalizer(obj, imagev1.ImageFinalizer)
+
+	// Cleanup caches.
+	r.TokenCache.DeleteEventsForObject(imagev1.ImageRepositoryKind,
+		obj.GetName(), obj.GetNamespace(), cache.OperationReconcile)
 
 	// Stop reconciliation as the object is being deleted.
 	return ctrl.Result{}, nil

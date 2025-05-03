@@ -208,7 +208,7 @@ metadata:
   namespace: default
 spec:
   interval: 5m0s
-  url: example.com
+  image: example.com
   certSecretRef:
     name: example-tls
 ---
@@ -252,7 +252,7 @@ metadata:
   namespace: default
 spec:
   interval: 5m0s
-  url: example.com
+  image: example.com
   proxySecretRef:
     name: http-proxy
 ---
