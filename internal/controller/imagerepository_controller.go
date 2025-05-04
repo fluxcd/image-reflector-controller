@@ -739,7 +739,7 @@ func notify(ctx context.Context, r kuberecorder.EventRecorder, oldObj, newObj co
 	// Was ready before and is ready now, but the scan results have changed.
 	if conditions.IsReady(oldObj) && conditions.IsReady(newObj) &&
 		(conditions.GetMessage(oldObj, meta.ReadyCondition)) != ready.Message {
-		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, ready.Message)
+		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, "%s", ready.Message)
 		return
 	}
 
@@ -747,14 +747,14 @@ func notify(ctx context.Context, r kuberecorder.EventRecorder, oldObj, newObj co
 
 	// Became ready from not ready.
 	if !conditions.IsReady(oldObj) && conditions.IsReady(newObj) {
-		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, ready.Message)
+		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, "%s", ready.Message)
 		return
 	}
 	// Not ready, failed.
 	if !conditions.IsReady(newObj) {
-		eventLogf(ctx, r, newObj, corev1.EventTypeWarning, ready.Reason, ready.Message)
+		eventLogf(ctx, r, newObj, corev1.EventTypeWarning, ready.Reason, "%s", ready.Message)
 		return
 	}
 
-	eventLogf(ctx, r, newObj, eventv1.EventTypeTrace, meta.SucceededReason, nextScanMsg)
+	eventLogf(ctx, r, newObj, eventv1.EventTypeTrace, meta.SucceededReason, "%s", nextScanMsg)
 }
