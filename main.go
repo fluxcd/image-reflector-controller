@@ -33,9 +33,14 @@ import (
 	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/fluxcd/pkg/oci/auth/login"
+	"github.com/fluxcd/pkg/auth"
+	"github.com/fluxcd/pkg/auth/aws"
+	"github.com/fluxcd/pkg/auth/azure"
+	"github.com/fluxcd/pkg/auth/gcp"
+	pkgcache "github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -70,6 +75,10 @@ func init() {
 }
 
 func main() {
+	const (
+		tokenCacheDefaultMaxSize = 100
+	)
+
 	var (
 		metricsAddr             string
 		eventsAddr              string
@@ -87,6 +96,7 @@ func main() {
 		aclOptions              acl.Options
 		rateLimiterOptions      helper.RateLimiterOptions
 		featureGates            feathelper.FeatureGates
+		tokenCacheOptions       pkgcache.TokenFlags
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -108,6 +118,7 @@ func main() {
 	rateLimiterOptions.BindFlags(flag.CommandLine)
 	featureGates.BindFlags(flag.CommandLine)
 	watchOptions.BindFlags(flag.CommandLine)
+	tokenCacheOptions.BindFlags(flag.CommandLine, tokenCacheDefaultMaxSize)
 
 	flag.Parse()
 
@@ -215,17 +226,38 @@ func main() {
 
 	metricsH := helper.NewMetrics(mgr, metrics.MustMakeRecorder(), imagev1.ImageFinalizer)
 
+	var tokenCache *pkgcache.TokenCache
+	if tokenCacheOptions.MaxSize > 0 {
+		var err error
+		tokenCache, err = pkgcache.NewTokenCache(tokenCacheOptions.MaxSize,
+			pkgcache.WithMaxDuration(tokenCacheOptions.MaxDuration),
+			pkgcache.WithMetricsRegisterer(ctrlmetrics.Registry),
+			pkgcache.WithMetricsPrefix("gotk_token_"))
+		if err != nil {
+			setupLog.Error(err, "unable to create token cache")
+			os.Exit(1)
+		}
+	}
+
+	var deprecatedLoginOpts []auth.Provider
+	if awsAutoLogin {
+		deprecatedLoginOpts = append(deprecatedLoginOpts, aws.Provider{})
+	}
+	if azureAutoLogin {
+		deprecatedLoginOpts = append(deprecatedLoginOpts, azure.Provider{})
+	}
+	if gcpAutoLogin {
+		deprecatedLoginOpts = append(deprecatedLoginOpts, gcp.Provider{})
+	}
+
 	if err := (&controller.ImageRepositoryReconciler{
-		Client:         mgr.GetClient(),
-		EventRecorder:  eventRecorder,
-		Metrics:        metricsH,
-		Database:       db,
-		ControllerName: controllerName,
-		DeprecatedLoginOpts: login.ProviderOptions{
-			AwsAutoLogin:   awsAutoLogin,
-			AzureAutoLogin: azureAutoLogin,
-			GcpAutoLogin:   gcpAutoLogin,
-		},
+		Client:              mgr.GetClient(),
+		EventRecorder:       eventRecorder,
+		Metrics:             metricsH,
+		Database:            db,
+		ControllerName:      controllerName,
+		TokenCache:          tokenCache,
+		DeprecatedLoginOpts: deprecatedLoginOpts,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
