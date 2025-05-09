@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dgraph-io/badger/v3"
 	flag "github.com/spf13/pflag"
@@ -60,7 +61,10 @@ import (
 	"github.com/fluxcd/image-reflector-controller/internal/features"
 )
 
-const controllerName = "image-reflector-controller"
+const (
+	controllerName = "image-reflector-controller"
+	discardRatio   = 0.7
+)
 
 var (
 	scheme   = runtime.NewScheme()
@@ -89,6 +93,7 @@ func main() {
 		watchOptions            helper.WatchOptions
 		storagePath             string
 		storageValueLogFileSize int64
+		gcInterval              uint16 // max value is 65535 minutes (~ 45 days) which is well under the maximum time.Duration
 		concurrent              int
 		awsAutoLogin            bool
 		gcpAutoLogin            bool
@@ -104,6 +109,7 @@ func main() {
 	flag.StringVar(&healthAddr, "health-addr", ":9440", "The address the health endpoint binds to.")
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
+	flag.Uint16Var(&gcInterval, "gc-interval", 1, "The number of minutes to wait between garbage collections. 0 disables the garbage collector.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
 
 	// NOTE: Deprecated flags.
@@ -143,7 +149,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer badgerDB.Close()
+
 	db := database.NewBadgerDatabase(badgerDB)
+	var badgerGC *database.BadgerGarbageCollector
+	if gcInterval > 0 {
+		badgerGC = database.NewBadgerGarbageCollector("badger-gc", badgerDB, time.Duration(gcInterval)*time.Minute, discardRatio)
+	} else {
+		setupLog.V(1).Info("Badger garbage collector is disabled")
+	}
 
 	watchNamespace := ""
 	if !watchOptions.AllNamespaces {
@@ -214,6 +227,10 @@ func main() {
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
+	}
+
+	if badgerGC != nil {
+		mgr.Add(badgerGC)
 	}
 
 	probes.SetupChecks(mgr, setupLog)
