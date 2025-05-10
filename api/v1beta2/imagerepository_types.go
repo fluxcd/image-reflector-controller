@@ -28,7 +28,7 @@ import (
 const ImageRepositoryKind = "ImageRepository"
 
 // Deprecated: Use ImageFinalizer.
-const ImageRepositoryFinalizer = "finalizers.fluxcd.io"
+const ImageRepositoryFinalizer = ImageFinalizer
 
 // ImageRepositorySpec defines the parameters for scanning an image
 // repository, e.g., `fluxcd/flux`.

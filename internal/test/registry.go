@@ -27,6 +27,7 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
@@ -78,22 +79,29 @@ func RegistryName(srv *httptest.Server) string {
 // image repo
 // name. https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
 // has an example of loading a test registry with a random image.
-func LoadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) (string, error) {
+func LoadImages(srv *httptest.Server, imageName string, versions []string, options ...remote.Option) (string, map[string]v1.Hash, error) {
 	imgRepo := RegistryName(srv) + "/" + imageName
+	imgRes := make(map[string]v1.Hash, 0)
+
 	for _, tag := range versions {
 		imgRef, err := name.NewTag(imgRepo + ":" + tag)
 		if err != nil {
-			return imgRepo, err
+			return imgRepo, nil, err
 		}
 		img, err := random.Image(512, 1)
 		if err != nil {
-			return imgRepo, err
+			return imgRepo, nil, err
 		}
 		if err := remote.Write(imgRef, img, options...); err != nil {
-			return imgRepo, err
+			return imgRepo, nil, err
 		}
+		dig, err := img.Digest()
+		if err != nil {
+			return imgRepo, nil, err
+		}
+		imgRes[tag] = dig
 	}
-	return imgRepo, nil
+	return imgRepo, imgRes, nil
 }
 
 // the go-containerregistry test registry implementation does not
