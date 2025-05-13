@@ -116,7 +116,7 @@ func TestImageRepositoryReconciler_fetchImageTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			imgRepo, err := test.LoadImages(registryServer, "test-fetch-"+randStringRunes(5), tt.versions)
+			imgRepo, _, err := test.LoadImages(registryServer, "test-fetch-"+randStringRunes(5), tt.versions)
 			g.Expect(err).ToNot(HaveOccurred())
 
 			repo := imagev1.ImageRepository{
@@ -209,7 +209,7 @@ func TestImageRepositoryReconciler_reconcileAtAnnotation(t *testing.T) {
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
 
-	imgRepo, err := test.LoadImages(registryServer, "test-annot-"+randStringRunes(5), []string{"1.0.0"})
+	imgRepo, _, err := test.LoadImages(registryServer, "test-annot-"+randStringRunes(5), []string{"1.0.0"})
 	g.Expect(err).ToNot(HaveOccurred())
 
 	repo := imagev1.ImageRepository{
@@ -289,7 +289,7 @@ func TestImageRepositoryReconciler_authRegistry(t *testing.T) {
 	}()
 
 	versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-	imgRepo, err := test.LoadImages(registryServer, "test-authn-"+randStringRunes(5),
+	imgRepo, _, err := test.LoadImages(registryServer, "test-authn-"+randStringRunes(5),
 		versions, remote.WithAuth(&authn.Basic{
 			Username: username,
 			Password: password,
@@ -339,7 +339,7 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
 
-	imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+	imgRepo, _, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
 	g.Expect(err).ToNot(HaveOccurred())
 	imgRepo = "https://" + imgRepo
 
@@ -367,7 +367,7 @@ func TestImageRepositoryReconciler_imageAttribute_schemePrefix(t *testing.T) {
 		ready = apimeta.FindStatusCondition(repo.GetConditions(), meta.ReadyCondition)
 		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 	}, timeout, interval).Should(BeTrue())
-	g.Expect(ready.Message).To(ContainSubstring("should not start with URL scheme"))
+	g.Expect(ready.Message).To(ContainSubstring("should not include URL scheme"))
 
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
@@ -384,7 +384,7 @@ func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
 
-	imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+	imgRepo, _, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
 	g.Expect(err).ToNot(HaveOccurred())
 	imgRepo = imgRepo + ":1.0.0"
 
@@ -412,7 +412,7 @@ func TestImageRepositoryReconciler_imageAttribute_withTag(t *testing.T) {
 		ready = apimeta.FindStatusCondition(repo.GetConditions(), meta.ReadyCondition)
 		return ready != nil && ready.Reason == imagev1.ImageURLInvalidReason
 	}, timeout, interval).Should(BeTrue())
-	g.Expect(ready.Message).To(ContainSubstring("should not contain a tag"))
+	g.Expect(ready.Message).To(ContainSubstring("should not include a tag"))
 
 	// Check if the object status is valid.
 	condns := &conditionscheck.Conditions{NegativePolarity: imageRepositoryNegativeConditions}
@@ -429,7 +429,7 @@ func TestImageRepositoryReconciler_imageAttribute_hostPort(t *testing.T) {
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
 
-	imgRepo, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
+	imgRepo, _, err := test.LoadImages(registryServer, "test-fetch", []string{"1.0.0"})
 	g.Expect(err).ToNot(HaveOccurred())
 	imgRepo = strings.ReplaceAll(imgRepo, "127.0.0.1", "localhost")
 
@@ -505,7 +505,7 @@ func TestImageRepositoryReconciler_authRegistryWithServiceAccount(t *testing.T) 
 	}()
 
 	versions := []string{"0.1.0", "0.1.1", "0.2.0", "1.0.0", "1.0.1", "1.0.2", "1.1.0-alpha"}
-	imgRepo, err := test.LoadImages(registryServer, "test-authn-"+randStringRunes(5),
+	imgRepo, _, err := test.LoadImages(registryServer, "test-authn-"+randStringRunes(5),
 		versions, remote.WithAuth(&authn.Basic{
 			Username: username,
 			Password: password,

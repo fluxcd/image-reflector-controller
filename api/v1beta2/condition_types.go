@@ -32,4 +32,7 @@ const (
 
 	// ReadOperationFailedReason signals a failure caused by a read operation.
 	ReadOperationFailedReason string = "ReadOperationFailed"
+
+	// IntervalNotConfiguredReason signals that the interval is missing.
+	IntervalNotConfiguredReason string = "IntervalNotConfigured"
 )

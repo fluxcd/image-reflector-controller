@@ -20,22 +20,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
 	"regexp"
 	"sort"
-	"strings"
 	"time"
 
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/authn/k8schain"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -49,7 +43,6 @@ import (
 	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/auth"
-	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -58,7 +51,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/reconcile"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
-	"github.com/fluxcd/image-reflector-controller/internal/secret"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )
 
 // latestTagsCount is the number of tags to use as latest tags.
@@ -104,6 +97,7 @@ func getPatchOptions(ownedConditions []string, controllerName string) []patch.Op
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=serviceaccounts/token,verbs=create
 
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
@@ -118,6 +112,7 @@ type ImageRepositoryReconciler struct {
 		DatabaseReader
 	}
 	DeprecatedLoginOpts []auth.Provider
+	AuthOptionsGetter   *registry.AuthOptionsGetter
 
 	patchOptions []patch.Option
 }
@@ -169,7 +164,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Examine if the object is under deletion.
 	if !obj.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, obj)
+		return r.reconcileDelete(obj)
 	}
 
 	// Add finalizer first if it doesn't exist to avoid the race condition
@@ -252,7 +247,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 
 	// Parse image reference.
-	ref, err := parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
+	ref, err := registry.ParseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
 		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, "%s", err)
 		result, retErr = ctrl.Result{}, nil
@@ -260,7 +255,13 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 	conditions.Delete(obj, meta.StalledCondition)
 
-	opts, err := r.setAuthOptions(ctx, obj, ref)
+	involvedObject := &cache.InvolvedObject{
+		Kind:      imagev1.ImageRepositoryKind,
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+		Operation: cache.OperationReconcile,
+	}
+	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject, r.DeprecatedLoginOpts...)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
 		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, "%s", e)
@@ -315,207 +316,13 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	obj.Status.CanonicalImageName = ref.Context().String()
 	obj.Status.ObservedExclusionList = obj.GetExclusionList()
 
-	// Remove any stale Ready condition, most likely False, set above. Its value
-	// is derived from the overall result of the reconciliation in the deferred
-	// block at the very end.
+	// Let result finalizer compute the Ready condition.
 	conditions.Delete(obj, meta.ReadyCondition)
 
 	// Set the next scan time in the result.
 	nextScanTime = when
 	result, retErr = ctrl.Result{RequeueAfter: when}, nil
 	return
-}
-
-// setAuthOptions returns authentication options required to scan a repository.
-func (r *ImageRepositoryReconciler) setAuthOptions(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference) ([]remote.Option, error) {
-	timeout := obj.GetTimeout()
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	var transportOptions []func(*http.Transport)
-
-	// Load proxy configuration.
-	var proxyURL *url.URL
-	var err error
-	if obj.Spec.ProxySecretRef != nil {
-		proxyURL, err = r.getProxyURL(ctx, obj)
-		if err != nil {
-			return nil, err
-		}
-		if proxyURL != nil {
-			transportOptions = append(transportOptions, func(t *http.Transport) {
-				t.Proxy = http.ProxyURL(proxyURL)
-			})
-		}
-	}
-
-	// Configure authentication strategy to access the registry.
-	var options []remote.Option
-	var authSecret corev1.Secret
-	var authenticator authn.Authenticator
-	var authErr error
-
-	if obj.Spec.SecretRef != nil {
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.Spec.SecretRef.Name,
-		}, &authSecret); err != nil {
-			return nil, err
-		}
-		authenticator, authErr = secret.AuthFromSecret(authSecret, ref)
-	} else {
-		// Build login provider options and use it to attempt registry login.
-		var opts []auth.Option
-		if proxyURL != nil {
-			opts = append(opts, auth.WithProxyURL(*proxyURL))
-		}
-		switch provider := obj.GetProvider(); provider {
-		case "aws", "azure", "gcp":
-			// Support new features (service account and cache) only for non-deprecated code paths.
-			if obj.Spec.ServiceAccountName != "" {
-				serviceAccount := client.ObjectKey{
-					Name:      obj.Spec.ServiceAccountName,
-					Namespace: obj.GetNamespace(),
-				}
-				opts = append(opts, auth.WithServiceAccount(serviceAccount, r.Client))
-			}
-			if r.TokenCache != nil {
-				involvedObject := cache.InvolvedObject{
-					Kind:      imagev1.ImageRepositoryKind,
-					Name:      obj.GetName(),
-					Namespace: obj.GetNamespace(),
-					Operation: cache.OperationReconcile,
-				}
-				opts = append(opts, auth.WithCache(*r.TokenCache, involvedObject))
-			}
-			authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx, provider, obj.Spec.Image, opts...)
-		default:
-			// Handle deprecated auto-login controller flags.
-			for _, provider := range r.DeprecatedLoginOpts {
-				if _, err := provider.ParseArtifactRepository(obj.Spec.Image); err == nil {
-					authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx,
-						provider.GetName(), obj.Spec.Image, opts...)
-					break
-				}
-			}
-		}
-	}
-	if authErr != nil {
-		return nil, authErr
-	}
-	if authenticator != nil {
-		options = append(options, remote.WithAuth(authenticator))
-	}
-
-	// Load any provided certificate.
-	if obj.Spec.CertSecretRef != nil {
-		var certSecret corev1.Secret
-		if obj.Spec.SecretRef != nil && obj.Spec.SecretRef.Name == obj.Spec.CertSecretRef.Name {
-			certSecret = authSecret
-		} else {
-			if err := r.Get(ctx, types.NamespacedName{
-				Namespace: obj.GetNamespace(),
-				Name:      obj.Spec.CertSecretRef.Name,
-			}, &certSecret); err != nil {
-				return nil, err
-			}
-		}
-
-		tlsConfig, err := secret.TLSConfigFromKubeTLSSecret(&certSecret)
-		if err != nil {
-			return nil, err
-		}
-		if tlsConfig == nil {
-			tlsConfig, err = secret.TLSConfigFromSecret(&certSecret)
-			if err != nil {
-				return nil, err
-			}
-			if tlsConfig != nil {
-				ctrl.LoggerFrom(ctx).
-					Info("warning: specifying TLS auth data via `certFile`/`keyFile`/`caFile` is deprecated, please use `tls.crt`/`tls.key`/`ca.crt` instead")
-			}
-		}
-		if tlsConfig != nil {
-			transportOptions = append(transportOptions, func(t *http.Transport) {
-				t.TLSClientConfig = tlsConfig
-			})
-		}
-	}
-
-	// Specify any transport options.
-	if len(transportOptions) > 0 {
-		tr := http.DefaultTransport.(*http.Transport).Clone()
-		for _, opt := range transportOptions {
-			opt(tr)
-		}
-		options = append(options, remote.WithTransport(tr))
-	}
-
-	if authenticator == nil && obj.Spec.ServiceAccountName != "" {
-		serviceAccount := corev1.ServiceAccount{}
-		// Lookup service account
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.Spec.ServiceAccountName,
-		}, &serviceAccount); err != nil {
-			return nil, err
-		}
-
-		if len(serviceAccount.ImagePullSecrets) > 0 {
-			imagePullSecrets := make([]corev1.Secret, len(serviceAccount.ImagePullSecrets))
-			for i, ips := range serviceAccount.ImagePullSecrets {
-				var saAuthSecret corev1.Secret
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: obj.GetNamespace(),
-					Name:      ips.Name,
-				}, &saAuthSecret); err != nil {
-					return nil, err
-				}
-				imagePullSecrets[i] = saAuthSecret
-			}
-			keychain, err := k8schain.NewFromPullSecrets(ctx, imagePullSecrets)
-			if err != nil {
-				return nil, err
-			}
-			options = append(options, remote.WithAuthFromKeychain(keychain))
-		}
-	}
-
-	return options, nil
-}
-
-// getProxyURL gets the proxy configuration for the transport based on the
-// specified proxy secret reference in the ImageRepository object.
-func (r *ImageRepositoryReconciler) getProxyURL(ctx context.Context, obj *imagev1.ImageRepository) (*url.URL, error) {
-	if obj.Spec.ProxySecretRef == nil || obj.Spec.ProxySecretRef.Name == "" {
-		return nil, nil
-	}
-
-	proxySecretName := types.NamespacedName{
-		Namespace: obj.Namespace,
-		Name:      obj.Spec.ProxySecretRef.Name,
-	}
-	var proxySecret corev1.Secret
-	if err := r.Get(ctx, proxySecretName, &proxySecret); err != nil {
-		return nil, err
-	}
-
-	proxyData := proxySecret.Data
-	address, ok := proxyData["address"]
-	if !ok {
-		return nil, fmt.Errorf("invalid proxy secret '%s/%s': key 'address' is missing",
-			obj.Namespace, obj.Spec.ProxySecretRef.Name)
-	}
-	proxyURL, err := url.Parse(string(address))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse proxy address '%s': %w", address, err)
-	}
-	user, hasUser := proxyData["username"]
-	password, hasPassword := proxyData["password"]
-	if hasUser || hasPassword {
-		proxyURL.User = url.UserPassword(string(user), string(password))
-	}
-	return proxyURL, nil
 }
 
 // shouldScan takes an image repo and the time now, and returns whether
@@ -552,7 +359,7 @@ func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now 
 
 	// If the canonical image name of the image is different from the last
 	// observed name, scan now.
-	ref, err := parseImageReference(obj.Spec.Image, obj.Spec.Insecure)
+	ref, err := registry.ParseImageReference(obj.Spec.Image, obj.Spec.Insecure)
 	if err != nil {
 		return false, scanInterval, "", err
 	}
@@ -629,7 +436,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 }
 
 // reconcileDelete handles the deletion of the object.
-func (r *ImageRepositoryReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImageRepository) (ctrl.Result, error) {
+func (r *ImageRepositoryReconciler) reconcileDelete(obj *imagev1.ImageRepository) (ctrl.Result, error) {
 	// Remove our finalizer from the list.
 	controllerutil.RemoveFinalizer(obj, imagev1.ImageFinalizer)
 
@@ -655,32 +462,6 @@ func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Ob
 		ctrl.LoggerFrom(ctx).Info(msg)
 	}
 	r.Eventf(obj, eventType, reason, msg)
-}
-
-// parseImageReference parses the given URL into a container registry repository
-// reference. If insecure is set to true, then the registry is deemed to be
-// located at an HTTP endpoint.
-func parseImageReference(url string, insecure bool) (name.Reference, error) {
-	if s := strings.Split(url, "://"); len(s) > 1 {
-		return nil, fmt.Errorf(".spec.image value should not start with URL scheme; remove '%s://'", s[0])
-	}
-
-	var opts []name.Option
-	if insecure {
-		opts = append(opts, name.Insecure)
-	}
-
-	ref, err := name.ParseReference(url, opts...)
-	if err != nil {
-		return nil, err
-	}
-
-	imageName := strings.TrimPrefix(url, ref.Context().RegistryStr())
-	if s := strings.Split(imageName, ":"); len(s) > 1 {
-		return nil, fmt.Errorf(".spec.image value should not contain a tag; remove ':%s'", s[1])
-	}
-
-	return ref, nil
 }
 
 // filterOutTags filters the given tags through the given regular expression

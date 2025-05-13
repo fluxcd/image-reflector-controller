@@ -58,6 +58,7 @@ import (
 	"github.com/fluxcd/image-reflector-controller/internal/controller"
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/features"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )
 
 const controllerName = "image-reflector-controller"
@@ -250,6 +251,11 @@ func main() {
 		deprecatedLoginOpts = append(deprecatedLoginOpts, gcp.Provider{})
 	}
 
+	authOptionsGetter := &registry.AuthOptionsGetter{
+		Client:     mgr.GetClient(),
+		TokenCache: tokenCache,
+	}
+
 	if err := (&controller.ImageRepositoryReconciler{
 		Client:              mgr.GetClient(),
 		EventRecorder:       eventRecorder,
@@ -257,6 +263,7 @@ func main() {
 		Database:            db,
 		ControllerName:      controllerName,
 		TokenCache:          tokenCache,
+		AuthOptionsGetter:   authOptionsGetter,
 		DeprecatedLoginOpts: deprecatedLoginOpts,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
@@ -265,12 +272,14 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ImagePolicyReconciler{
-		Client:         mgr.GetClient(),
-		EventRecorder:  eventRecorder,
-		Metrics:        metricsH,
-		Database:       db,
-		ACLOptions:     aclOptions,
-		ControllerName: controllerName,
+		Client:            mgr.GetClient(),
+		EventRecorder:     eventRecorder,
+		Metrics:           metricsH,
+		Database:          db,
+		ACLOptions:        aclOptions,
+		ControllerName:    controllerName,
+		AuthOptionsGetter: authOptionsGetter,
+		TokenCache:        tokenCache,
 	}).SetupWithManager(mgr, controller.ImagePolicyReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

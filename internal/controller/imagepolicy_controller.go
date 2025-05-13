@@ -20,9 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,6 +42,7 @@ import (
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -48,6 +51,7 @@ import (
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
+	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )
 
 // errAccessDenied is returned when an ImageRepository reference in ImagePolicy
@@ -81,14 +85,6 @@ var imagePolicyOwnedConditions = []string{
 	meta.StalledCondition,
 }
 
-// imagePolicyNegativeConditions is a list of negative polarity conditions
-// owned by ImagePolicyReconciler. It is used in tests for compliance with
-// kstatus.
-var imagePolicyNegativeConditions = []string{
-	meta.StalledCondition,
-	meta.ReconcilingCondition,
-}
-
 // this is used as the key for the index of policy->repository; the
 // string is arbitrary and acts as a reminder where the value comes
 // from.
@@ -107,9 +103,11 @@ type ImagePolicyReconciler struct {
 	kuberecorder.EventRecorder
 	helper.Metrics
 
-	ControllerName string
-	Database       DatabaseReader
-	ACLOptions     acl.Options
+	ControllerName    string
+	Database          DatabaseReader
+	ACLOptions        acl.Options
+	AuthOptionsGetter *registry.AuthOptionsGetter
+	TokenCache        *cache.TokenCache
 
 	patchOptions []patch.Option
 }
@@ -181,7 +179,7 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Examine if the object is under deletion.
 	if !obj.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, obj)
+		return r.reconcileDelete(obj)
 	}
 
 	// Add finalizer first if it doesn't exist to avoid the race condition
@@ -200,22 +198,45 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 // composeImagePolicyReadyMessage composes a Ready message for an ImagePolicy
 // based on the results of applying the policy.
-func composeImagePolicyReadyMessage(previousTag, latestTag, image string) string {
-	readyMsg := fmt.Sprintf("Latest image tag for '%s' resolved to %s", image, latestTag)
-	if previousTag != "" && previousTag != latestTag {
-		readyMsg = fmt.Sprintf("Latest image tag for '%s' updated from %s to %s", image, previousTag, latestTag)
+func composeImagePolicyReadyMessage(obj *imagev1.ImagePolicy) string {
+	latestRef := obj.Status.LatestRef
+	readyMsg := fmt.Sprintf("Latest image tag for %s resolved to %s", latestRef.Name, latestRef.Tag)
+	if latestRef.Digest != "" {
+		readyMsg += fmt.Sprintf(" with digest %s", latestRef.Digest)
+	}
+	if prev := obj.Status.ObservedPreviousRef; prev != nil && *latestRef != *prev {
+		readyMsg += fmt.Sprintf(" (previously %s:%s", prev.Name, prev.Tag)
+		if prev.Digest != "" {
+			readyMsg += fmt.Sprintf("@%s", prev.Digest)
+		}
+		readyMsg += ")"
 	}
 	return readyMsg
+}
+
+// migrateImageToRef migrates the old status.LatestImage and
+// status.ObservedPreviousImage fields to the new status.LatestRef and
+// status.ObservedPreviousRef fields.
+func migrateImageToRef(imgWithTag string, ref **imagev1.ImageRef) {
+	if *ref != nil || imgWithTag == "" {
+		return
+	}
+
+	idx := strings.LastIndex(imgWithTag, ":")
+	*ref = &imagev1.ImageRef{
+		Name: imgWithTag[:idx],
+		Tag:  imgWithTag[idx+1:],
+	}
 }
 
 func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
-	var resultImage, resultTag, previousTag string
+	// Migrate old status fields to new ones.
+	migrateImageToRef(obj.Status.LatestImage, &obj.Status.LatestRef)
+	migrateImageToRef(obj.Status.ObservedPreviousImage, &obj.Status.ObservedPreviousRef)
 
-	// If there's no error and no requeue is requested, it's a success. Unlike
-	// other reconcilers, this reconciler doesn't requeue on its own with a
-	// RequeueAfter value.
+	// If there's no error and no requeue is requested, it's a success.
 	isSuccess := func(res ctrl.Result, err error) bool {
 		if err != nil || res.Requeue {
 			return false
@@ -223,9 +244,8 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		return true
 	}
 
+	var readyMsg string
 	defer func() {
-		readyMsg := composeImagePolicyReadyMessage(previousTag, resultTag, resultImage)
-
 		rs := pkgreconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
 
@@ -241,6 +261,14 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		notify(ctx, r.EventRecorder, oldObj, obj, readyMsg)
 	}()
 
+	// Validate errors in the spec before proceeding.
+	if obj.GetDigestReflectionPolicy() == imagev1.ReflectAlways && obj.Spec.Interval == nil {
+		const msg = "spec.interval must be set when spec.digestReflectionPolicy is set to 'Always'"
+		conditions.MarkStalled(obj, imagev1.IntervalNotConfiguredReason, msg)
+		result, retErr = ctrl.Result{}, nil
+		return
+	}
+
 	// Set reconciling condition.
 	pkgreconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")
 
@@ -253,9 +281,6 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 			return
 		}
 	}
-
-	// Cleanup the last result.
-	obj.Status.LatestImage = ""
 
 	// Get ImageRepository from reference.
 	repo, err := r.getImageRepository(ctx, obj)
@@ -280,7 +305,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	}
 
 	// Proceed only if the ImageRepository has scan result.
-	if repo.Status.LastScanResult == nil {
+	if !conditions.IsReady(repo) {
 		// Mark not ready but don't requeue. When the repository becomes ready,
 		// it'll trigger a policy reconciliation. No runtime error to prevent
 		// requeue.
@@ -289,10 +314,17 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		return
 	}
 
+	// Check if the image is valid and mark stalled if not.
+	if _, err := registry.ParseImageReference(repo.Spec.Image, repo.Spec.Insecure); err != nil {
+		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, "%s", err)
+		result, retErr = ctrl.Result{}, nil
+		return
+	}
+
 	// Construct a policer from the spec.policy.
 	// Read the tags from database and use the policy to obtain a result for the
 	// latest tag.
-	latest, err := r.applyPolicy(ctx, obj, repo)
+	latest, err := r.applyPolicy(obj, repo)
 	if err != nil {
 		// Stall if it's an invalid policy.
 		if _, ok := err.(errInvalidPolicy); ok {
@@ -313,36 +345,101 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		return
 	}
 
-	// Write the observations on status.
+	// Update status fields with the latest tag and digest.
+	if err := r.updateImageRefs(ctx, repo, obj, latest); err != nil {
+		result, retErr = ctrl.Result{}, err
+		return
+	}
+
+	// Compute ready message.
+	readyMsg = composeImagePolicyReadyMessage(obj)
+
+	// Update deprecated status fields with the latest tag.
 	obj.Status.LatestImage = repo.Spec.Image + ":" + latest
-	// If the old latest image and new latest image don't match, set the old
-	// image as the observed previous image.
-	// NOTE: The following allows the previous image to be set empty when
-	// there's a failure and a subsequent recovery from it. This behavior helps
-	// avoid creating an update event as there's no previous image to infer
-	// from. Recovery from a failure shouldn't result in an update event.
-	if oldObj.Status.LatestImage != obj.Status.LatestImage {
-		obj.Status.ObservedPreviousImage = oldObj.Status.LatestImage
-	}
-	// Parse the observed previous image if any and extract previous tag. This
-	// is used to determine image tag update path.
-	if obj.Status.ObservedPreviousImage != "" {
-		prevRef, err := name.NewTag(obj.Status.ObservedPreviousImage)
-		if err != nil {
-			e := fmt.Errorf("failed to parse previous image '%s': %w", obj.Status.ObservedPreviousImage, err)
-			conditions.MarkFalse(obj, meta.ReadyCondition, meta.FailedReason, "%s", e)
-			result, retErr = ctrl.Result{}, e
-		}
-		previousTag = prevRef.TagStr()
+	if prev := obj.Status.ObservedPreviousRef; prev != nil {
+		obj.Status.ObservedPreviousImage = prev.Name + ":" + prev.Tag
 	}
 
-	resultImage = repo.Spec.Image
-	resultTag = latest
-
+	// Let result finalizer compute the Ready condition.
 	conditions.Delete(obj, meta.ReadyCondition)
 
-	result, retErr = ctrl.Result{}, nil
+	result, retErr = ctrl.Result{RequeueAfter: obj.GetInterval()}, nil
 	return
+}
+
+// updateImageRefs updates the status fields of the ImagePolicy with the
+// latest image and digest. It takes the digest reflection policy into
+// account and fetches the digest if needed.
+func (r *ImagePolicyReconciler) updateImageRefs(ctx context.Context,
+	repo *imagev1.ImageRepository, obj *imagev1.ImagePolicy, latest string) error {
+
+	latestRef := &imagev1.ImageRef{
+		Name: repo.Spec.Image,
+		Tag:  latest,
+	}
+
+	// Determine if we need to fetch the digest based on the reflection policy.
+	var shouldFetch bool
+	switch obj.GetDigestReflectionPolicy() {
+	case imagev1.ReflectIfNotPresent:
+
+		shouldFetch = obj.Status.LatestRef == nil ||
+			obj.Status.LatestRef.Name != latestRef.Name ||
+			obj.Status.LatestRef.Tag != latestRef.Tag ||
+			obj.Status.LatestRef.Digest == ""
+
+		if !shouldFetch {
+			latestRef.Digest = obj.Status.LatestRef.Digest
+		}
+	case imagev1.ReflectAlways:
+		shouldFetch = true
+	}
+
+	// Fetch the digest if needed.
+	if shouldFetch {
+		digest, err := r.fetchDigest(ctx, repo, obj, latest)
+		if err != nil {
+			return fmt.Errorf("failed fetching digest of %s: %w", latestRef.String(), err)
+		}
+		latestRef.Digest = digest
+	}
+
+	// Update the status fields only if the resulting ref is different.
+	if obj.Status.LatestRef == nil || *latestRef != *obj.Status.LatestRef {
+		obj.Status.ObservedPreviousRef = obj.Status.LatestRef
+		obj.Status.LatestRef = latestRef
+	}
+
+	return nil
+}
+
+// fetchDigest fetches the digest of the given image repository and latest tag.
+func (r *ImagePolicyReconciler) fetchDigest(ctx context.Context,
+	repo *imagev1.ImageRepository, obj *imagev1.ImagePolicy, latest string) (string, error) {
+
+	ref := repo.Spec.Image + ":" + latest
+	tagRef, err := name.ParseReference(ref)
+	if err != nil {
+		return "", fmt.Errorf("failed parsing reference %q: %w", ref, err)
+	}
+
+	involvedObject := &cache.InvolvedObject{
+		Kind:      imagev1.ImagePolicyKind,
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+		Operation: cache.OperationReconcile,
+	}
+	opts, err := r.AuthOptionsGetter.GetOptions(ctx, repo, involvedObject)
+	if err != nil {
+		return "", fmt.Errorf("failed to configure authentication options: %w", err)
+	}
+
+	desc, err := remote.Head(tagRef, opts...)
+	if err != nil {
+		return "", fmt.Errorf("failed fetching descriptor for %q: %w", tagRef.String(), err)
+	}
+
+	return desc.Digest.String(), nil
 }
 
 // getImageRepository tries to fetch an ImageRepository referenced by the given
@@ -383,7 +480,7 @@ func (r *ImagePolicyReconciler) getImageRepository(ctx context.Context, obj *ima
 
 // applyPolicy reads the tags of the given repository from the internal database
 // and applies the tag filters and constraints to return the latest image.
-func (r *ImagePolicyReconciler) applyPolicy(ctx context.Context, obj *imagev1.ImagePolicy, repo *imagev1.ImageRepository) (string, error) {
+func (r *ImagePolicyReconciler) applyPolicy(obj *imagev1.ImagePolicy, repo *imagev1.ImageRepository) (string, error) {
 	policer, err := policy.PolicerFromSpec(obj.Spec.Policy)
 	if err != nil {
 		return "", errInvalidPolicy{err: fmt.Errorf("invalid policy: %w", err)}
@@ -419,9 +516,13 @@ func (r *ImagePolicyReconciler) applyPolicy(ctx context.Context, obj *imagev1.Im
 }
 
 // reconcileDelete handles the deletion of the object.
-func (r *ImagePolicyReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImagePolicy) (reconcile.Result, error) {
+func (r *ImagePolicyReconciler) reconcileDelete(obj *imagev1.ImagePolicy) (reconcile.Result, error) {
 	// Remove our finalizer from the list.
 	controllerutil.RemoveFinalizer(obj, imagev1.ImageFinalizer)
+
+	// Cleanup caches.
+	r.TokenCache.DeleteEventsForObject(imagev1.ImagePolicyKind,
+		obj.GetName(), obj.GetNamespace(), cache.OperationReconcile)
 
 	// Stop reconciliation as the object is being deleted.
 	return ctrl.Result{}, nil

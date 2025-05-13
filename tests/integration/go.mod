@@ -6,6 +6,7 @@ replace github.com/fluxcd/image-reflector-controller/api => ../../api
 
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.34.0
+	github.com/fluxcd/pkg/apis/meta v1.11.0
 	github.com/fluxcd/test-infra/tftestenv v0.0.0-20250428124931-40db4180bdbd
 	github.com/hashicorp/terraform-exec v0.23.0
 	github.com/hashicorp/terraform-json v0.24.0
@@ -26,7 +27,6 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fluxcd/pkg/apis/acl v0.7.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.11.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.1 // indirect

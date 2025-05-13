@@ -44,6 +44,14 @@ import (
 // https://github.com/google/go-containerregistry/blob/v0.1.1/pkg/registry/compatibility_test.go
 // has an example of loading a test registry with a random image.
 
+// imagePolicyNegativeConditions is a list of negative polarity conditions
+// owned by ImagePolicyReconciler. It is used in tests for compliance with
+// kstatus.
+var imagePolicyNegativeConditions = []string{
+	meta.StalledCondition,
+	meta.ReconcilingCondition,
+}
+
 func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 	g := NewWithT(t)
 
@@ -51,7 +59,7 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 	defer registryServer.Close()
 
 	versions := []string{"1.0.1", "1.0.2", "1.1.0-alpha"}
-	imgRepo, err := test.LoadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
+	imgRepo, _, err := test.LoadImages(registryServer, "test-semver-policy-"+randStringRunes(5), versions)
 	g.Expect(err).ToNot(HaveOccurred())
 
 	namespaceLabels := map[string]string{
@@ -171,7 +179,7 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			imgRepo, err := test.LoadImages(registryServer, "test-semver-policy-"+randStringRunes(5), tt.versions)
+			imgRepo, _, err := test.LoadImages(registryServer, "test-semver-policy-"+randStringRunes(5), tt.versions)
 			g.Expect(err).ToNot(HaveOccurred())
 
 			repo := imagev1.ImageRepository{
@@ -219,9 +227,14 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 			if !tt.wantFailure {
 				g.Eventually(func() bool {
 					err := testEnv.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
+					return err == nil &&
+						pol.Status.LatestRef != nil
 				}, timeout, interval).Should(BeTrue())
-				g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + tt.wantImageTag))
+				g.Expect(pol.Status.LatestRef.String()).To(Equal(imgRepo + tt.wantImageTag))
+				g.Expect(pol.Status.ObservedPreviousImage).To(Equal(""),
+					"single reconciliation should leave status.observedPreviousImage empty")
+				g.Expect(pol.Status.ObservedPreviousRef).To(BeNil(),
+					"single reconciliation should leave status.observedPreviousRef nil")
 			} else {
 				g.Eventually(func() bool {
 					err := testEnv.Get(ctx, polName, &pol)
@@ -237,6 +250,7 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 			checker.WithT(g).CheckErr(ctx, &pol)
 
 			g.Expect(testEnv.Delete(ctx, &pol)).To(Succeed())
+			g.Expect(testEnv.Delete(ctx, &repo)).To(Succeed())
 		})
 	}
 }
@@ -276,7 +290,7 @@ func TestImagePolicyReconciler_filterTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			imgRepo, err := test.LoadImages(registryServer, "test-semver-policy-"+randStringRunes(5), tt.versions)
+			imgRepo, _, err := test.LoadImages(registryServer, "test-semver-policy-"+randStringRunes(5), tt.versions)
 			g.Expect(err).ToNot(HaveOccurred())
 
 			repo := imagev1.ImageRepository{
@@ -329,9 +343,9 @@ func TestImagePolicyReconciler_filterTags(t *testing.T) {
 			if !tt.wantFailure {
 				g.Eventually(func() bool {
 					err := testEnv.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
+					return err == nil && pol.Status.LatestRef != nil
 				}, timeout, interval).Should(BeTrue())
-				g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + tt.wantImageTag))
+				g.Expect(pol.Status.LatestRef.String()).To(Equal(imgRepo + tt.wantImageTag))
 			} else {
 				g.Eventually(func() bool {
 					err := testEnv.Get(ctx, polName, &pol)
@@ -440,7 +454,7 @@ func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
 			g := NewWithT(t)
 
 			versions := []string{"1.0.0", "1.0.1"}
-			imgRepo, err := test.LoadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
+			imgRepo, _, err := test.LoadImages(registryServer, "acl-image-"+randStringRunes(5), versions)
 			g.Expect(err).ToNot(HaveOccurred())
 
 			ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
@@ -505,9 +519,9 @@ func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
 			if tt.wantAccessible {
 				g.Eventually(func() bool {
 					err := testEnv.Get(ctx, polName, &pol)
-					return err == nil && pol.Status.LatestImage != ""
+					return err == nil && pol.Status.LatestRef != nil
 				}, timeout, interval).Should(BeTrue())
-				g.Expect(pol.Status.LatestImage).To(Equal(imgRepo + ":1.0.1"))
+				g.Expect(pol.Status.LatestRef.String()).To(Equal(imgRepo + ":1.0.1"))
 			} else {
 				g.Eventually(func() bool {
 					_ = testEnv.Get(ctx, polName, &pol)

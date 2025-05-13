@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Flux authors
+Copyright 2023 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ limitations under the License.
 package v1beta2
 
 import (
+	"time"
+
 	"github.com/fluxcd/pkg/apis/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -24,10 +26,12 @@ import (
 const ImagePolicyKind = "ImagePolicy"
 
 // Deprecated: Use ImageFinalizer.
-const ImagePolicyFinalizer = "finalizers.fluxcd.io"
+const ImagePolicyFinalizer = ImageFinalizer
 
 // ImagePolicySpec defines the parameters for calculating the
 // ImagePolicy.
+// +kubebuilder:validation:XValidation:rule="!has(self.interval) || (has(self.digestReflectionPolicy) && self.digestReflectionPolicy == 'Always')", message="spec.interval is only accepted when spec.digestReflectionPolicy is set to 'Always'"
+// +kubebuilder:validation:XValidation:rule="has(self.interval) || !has(self.digestReflectionPolicy) || self.digestReflectionPolicy != 'Always'", message="spec.interval must be set when spec.digestReflectionPolicy is set to 'Always'"
 type ImagePolicySpec struct {
 	// ImageRepositoryRef points at the object specifying the image
 	// being scanned
@@ -42,7 +46,45 @@ type ImagePolicySpec struct {
 	// ordered and compared.
 	// +optional
 	FilterTags *TagFilter `json:"filterTags,omitempty"`
+	// DigestReflectionPolicy governs the setting of the `.status.latestRef.digest` field.
+	//
+	// Never: The digest field will always be set to the empty string.
+	//
+	// IfNotPresent: The digest field will be set to the digest of the elected
+	// latest image if the field is empty and the image did not change.
+	//
+	// Always: The digest field will always be set to the digest of the elected
+	// latest image.
+	//
+	// Default: Never.
+	// +kubebuilder:default:=Never
+	DigestReflectionPolicy ReflectionPolicy `json:"digestReflectionPolicy,omitempty"`
+
+	// Interval is the length of time to wait between
+	// refreshing the digest of the latest tag when the
+	// reflection policy is set to "Always".
+	//
+	// Defaults to 10m.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$"
+	// +optional
+	Interval *metav1.Duration `json:"interval,omitempty"`
 }
+
+// ReflectionPolicy describes a policy for if/when to reflect a value from the registry in a certain resource field.
+// +kubebuilder:validation:Enum=Always;IfNotPresent;Never
+type ReflectionPolicy string
+
+const (
+	// ReflectAlways means that a value is always reflected with the latest value from the registry even if this would
+	// overwrite an existing value in the object.
+	ReflectAlways ReflectionPolicy = "Always"
+	// ReflectIfNotPresent means that the target value is only reflected from the registry if it is empty. It will
+	// never be overwritten afterwards, even if it changes in the registry.
+	ReflectIfNotPresent ReflectionPolicy = "IfNotPresent"
+	// ReflectNever means that no reflection will happen at all.
+	ReflectNever ReflectionPolicy = "Never"
+)
 
 // ImagePolicyChoice is a union of all the types of policy that can be
 // supplied.
@@ -101,16 +143,49 @@ type TagFilter struct {
 	Extract string `json:"extract"`
 }
 
+// ImageRef represents an image reference.
+type ImageRef struct {
+	// Name is the bare image's name.
+	// +required
+	Name string `json:"name"`
+	// Tag is the image's tag.
+	// +required
+	Tag string `json:"tag"`
+	// Digest is the image's digest.
+	// +optional
+	Digest string `json:"digest,omitempty"`
+}
+
+func (in *ImageRef) String() string {
+	res := in.Name + ":" + in.Tag
+	if in.Digest != "" {
+		res += "@" + in.Digest
+	}
+	return res
+}
+
 // ImagePolicyStatus defines the observed state of ImagePolicy
 type ImagePolicyStatus struct {
 	// LatestImage gives the first in the list of images scanned by
 	// the image repository, when filtered and ordered according to
 	// the policy.
+	//
+	// Deprecated: Replaced by the composite "latestRef" field.
 	LatestImage string `json:"latestImage,omitempty"`
 	// ObservedPreviousImage is the observed previous LatestImage. It is used
 	// to keep track of the previous and current images.
+	//
+	// Deprecated: Replaced by the composite "observedPreviousRef" field.
 	// +optional
 	ObservedPreviousImage string `json:"observedPreviousImage,omitempty"`
+	// LatestRef gives the first in the list of images scanned by
+	// the image repository, when filtered and ordered according
+	// to the policy.
+	LatestRef *ImageRef `json:"latestRef,omitempty"`
+	// ObservedPreviousRef is the observed previous LatestRef. It is used
+	// to keep track of the previous and current images.
+	// +optional
+	ObservedPreviousRef *ImageRef `json:"observedPreviousRef,omitempty"`
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// +optional
@@ -118,13 +193,13 @@ type ImagePolicyStatus struct {
 }
 
 // GetConditions returns the status conditions of the object.
-func (p ImagePolicy) GetConditions() []metav1.Condition {
-	return p.Status.Conditions
+func (in *ImagePolicy) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
 }
 
 // SetConditions sets the status conditions on the object.
-func (p *ImagePolicy) SetConditions(conditions []metav1.Condition) {
-	p.Status.Conditions = conditions
+func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
 }
 
 // +kubebuilder:storageversion
@@ -140,6 +215,20 @@ type ImagePolicy struct {
 	Spec ImagePolicySpec `json:"spec,omitempty"`
 	// +kubebuilder:default={"observedGeneration":-1}
 	Status ImagePolicyStatus `json:"status,omitempty"`
+}
+
+func (in *ImagePolicy) GetDigestReflectionPolicy() ReflectionPolicy {
+	if in.Spec.DigestReflectionPolicy != "" {
+		return in.Spec.DigestReflectionPolicy
+	}
+	return ReflectNever
+}
+
+func (in *ImagePolicy) GetInterval() time.Duration {
+	if in.GetDigestReflectionPolicy() == ReflectAlways {
+		return in.Spec.Interval.Duration
+	}
+	return 0
 }
 
 //+kubebuilder:object:root=true

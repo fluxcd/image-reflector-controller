@@ -42,12 +42,6 @@ func registryLoginGCR(ctx context.Context, output map[string]*tfjson.StateOutput
 	// with a new repository name.
 	testRepos := map[string]string{}
 
-	repoURL := output["gcr_repository_url"].Value.(string)
-	if err := tftestenv.RegistryLoginGCR(ctx, repoURL); err != nil {
-		return nil, err
-	}
-	testRepos["gcr"] = repoURL + "/" + randStringRunes(5)
-
 	project := output["gcp_project"].Value.(string)
 	region := output["gcp_region"].Value.(string)
 	repositoryID := output["gcp_artifact_repository"].Value.(string)
