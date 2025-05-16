@@ -222,6 +222,15 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		notify(ctx, r.EventRecorder, oldObj, obj, nextScanMsg)
 	}()
 
+	// Check object-level workload identity feature gate.
+	if obj.Spec.Provider != "generic" && obj.Spec.ServiceAccountName != "" && !auth.IsObjectLevelWorkloadIdentityEnabled() {
+		const msgFmt = "to use spec.serviceAccountName for provider authentication please enable the %s feature gate in the controller"
+		conditions.MarkStalled(obj, meta.FeatureGateDisabledReason, msgFmt,
+			auth.FeatureGateObjectLevelWorkloadIdentity)
+		result, retErr = ctrl.Result{}, nil
+		return
+	}
+
 	// Set reconciling condition.
 	reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")
 

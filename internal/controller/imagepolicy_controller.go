@@ -42,6 +42,7 @@ import (
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
@@ -321,6 +322,15 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		return
 	}
 
+	// Check object-level workload identity feature gate.
+	if repo.Spec.Provider != "generic" && repo.Spec.ServiceAccountName != "" && !auth.IsObjectLevelWorkloadIdentityEnabled() {
+		const msgFmt = "to use spec.serviceAccountName in the ImageRepository for provider authentication please enable the %s feature gate in the controller"
+		conditions.MarkStalled(obj, meta.FeatureGateDisabledReason, msgFmt,
+			auth.FeatureGateObjectLevelWorkloadIdentity)
+		result, retErr = ctrl.Result{}, nil
+		return
+	}
+
 	// Construct a policer from the spec.policy.
 	// Read the tags from database and use the policy to obtain a result for the
 	// latest tag.
@@ -391,6 +401,7 @@ func (r *ImagePolicyReconciler) updateImageRefs(ctx context.Context,
 		if !shouldFetch {
 			latestRef.Digest = obj.Status.LatestRef.Digest
 		}
+
 	case imagev1.ReflectAlways:
 		shouldFetch = true
 	}

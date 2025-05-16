@@ -136,6 +136,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	switch enabled, err := features.Enabled(auth.FeatureGateObjectLevelWorkloadIdentity); {
+	case err != nil:
+		setupLog.Error(err, "unable to check feature gate "+auth.FeatureGateObjectLevelWorkloadIdentity)
+		os.Exit(1)
+	case enabled:
+		auth.EnableObjectLevelWorkloadIdentity()
+	}
+
 	badgerOpts := badger.DefaultOptions(storagePath)
 	badgerOpts.ValueLogFileSize = storageValueLogFileSize
 	badgerDB, err := badger.Open(badgerOpts)
