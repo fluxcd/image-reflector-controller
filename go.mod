@@ -12,8 +12,8 @@ require (
 	github.com/fluxcd/image-reflector-controller/api v0.34.0
 	github.com/fluxcd/pkg/apis/acl v0.7.0
 	github.com/fluxcd/pkg/apis/event v0.17.0
-	github.com/fluxcd/pkg/apis/meta v1.11.0
-	github.com/fluxcd/pkg/auth v0.12.0
+	github.com/fluxcd/pkg/apis/meta v1.12.0
+	github.com/fluxcd/pkg/auth v0.14.0
 	github.com/fluxcd/pkg/cache v0.9.0
 	github.com/fluxcd/pkg/runtime v0.59.0
 	github.com/fluxcd/pkg/version v0.7.0
@@ -28,6 +28,7 @@ require (
 	k8s.io/client-go v0.33.0
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
 	sigs.k8s.io/controller-runtime v0.20.4
+	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
@@ -168,5 +169,4 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.19.0 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
 )

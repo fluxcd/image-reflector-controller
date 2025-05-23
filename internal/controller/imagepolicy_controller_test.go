@@ -36,6 +36,7 @@ import (
 
 	aclapis "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
+	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
@@ -158,6 +159,151 @@ func TestImagePolicyReconciler_invalidImage(t *testing.T) {
 		return err == nil && conditions.IsStalled(imagePolicy) &&
 			conditions.GetReason(imagePolicy, meta.StalledCondition) == imagev1.ImageURLInvalidReason
 	}).Should(BeTrue())
+}
+
+func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing.T) {
+	t.Run("disabled", func(t *testing.T) {
+		g := NewWithT(t)
+
+		namespaceName := "imagepolicy-" + randStringRunes(5)
+		namespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		}
+		g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+		t.Cleanup(func() {
+			g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+		})
+
+		imageRepo := &imagev1.ImageRepository{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespaceName,
+				Name:      "repo",
+			},
+			Spec: imagev1.ImageRepositorySpec{
+				Image:              "ghcr.io/stefanprodan/podinfo",
+				Provider:           "aws",
+				ServiceAccountName: "foo",
+			},
+		}
+		g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+		t.Cleanup(func() {
+			g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+		})
+
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+			return err == nil && conditions.IsStalled(imageRepo) &&
+				conditions.GetReason(imageRepo, meta.StalledCondition) == meta.FeatureGateDisabledReason &&
+				conditions.GetMessage(imageRepo, meta.StalledCondition) == "to use spec.serviceAccountName for provider authentication please enable the ObjectLevelWorkloadIdentity feature gate in the controller"
+		}).Should(BeTrue())
+
+		g.Eventually(func() bool {
+			p := patch.NewSerialPatcher(imageRepo, k8sClient)
+			imageRepo.Spec.Suspend = true
+			imageRepo.Status.Conditions = nil
+			conditions.MarkTrue(imageRepo, meta.ReadyCondition, "success", "image repository is ready")
+			return p.Patch(ctx, imageRepo) == nil
+		}).Should(BeTrue())
+
+		imagePolicy := &imagev1.ImagePolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespaceName,
+				Name:      "test-imagepolicy",
+			},
+			Spec: imagev1.ImagePolicySpec{
+				ImageRepositoryRef: meta.NamespacedObjectReference{
+					Name: imageRepo.Name,
+				},
+				Policy: imagev1.ImagePolicyChoice{
+					Alphabetical: &imagev1.AlphabeticalPolicy{},
+				},
+			},
+		}
+		g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+		t.Cleanup(func() {
+			g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+		})
+
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+			logPolicyStatus(t, imagePolicy)
+			return err == nil && conditions.IsStalled(imagePolicy) &&
+				conditions.GetReason(imagePolicy, meta.StalledCondition) == meta.FeatureGateDisabledReason &&
+				conditions.GetMessage(imagePolicy, meta.StalledCondition) == "to use spec.serviceAccountName in the ImageRepository for provider authentication please enable the ObjectLevelWorkloadIdentity feature gate in the controller"
+		}).Should(BeTrue())
+	})
+
+	t.Run("enabled", func(t *testing.T) {
+		g := NewWithT(t)
+
+		t.Setenv(auth.EnvVarEnableObjectLevelWorkloadIdentity, "true")
+
+		namespaceName := "imagepolicy-" + randStringRunes(5)
+		namespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		}
+		g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+		t.Cleanup(func() {
+			g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+		})
+
+		imageRepo := &imagev1.ImageRepository{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespaceName,
+				Name:      "repo",
+			},
+			Spec: imagev1.ImageRepositorySpec{
+				Image:              "ghcr.io/stefanprodan/podinfo",
+				Provider:           "aws",
+				ServiceAccountName: "foo",
+			},
+		}
+		g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+		t.Cleanup(func() {
+			g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+		})
+
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+			logRepoStatus(t, imageRepo)
+			return err == nil && !conditions.IsReady(imageRepo) &&
+				conditions.GetReason(imageRepo, meta.ReadyCondition) == imagev1.AuthenticationFailedReason
+		}).Should(BeTrue())
+
+		g.Eventually(func() bool {
+			p := patch.NewSerialPatcher(imageRepo, k8sClient)
+			imageRepo.Spec.Suspend = true
+			imageRepo.Status.Conditions = nil
+			conditions.MarkTrue(imageRepo, meta.ReadyCondition, "success", "image repository is ready")
+			return p.Patch(ctx, imageRepo) == nil
+		}).Should(BeTrue())
+
+		imagePolicy := &imagev1.ImagePolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespaceName,
+				Name:      "test-imagepolicy",
+			},
+			Spec: imagev1.ImagePolicySpec{
+				ImageRepositoryRef: meta.NamespacedObjectReference{
+					Name: imageRepo.Name,
+				},
+				Policy: imagev1.ImagePolicyChoice{
+					Alphabetical: &imagev1.AlphabeticalPolicy{},
+				},
+			},
+		}
+		g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+		t.Cleanup(func() {
+			g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+		})
+
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+			logPolicyStatus(t, imagePolicy)
+			return err == nil && !conditions.IsReady(imagePolicy) &&
+				conditions.GetReason(imagePolicy, meta.ReadyCondition) == imagev1.DependencyNotReadyReason
+		}).Should(BeTrue())
+	})
 }
 
 func TestImagePolicyReconciler_intervalNotConfigured(t *testing.T) {
