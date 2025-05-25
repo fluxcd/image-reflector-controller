@@ -7,7 +7,7 @@ replace github.com/fluxcd/image-reflector-controller/api => ../../api
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.34.0
 	github.com/fluxcd/pkg/apis/meta v1.12.0
-	github.com/fluxcd/test-infra/tftestenv v0.0.0-20250428124931-40db4180bdbd
+	github.com/fluxcd/test-infra/tftestenv v0.0.0-20250519112614-4450eea17b00
 	github.com/hashicorp/terraform-exec v0.23.0
 	github.com/hashicorp/terraform-json v0.24.0
 	github.com/onsi/gomega v1.37.0
