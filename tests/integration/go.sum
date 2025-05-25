@@ -36,8 +36,8 @@ github.com/fluxcd/pkg/apis/acl v0.7.0 h1:dMhZJH+g6ZRPjs4zVOAN9vHBd1DcavFgcIFkg5o
 github.com/fluxcd/pkg/apis/acl v0.7.0/go.mod h1:uv7pXXR/gydiX4MUwlQa7vS8JONEDztynnjTvY3JxKQ=
 github.com/fluxcd/pkg/apis/meta v1.12.0 h1:XW15TKZieC2b7MN8VS85stqZJOx+/b8jATQ/xTUhVYg=
 github.com/fluxcd/pkg/apis/meta v1.12.0/go.mod h1:+son1Va60x2eiDcTwd7lcctbI6C+K3gM7R+ULmEq1SI=
-github.com/fluxcd/test-infra/tftestenv v0.0.0-20250428124931-40db4180bdbd h1:DBXNQN+G/bp9S43EMO/xq9yTQ4aDbovqqYQMJwQbyV8=
-github.com/fluxcd/test-infra/tftestenv v0.0.0-20250428124931-40db4180bdbd/go.mod h1:liFlLEXgambGVdWSJ4JzbIHf1Vjpp1HwUyPazPIVZug=
+github.com/fluxcd/test-infra/tftestenv v0.0.0-20250519112614-4450eea17b00 h1:hU0IM9zG6xaasycHPOPdUlDLtg6tfN1bZ8GTv4iwkRQ=
+github.com/fluxcd/test-infra/tftestenv v0.0.0-20250519112614-4450eea17b00/go.mod h1:liFlLEXgambGVdWSJ4JzbIHf1Vjpp1HwUyPazPIVZug=
 github.com/fxamacker/cbor/v2 v2.8.0 h1:fFtUGXUzXPHTIUdne5+zzMPTfffl3RD5qYnkY40vtxU=
 github.com/fxamacker/cbor/v2 v2.8.0/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 h1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI=
