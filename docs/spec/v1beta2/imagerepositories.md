@@ -168,10 +168,22 @@ reference.
 
 ### ServiceAccount name
 
-`.spec.serviceAccountName` is an optional field to specify a name reference to a
-ServiceAccount in the same namespace as the ImageRepository, with an image pull
-secret attached to it. For detailed instructions about attaching an image pull
-secret to a ServiceAccount, see [Add image pull secret to service account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#add-image-pull-secret-to-service-account).
+`.spec.serviceAccountName` is an optional field to specify a Service Account
+in the same namespace as ImageRepository with purpose depending on the value of
+the `.spec.provider` field:
+
+- When `.spec.provider` is set to `generic`, the controller will fetch the image
+  pull secrets attached to the Service Account and use them for authentication.
+- When `.spec.provider` is set to `aws`, `azure`, or `gcp`, the Service Account
+  will be used for Workload Identity authentication. In this case, the controller
+  feature gate `ObjectLevelWorkloadIdentity` must be enabled, otherwise the
+  controller will error out.
+
+**Note:** that for a publicly accessible image repository, you don't need to
+provide a `secretRef` nor `serviceAccountName`.
+
+For a complete guide on how to set up authentication for cloud providers,
+see the integration [docs](/flux/integrations/).
 
 ### Certificate secret reference
 
@@ -368,8 +380,8 @@ container registry.
 
 ### Provider
 
-`.spec.provider` is an optional field that allows specifying an OIDC provider
-used for authentication purposes.
+`.spec.provider` is an optional field that allows specifying an OIDC provider used for
+authentication purposes.
 
 Supported options are:
 
@@ -378,10 +390,13 @@ Supported options are:
 - `azure`
 - `gcp`
 
-The `generic` provider can be used for public repositories or when static
-credentials are used for authentication, either with `.spec.secretRef` or
-`.spec.serviceAccount`. If `.spec.provider` is not specified, it defaults to
-`generic`.
+The `generic` provider can be used for public repositories or when
+static credentials are used for authentication, either with
+`spec.secretRef` or `spec.serviceAccountName`.
+If you do not specify `.spec.provider`, it defaults to `generic`.
+
+For a complete guide on how to set up authentication for cloud providers,
+see the integration [docs](/flux/integrations/).
 
 #### AWS
 
