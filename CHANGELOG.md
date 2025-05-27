@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.35.0
+
+**Release date:** 2025-05-27
+
+This prerelease comes with support for object-level workload identity
+and image digest reflection.
+
+### ImageRepository
+
+ImageRepository API now supports object-level workload identity by setting
+`.spec.provider` to one of `aws`, `azure`, or `gcp`, and setting
+`.spec.serviceAccountName` to the name of a service account in the same
+namespace that has been configured with appropriate cloud permissions.
+For this feature to work, the controller feature gate
+`ObjectLevelWorkloadIdentity` must be enabled. See a complete guide
+[here](https://fluxcd.io/flux/integrations/).
+
+ImageRepository API now caches registry credentials for cloud providers
+by default. This behavior can be disabled or fine-tuned by adjusting the
+token cache controller flags (see [docs](https://fluxcd.io/flux/components/source/options/)).
+The token cache also exposes metrics that are documented
+[here](https://fluxcd.io/flux/monitoring/metrics/#controller-metrics).
+
+### ImagePolicy
+
+ImagePolicy API now supports configuring a digest reflection policy
+through the field `.spec.digestReflectionPolicy`. This allows users
+to configure the controller to reflect the digest of the latest image
+tag in the status of the ImagePolicy resource. See this
+[guide](https://fluxcd.io/flux/guides/image-update/#digest-pinning)
+for more details.
+
+### General updates
+
+The controller now collects the garbage from BadgerDB, the database
+where it stores image tags. The interval is 10 minutes by default,
+but it can be disabled or fine-tuned, see
+[docs](https://fluxcd.io/flux/components/image/options/#image-reflector-flags).
+
+In addition, the Kubernetes dependencies have been updated to v1.33
+and various other controller dependencies have been updated to their latest
+version. The controller is now built with Go 1.24.
+
+Fixes:
+- Downgrade `Masterminds/semver` to v3.3.0
+  [#761](https://github.com/fluxcd/image-reflector-controller/pull/761)
+
+Improvements:
+- [RFC-0010] Introduce object-level workload identity and cache credentials
+  [#760](https://github.com/fluxcd/image-reflector-controller/pull/760)
+  [#762](https://github.com/fluxcd/image-reflector-controller/pull/762)
+  [#766](https://github.com/fluxcd/image-reflector-controller/pull/766)
+- Store digest of latest image in ImagePolicy status
+  [#368](https://github.com/fluxcd/image-reflector-controller/pull/368)
+- Implement BadgerDB garbage collection
+  [#757](https://github.com/fluxcd/image-reflector-controller/pull/757)
+- Various dependency updates
+  [#767](https://github.com/fluxcd/image-reflector-controller/pull/767)
+  [#765](https://github.com/fluxcd/image-reflector-controller/pull/765)
+  [#764](https://github.com/fluxcd/image-reflector-controller/pull/764)
+  [#759](https://github.com/fluxcd/image-reflector-controller/pull/759)
+
 ## 0.34.0
 
 **Release date:** 2025-02-13
