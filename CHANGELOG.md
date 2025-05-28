@@ -19,7 +19,8 @@ For this feature to work, the controller feature gate
 
 ImageRepository API now caches registry credentials for cloud providers
 by default. This behavior can be disabled or fine-tuned by adjusting the
-token cache controller flags (see [docs](https://fluxcd.io/flux/components/source/options/)).
+token cache controller flags (see
+[docs](https://fluxcd.io/flux/components/image/options/#image-reflector-flags)).
 The token cache also exposes metrics that are documented
 [here](https://fluxcd.io/flux/monitoring/metrics/#controller-metrics).
 
