@@ -16,6 +16,7 @@ limitations under the License.
 package database
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -40,7 +41,7 @@ func TestSetTags(t *testing.T) {
 	db := createBadgerDatabase(t)
 	tags := []string{"latest", "v0.0.1", "v0.0.2"}
 
-	fatalIfError(t, db.SetTags(testRepo, tags))
+	fatalIfError(t, setTags(t, db, testRepo, tags, "1943865137"))
 
 	loaded, err := db.Tags(testRepo)
 	fatalIfError(t, err)
@@ -53,9 +54,9 @@ func TestSetTagsOverwrites(t *testing.T) {
 	db := createBadgerDatabase(t)
 	tags1 := []string{"latest", "v0.0.1", "v0.0.2"}
 	tags2 := []string{"latest", "v0.0.1", "v0.0.2", "v0.0.3"}
-	fatalIfError(t, db.SetTags(testRepo, tags1))
+	fatalIfError(t, setTags(t, db, testRepo, tags1, "1943865137"))
 
-	fatalIfError(t, db.SetTags(testRepo, tags2))
+	fatalIfError(t, setTags(t, db, testRepo, tags2, "3168012550"))
 
 	loaded, err := db.Tags(testRepo)
 	fatalIfError(t, err)
@@ -67,10 +68,10 @@ func TestSetTagsOverwrites(t *testing.T) {
 func TestGetOnlyFetchesForRepo(t *testing.T) {
 	db := createBadgerDatabase(t)
 	tags1 := []string{"latest", "v0.0.1", "v0.0.2"}
-	fatalIfError(t, db.SetTags(testRepo, tags1))
+	fatalIfError(t, setTags(t, db, testRepo, tags1, "1943865137"))
 	testRepo2 := "another/repo"
 	tags2 := []string{"v0.0.3", "v0.0.4"}
-	fatalIfError(t, db.SetTags(testRepo2, tags2))
+	fatalIfError(t, setTags(t, db, testRepo2, tags2, "728958008"))
 
 	loaded, err := db.Tags(testRepo)
 	fatalIfError(t, err)
@@ -94,6 +95,18 @@ func createBadgerDatabase(t *testing.T) *BadgerDatabase {
 		os.RemoveAll(dir)
 	})
 	return NewBadgerDatabase(db)
+}
+
+func setTags(t *testing.T, db *BadgerDatabase, repo string, tags []string, expectedChecksum string) error {
+	t.Helper()
+	checksum, err := db.SetTags(repo, tags)
+	if err != nil {
+		return err
+	}
+	if checksum != expectedChecksum {
+		return fmt.Errorf("SetTags returned unexpected checksum: got %s, want %s", checksum, expectedChecksum)
+	}
+	return nil
 }
 
 func fatalIfError(t *testing.T, err error) {
