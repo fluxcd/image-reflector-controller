@@ -185,6 +185,147 @@ func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
 	}).Should(BeTrue())
 }
 
+func TestImagePolicyReconciler_imageRepoRevisionLifeCycle(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imageRepo := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "repo",
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "ghcr.io/stefanprodan/podinfo",
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo) &&
+			imageRepo.Generation == conditions.GetObservedGeneration(imageRepo, meta.ReadyCondition)
+	}, timeout).Should(BeTrue())
+
+	imagePolicy := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "test-imagepolicy",
+		},
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{
+				Name: imageRepo.Name,
+			},
+			FilterTags: &imagev1.TagFilter{
+				Pattern: `^6\.7\.\d+$`,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				SemVer: &imagev1.SemVerPolicy{
+					Range: "6.7.x",
+				},
+			},
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy) &&
+			imagePolicy.Generation == conditions.GetObservedGeneration(imagePolicy, meta.ReadyCondition) &&
+			imagePolicy.Status.LatestRef != nil &&
+			imagePolicy.Status.LatestRef.Tag == "6.7.1"
+	}, timeout).Should(BeTrue())
+	expectedImagePolicyLastTransitionTime := conditions.GetLastTransitionTime(imagePolicy, meta.ReadyCondition).Time
+
+	// Now force a reconciliation by setting the annotation.
+	var requestedAt string
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		if err != nil {
+			return false
+		}
+		p := patch.NewSerialPatcher(imageRepo, k8sClient)
+		requestedAt = time.Now().Format(time.RFC3339Nano)
+		if imageRepo.Annotations == nil {
+			imageRepo.Annotations = make(map[string]string)
+		}
+		imageRepo.Annotations["reconcile.fluxcd.io/requestedAt"] = requestedAt
+		return p.Patch(ctx, imageRepo) == nil
+	}, timeout).Should(BeTrue())
+
+	// Wait for the ImageRepository to reconcile.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo) &&
+			imageRepo.Status.LastHandledReconcileAt == requestedAt
+	}, timeout).Should(BeTrue())
+
+	// Check that the ImagePolicy is still ready and does not get updated.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy) &&
+			imagePolicy.Status.LatestRef != nil &&
+			imagePolicy.Status.LatestRef.Tag == "6.7.1"
+	}, timeout).Should(BeTrue())
+
+	// Wait a bit and check that the ImagePolicy remains ready.
+	time.Sleep(time.Second)
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy) &&
+			imagePolicy.Status.LatestRef != nil &&
+			imagePolicy.Status.LatestRef.Tag == "6.7.1"
+	}, timeout).Should(BeTrue())
+
+	// Check that the last transition time of the ImagePolicy Ready condition did not change since the beginning.
+	lastTransitionTime := conditions.GetLastTransitionTime(imagePolicy, meta.ReadyCondition).Time
+	g.Expect(lastTransitionTime).To(Equal(expectedImagePolicyLastTransitionTime))
+
+	// Now add an exclusion rule to force the checksum to change.
+	firstChecksum := imageRepo.Status.LastScanResult.Revision
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		if err != nil {
+			return false
+		}
+		p := patch.NewSerialPatcher(imageRepo, k8sClient)
+		imageRepo.Spec.ExclusionList = []string{`^6\.7\.1$`}
+		return p.Patch(ctx, imageRepo) == nil
+	}, timeout).Should(BeTrue())
+
+	// Wait for the ImageRepository to reconcile.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo) &&
+			imageRepo.Generation == conditions.GetObservedGeneration(imageRepo, meta.ReadyCondition) &&
+			imageRepo.Status.LastScanResult.Revision != firstChecksum
+	}, timeout).Should(BeTrue())
+
+	// Check that the ImagePolicy receives the update and the latest tag changes.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		if err != nil {
+			return false
+		}
+		return conditions.IsReady(imagePolicy) &&
+			imagePolicy.Generation == conditions.GetObservedGeneration(imagePolicy, meta.ReadyCondition) &&
+			imagePolicy.Status.LatestRef.Tag == "6.7.0"
+	}, timeout).Should(BeTrue())
+}
+
 func TestImagePolicyReconciler_invalidImage(t *testing.T) {
 	g := NewWithT(t)
 

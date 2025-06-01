@@ -483,12 +483,15 @@ spec:
                     items:
                       type: string
                     type: array
+                  revision:
+                    type: string
                   scanTime:
                     format: date-time
                     type: string
                   tagCount:
                     type: integer
                 required:
+                - revision
                 - tagCount
                 type: object
               observedExclusionList:
