@@ -4,12 +4,14 @@
 
 **Release date:** 2025-06-01
 
-This prerelease fixes the ImagePolicy reconciler getting triggered by
-non-ready ImageRepository objects.
+This prerelease fixes the ImagePolicy reconciler spamming red-herring
+error messages.
 
 Fixes:
 - Fix ImagePolicy reconciler getting triggered when ImageRepository is not ready
   [#774](https://github.com/fluxcd/image-reflector-controller/pull/774)
+- Fix ImagePolicy reconciler spamming `no tags in database` after a restart
+  [#776](https://github.com/fluxcd/image-reflector-controller/pull/776)
 
 ## 0.35.0
 
