@@ -290,7 +290,12 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	// Scan the repository if it's scan time. No scan is a no-op reconciliation.
 	// The next scan time is not reset in case of no-op reconciliation.
 	if ok {
-		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
+		// When the database is empty, we need to set the Ready condition to
+		// Unknown to force a transition when the controller restarts.
+		// This transition is required to unblock the ImagePolicy object
+		// from the Ready condition stuck in False with reason DependencyNotReady.
+		drift := reasonMsg == scanReasonEmptyDatabase
+		reconcile.ProgressiveStatus(drift, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
 		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
 			result, retErr = ctrl.Result{}, err
 			return

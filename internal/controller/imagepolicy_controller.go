@@ -330,16 +330,6 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		return
 	}
 
-	// Proceed only if the ImageRepository has scan result.
-	if !conditions.IsReady(repo) {
-		// Mark not ready but don't requeue. When the repository becomes ready,
-		// it'll trigger a policy reconciliation. No runtime error to prevent
-		// requeue.
-		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "referenced ImageRepository has not been scanned yet")
-		result, retErr = ctrl.Result{}, nil
-		return
-	}
-
 	// Check if the image is valid and mark stalled if not.
 	if _, err := registry.ParseImageReference(repo.Spec.Image, repo.Spec.Insecure); err != nil {
 		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, "%s", err)
@@ -368,10 +358,10 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 			return
 		}
 
-		// If there's no tag in the database, mark not ready and retry.
+		// If there's no tag in the database, mark not ready.
 		if err == errNoTagsInDatabase {
 			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "%s", err)
-			result, retErr = ctrl.Result{}, err
+			result, retErr = ctrl.Result{}, nil
 			return
 		}
 

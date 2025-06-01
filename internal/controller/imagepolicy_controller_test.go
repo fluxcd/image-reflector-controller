@@ -47,7 +47,7 @@ import (
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
-func TestImagePolicyReconciler_imageRepoNotReady(t *testing.T) {
+func TestImagePolicyReconciler_imageRepoHasNoTags(t *testing.T) {
 	g := NewWithT(t)
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
@@ -65,18 +65,13 @@ func TestImagePolicyReconciler_imageRepoNotReady(t *testing.T) {
 			Name:      "repo",
 		},
 		Spec: imagev1.ImageRepositorySpec{
-			Image: "ghcr.io/stefanprodan/podinfo/foo:bar:zzz:qqq/aaa",
+			Image: "ghcr.io/doesnot/exist",
 		},
 	}
 	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
 	t.Cleanup(func() {
 		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
 	})
-
-	g.Eventually(func() bool {
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
-		return err == nil && conditions.IsStalled(imageRepo)
-	}).Should(BeTrue())
 
 	imagePolicy := &imagev1.ImagePolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -86,6 +81,9 @@ func TestImagePolicyReconciler_imageRepoNotReady(t *testing.T) {
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
 			},
 		},
 	}
@@ -174,15 +172,17 @@ func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
 	}).Should(BeTrue())
 
 	// Check that the ImagePolicy is still ready and does not get updated.
-	err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(conditions.IsReady(imagePolicy)).To(BeTrue())
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy)
+	}).Should(BeTrue())
 
 	// Wait a bit and check that the ImagePolicy remains ready.
 	time.Sleep(time.Second)
-	err = k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
-	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(conditions.IsReady(imagePolicy)).To(BeTrue())
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy)
+	}).Should(BeTrue())
 }
 
 func TestImagePolicyReconciler_invalidImage(t *testing.T) {
