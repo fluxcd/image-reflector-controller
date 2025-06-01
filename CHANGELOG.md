@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.35.1
+
+**Release date:** 2025-06-01
+
+This prerelease fixes the ImagePolicy reconciler getting triggered by
+non-ready ImageRepository objects.
+
+Fixes:
+- Fix ImagePolicy reconciler getting triggered when ImageRepository is not ready
+  [#774](https://github.com/fluxcd/image-reflector-controller/pull/774)
+
 ## 0.35.0
 
 **Release date:** 2025-05-27
