@@ -42,8 +42,9 @@ func TestBadgerGarbageCollectorDoesStop(t *testing.T) {
 	time.Sleep(time.Second)
 
 	tags := []string{"latest", "v0.0.1", "v0.0.2"}
-	fatalIfError(t, db.SetTags(testRepo, tags))
-	_, err := db.Tags(testRepo)
+	_, err := db.SetTags(testRepo, tags)
+	fatalIfError(t, err)
+	_, err = db.Tags(testRepo)
 	fatalIfError(t, err)
 	t.Log("wrote tags successfully")
 

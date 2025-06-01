@@ -18,7 +18,7 @@ package controller
 
 // DatabaseWriter implementations record the tags for an image repository.
 type DatabaseWriter interface {
-	SetTags(repo string, tags []string) error
+	SetTags(repo string, tags []string) (string, error)
 }
 
 // DatabaseReader implementations get the stored set of tags for an image

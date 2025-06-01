@@ -1110,6 +1110,16 @@ would select 0.</p>
 <tbody>
 <tr>
 <td>
+<code>revision</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+</td>
+</tr>
+<tr>
+<td>
 <code>tagCount</code><br>
 <em>
 int

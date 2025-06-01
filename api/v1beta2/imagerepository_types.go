@@ -116,6 +116,7 @@ type ImageRepositorySpec struct {
 }
 
 type ScanResult struct {
+	Revision   string      `json:"revision"`
 	TagCount   int         `json:"tagCount"`
 	ScanTime   metav1.Time `json:"scanTime,omitempty"`
 	LatestTags []string    `json:"latestTags,omitempty"`
