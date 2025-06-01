@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -143,11 +144,35 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 		Watches(
 			&imagev1.ImageRepository{},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
+			builder.WithPredicates(imageRepositoryPredicate{}),
 		).
 		WithOptions(controller.Options{
 			RateLimiter: opts.RateLimiter,
 		}).
 		Complete(r)
+}
+
+// imageRepositoryPredicate is used for watching changes to
+// ImageRepository objects that are referenced by ImagePolicy
+// objects.
+type imageRepositoryPredicate struct {
+	predicate.Funcs
+}
+
+func (imageRepositoryPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil || e.ObjectNew == nil {
+		return false
+	}
+
+	// This is a temporary workaround to avoid reconciling ImagePolicy
+	// when the ImageRepository is not ready. In the near future, we
+	// will implement a digest for the scanned tags in the ImageRepository
+	// and will only return true here if the digest has changed, which
+	// covers not only skipping the reconciliation when the ImageRepository
+	// is not ready, but also when the tags have not changed.
+	repo := e.ObjectNew.(*imagev1.ImageRepository)
+	return conditions.IsReady(repo) &&
+		conditions.GetObservedGeneration(repo, meta.ReadyCondition) == repo.Generation
 }
 
 func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {

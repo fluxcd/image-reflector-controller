@@ -101,6 +101,90 @@ func TestImagePolicyReconciler_imageRepoNotReady(t *testing.T) {
 	}).Should(BeTrue())
 }
 
+func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imageRepo := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "repo",
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "ghcr.io/stefanprodan/podinfo",
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo)
+	}, timeout).Should(BeTrue())
+
+	imagePolicy := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "test-imagepolicy",
+		},
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{
+				Name: imageRepo.Name,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy)
+	}).Should(BeTrue())
+
+	// Now cause the ImageRepository to become not ready.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		if err != nil {
+			return false
+		}
+		p := patch.NewSerialPatcher(imageRepo, k8sClient)
+		imageRepo.Spec.Image = "ghcr.io/stefanprodan/podinfo/foo:bar:zzz:qqq/aaa"
+		return p.Patch(ctx, imageRepo) == nil
+	}).Should(BeTrue())
+
+	// Wait for the ImageRepository to become not ready.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsStalled(imageRepo)
+	}).Should(BeTrue())
+
+	// Check that the ImagePolicy is still ready and does not get updated.
+	err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(conditions.IsReady(imagePolicy)).To(BeTrue())
+
+	// Wait a bit and check that the ImagePolicy remains ready.
+	time.Sleep(time.Second)
+	err = k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(conditions.IsReady(imagePolicy)).To(BeTrue())
+}
+
 func TestImagePolicyReconciler_invalidImage(t *testing.T) {
 	g := NewWithT(t)
 
