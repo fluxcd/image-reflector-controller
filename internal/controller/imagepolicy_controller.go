@@ -164,15 +164,18 @@ func (imageRepositoryPredicate) Update(e event.UpdateEvent) bool {
 		return false
 	}
 
-	// This is a temporary workaround to avoid reconciling ImagePolicy
-	// when the ImageRepository is not ready. In the near future, we
-	// will implement a digest for the scanned tags in the ImageRepository
-	// and will only return true here if the digest has changed, which
-	// covers not only skipping the reconciliation when the ImageRepository
-	// is not ready, but also when the tags have not changed.
-	repo := e.ObjectNew.(*imagev1.ImageRepository)
-	return conditions.IsReady(repo) &&
-		conditions.GetObservedGeneration(repo, meta.ReadyCondition) == repo.Generation
+	newRepo := e.ObjectNew.(*imagev1.ImageRepository)
+	if newRepo.Status.LastScanResult == nil {
+		return false
+	}
+
+	oldRepo := e.ObjectOld.(*imagev1.ImageRepository)
+	if oldRepo.Status.LastScanResult == nil ||
+		oldRepo.Status.LastScanResult.Revision != newRepo.Status.LastScanResult.Revision {
+		return true
+	}
+
+	return false
 }
 
 func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
