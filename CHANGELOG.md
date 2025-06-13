@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.35.2
+
+**Release date:** 2025-06-13
+
+This prerelease fixes authentication for
+[public ECR repositories](https://fluxcd.io/flux/integrations/aws/#for-amazon-public-elastic-container-registry).
+
+Fixes:
+- Fix authentication for public ECR
+  [#782](https://github.com/fluxcd/image-reflector-controller/pull/782)
+
 ## 0.35.1
 
 **Release date:** 2025-06-01
