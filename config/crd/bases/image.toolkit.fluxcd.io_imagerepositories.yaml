@@ -13,6 +13,8 @@ spec:
     plural: imagerepositories
     shortNames:
     - imgrepo
+    - imagerepo
+    - ir
     singular: imagerepository
   scope: Namespaced
   versions:
