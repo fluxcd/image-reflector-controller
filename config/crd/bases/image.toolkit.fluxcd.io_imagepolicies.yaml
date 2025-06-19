@@ -11,6 +11,8 @@ spec:
     kind: ImagePolicy
     listKind: ImagePolicyList
     plural: imagepolicies
+    shortNames:
+    - imgpol
     singular: imagepolicy
   scope: Namespaced
   versions:

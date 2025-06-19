@@ -11,6 +11,8 @@ spec:
     kind: ImageRepository
     listKind: ImageRepositoryList
     plural: imagerepositories
+    shortNames:
+    - imgrepo
     singular: imagerepository
   scope: Namespaced
   versions:

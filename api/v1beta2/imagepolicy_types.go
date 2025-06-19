@@ -205,6 +205,7 @@ func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
 // +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=imgpol
 // +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`
 
 // ImagePolicy is the Schema for the imagepolicies API
