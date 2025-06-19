@@ -14,7 +14,6 @@ spec:
     shortNames:
     - imgpol
     - imagepol
-    - ip
     singular: imagepolicy
   scope: Namespaced
   versions:
