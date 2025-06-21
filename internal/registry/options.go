@@ -31,9 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/auth"
-	"github.com/fluxcd/pkg/auth/aws"
-	"github.com/fluxcd/pkg/auth/azure"
-	"github.com/fluxcd/pkg/auth/gcp"
 	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
 
@@ -57,7 +54,7 @@ type AuthOptionsGetter struct {
 }
 
 func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageRepository,
-	involvedObject *cache.InvolvedObject, deprecatedLoginOpts ...auth.Provider) ([]remote.Option, error) {
+	involvedObject *cache.InvolvedObject) ([]remote.Option, error) {
 	timeout := repo.GetTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -98,36 +95,23 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			return nil, err
 		}
 		authenticator, authErr = secret.AuthFromSecret(authSecret, ref)
-	} else {
+	} else if provider := repo.GetProvider(); provider != "generic" {
 		// Build login provider options and use it to attempt registry login.
 		var opts []auth.Option
 		if proxyURL != nil {
 			opts = append(opts, auth.WithProxyURL(*proxyURL))
 		}
-		switch provider := repo.GetProvider(); provider {
-		case aws.ProviderName, azure.ProviderName, gcp.ProviderName:
-			// Support new features (service account and cache) only for non-deprecated code paths.
-			if repo.Spec.ServiceAccountName != "" {
-				serviceAccount := client.ObjectKey{
-					Name:      repo.Spec.ServiceAccountName,
-					Namespace: repo.GetNamespace(),
-				}
-				opts = append(opts, auth.WithServiceAccount(serviceAccount, r.Client))
+		if repo.Spec.ServiceAccountName != "" {
+			serviceAccount := client.ObjectKey{
+				Name:      repo.Spec.ServiceAccountName,
+				Namespace: repo.GetNamespace(),
 			}
-			if r.TokenCache != nil {
-				opts = append(opts, auth.WithCache(*r.TokenCache, *involvedObject))
-			}
-			authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx, provider, repo.Spec.Image, opts...)
-		default:
-			// Handle deprecated auto-login controller flags.
-			for _, provider := range deprecatedLoginOpts {
-				if _, err := provider.ParseArtifactRepository(repo.Spec.Image); err == nil {
-					authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx,
-						provider.GetName(), repo.Spec.Image, opts...)
-					break
-				}
-			}
+			opts = append(opts, auth.WithServiceAccount(serviceAccount, r.Client))
 		}
+		if r.TokenCache != nil {
+			opts = append(opts, auth.WithCache(*r.TokenCache, *involvedObject))
+		}
+		authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx, provider, repo.Spec.Image, opts...)
 	}
 	if authErr != nil {
 		return nil, authErr

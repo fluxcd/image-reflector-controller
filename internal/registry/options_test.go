@@ -260,6 +260,14 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "unsupported provider",
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:    testImg,
+				Provider: "unsupported-provider",
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

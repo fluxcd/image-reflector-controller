@@ -111,8 +111,7 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
-	DeprecatedLoginOpts []auth.Provider
-	AuthOptionsGetter   *registry.AuthOptionsGetter
+	AuthOptionsGetter *registry.AuthOptionsGetter
 
 	patchOptions []patch.Option
 }
@@ -270,7 +269,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		Namespace: obj.GetNamespace(),
 		Operation: cache.OperationReconcile,
 	}
-	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject, r.DeprecatedLoginOpts...)
+	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
 		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, "%s", e)
