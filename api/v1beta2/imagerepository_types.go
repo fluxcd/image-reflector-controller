@@ -28,6 +28,7 @@ import (
 const ImageRepositoryKind = "ImageRepository"
 
 // Deprecated: Use ImageFinalizer.
+// TODO: Remove in v1.
 const ImageRepositoryFinalizer = ImageFinalizer
 
 // ImageRepositorySpec defines the parameters for scanning an image
@@ -115,10 +116,26 @@ type ImageRepositorySpec struct {
 	Insecure bool `json:"insecure,omitempty"`
 }
 
+// ScanResult contains information about the last scan of the image repository.
+// TODO: Make all fields except for LatestTags required in v1.
 type ScanResult struct {
-	TagCount   int         `json:"tagCount"`
-	ScanTime   metav1.Time `json:"scanTime,omitempty"`
-	LatestTags []string    `json:"latestTags,omitempty"`
+	// Revision is a stable hash of the scanned tags.
+	// +optional
+	Revision string `json:"revision"`
+
+	// TagCount is the number of tags found in the last scan.
+	// +required
+	TagCount int `json:"tagCount"`
+
+	// ScanTime is the time when the last scan was performed.
+	// +optional
+	ScanTime metav1.Time `json:"scanTime"`
+
+	// LatestTags is a small sample of the tags found in the last scan.
+	// It's the first 10 tags when sorting all the tags in descending
+	// alphabetical order.
+	// +optional
+	LatestTags []string `json:"latestTags,omitempty"`
 }
 
 // ImageRepositoryStatus defines the observed state of ImageRepository

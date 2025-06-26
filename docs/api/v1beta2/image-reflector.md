@@ -1098,6 +1098,8 @@ would select 0.</p>
 (<em>Appears on:</em>
 <a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepositoryStatus">ImageRepositoryStatus</a>)
 </p>
+<p>ScanResult contains information about the last scan of the image repository.
+TODO: Make all fields except for LatestTags required in v1.</p>
 <div class="md-typeset__scrollwrap">
 <div class="md-typeset__table">
 <table>
@@ -1110,12 +1112,25 @@ would select 0.</p>
 <tbody>
 <tr>
 <td>
+<code>revision</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Revision is a stable hash of the scanned tags.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>tagCount</code><br>
 <em>
 int
 </em>
 </td>
 <td>
+<p>TagCount is the number of tags found in the last scan.</p>
 </td>
 </tr>
 <tr>
@@ -1128,6 +1143,8 @@ Kubernetes meta/v1.Time
 </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>ScanTime is the time when the last scan was performed.</p>
 </td>
 </tr>
 <tr>
@@ -1138,6 +1155,10 @@ Kubernetes meta/v1.Time
 </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>LatestTags is a small sample of the tags found in the last scan.
+It&rsquo;s the first 10 tags when sorting all the tags in descending
+alphabetical order.</p>
 </td>
 </tr>
 </tbody>
