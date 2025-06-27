@@ -215,8 +215,12 @@ func (in ImageRepository) GetRequeueAfter() time.Duration {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=imgrepo;imagerepo
-// +kubebuilder:printcolumn:name="Last scan",type=string,JSONPath=`.status.lastScanResult.scanTime`
+// +kubebuilder:printcolumn:name="Image",type="string",JSONPath=".spec.image"
 // +kubebuilder:printcolumn:name="Tags",type=string,JSONPath=`.status.lastScanResult.tagCount`
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].message",description=""
+// +kubebuilder:printcolumn:name="Last scan",type=string,JSONPath=`.status.lastScanResult.scanTime`,priority=1
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description=""
 
 // ImageRepository is the Schema for the imagerepositories API
 type ImageRepository struct {
