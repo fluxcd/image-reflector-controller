@@ -167,8 +167,8 @@ github.com/fluxcd/pkg/auth v0.18.0 h1:71pGdKe0PVKWQvM3hEuyd3FD9dEUHtMuKMbUeiMl4a
 github.com/fluxcd/pkg/auth v0.18.0/go.mod h1:4h6s8VBNuec3tWd4xIReLw8BYPOKaIegjNMEbA4ikTU=
 github.com/fluxcd/pkg/cache v0.9.0 h1:EGKfOLMG3fOwWnH/4Axl5xd425mxoQbZzlZoLfd8PDk=
 github.com/fluxcd/pkg/cache v0.9.0/go.mod h1:jMwabjWfsC5lW8hE7NM3wtGNwSJ38Javx6EKbEi7INU=
-github.com/fluxcd/pkg/runtime v0.60.0 h1:d++EkV3FlycB+bzakB5NumwY4J8xts8i7lbvD6jBLeU=
-github.com/fluxcd/pkg/runtime v0.60.0/go.mod h1:UeU0/eZLErYC/1bTmgzBfNXhiHy9fuQzjfLK0HxRgxY=
+github.com/fluxcd/pkg/runtime v0.63.0 h1:55J7ascGmXyTXWGwhD21N9fU7jC1l5rhdzjgNXs6aZg=
+github.com/fluxcd/pkg/runtime v0.63.0/go.mod h1:7pxGvaU0Yy1cDIUhiHAHhCx2yCLnkcVsplbYZG6j4JY=
 github.com/fluxcd/pkg/version v0.7.0 h1:jZT5I6WFy1KlM40nHCSqlHmjC1VT1/DfmbAdOkIVVJc=
 github.com/fluxcd/pkg/version v0.7.0/go.mod h1:3BjQDJXIZJmeJLXnfa2yG/sNAT1t5oeLAPfnSjOHNuA=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
