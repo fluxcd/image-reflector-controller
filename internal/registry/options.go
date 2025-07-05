@@ -18,7 +18,6 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -27,15 +26,14 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/auth"
 	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
+	"github.com/fluxcd/pkg/runtime/secrets"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
-	"github.com/fluxcd/image-reflector-controller/internal/secret"
 )
 
 // AuthOptionsGetter builds a slice of options from an ImageRepository by looking up references to Secrets etc.
@@ -65,7 +63,7 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	var proxyURL *url.URL
 	var err error
 	if repo.Spec.ProxySecretRef != nil {
-		proxyURL, err = r.GetProxyURL(ctx, repo)
+		proxyURL, err = secrets.ProxyURLFromSecret(ctx, r.Client, repo.Spec.ProxySecretRef.Name, repo.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -80,22 +78,8 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	var options []remote.Option
 	var authSecret corev1.Secret
 	var authenticator authn.Authenticator
-	var authErr error
 
-	if repo.Spec.SecretRef != nil {
-		ref, err := ParseImageReference(repo.Spec.Image, repo.Spec.Insecure)
-		if err != nil {
-			return nil, fmt.Errorf("failed parsing image reference %q: %w", repo.Spec.Image, err)
-		}
-
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: repo.GetNamespace(),
-			Name:      repo.Spec.SecretRef.Name,
-		}, &authSecret); err != nil {
-			return nil, err
-		}
-		authenticator, authErr = secret.AuthFromSecret(authSecret, ref)
-	} else if provider := repo.GetProvider(); provider != "generic" {
+	if provider := repo.GetProvider(); provider != "" && provider != "generic" {
 		// Build login provider options and use it to attempt registry login.
 		var opts []auth.Option
 		if proxyURL != nil {
@@ -111,12 +95,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		if r.TokenCache != nil {
 			opts = append(opts, auth.WithCache(*r.TokenCache, *involvedObject))
 		}
-		authenticator, authErr = authutils.GetArtifactRegistryCredentials(ctx, provider, repo.Spec.Image, opts...)
-	}
-	if authErr != nil {
-		return nil, authErr
-	}
-	if authenticator != nil {
+		var err error
+		authenticator, err = authutils.GetArtifactRegistryCredentials(ctx, provider, repo.Spec.Image, opts...)
+		if err != nil {
+			return nil, err
+		}
 		options = append(options, remote.WithAuth(authenticator))
 	}
 
@@ -134,19 +117,9 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			}
 		}
 
-		tlsConfig, err := secret.TLSConfigFromKubeTLSSecret(&certSecret)
+		tlsConfig, err := secrets.TLSConfigFromSecret(ctx, r.Client, certSecret.Name, certSecret.Namespace)
 		if err != nil {
 			return nil, err
-		}
-		if tlsConfig == nil {
-			tlsConfig, err = secret.TLSConfigFromSecret(&certSecret)
-			if err != nil {
-				return nil, err
-			}
-			if tlsConfig != nil {
-				ctrl.LoggerFrom(ctx).
-					Info("warning: specifying TLS auth data via `certFile`/`keyFile`/`caFile` is deprecated, please use `tls.crt`/`tls.key`/`ca.crt` instead")
-			}
 		}
 		if tlsConfig != nil {
 			transportOptions = append(transportOptions, func(t *http.Transport) {
@@ -164,29 +137,32 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		options = append(options, remote.WithTransport(tr))
 	}
 
-	if authenticator == nil && repo.Spec.ServiceAccountName != "" {
-		serviceAccount := corev1.ServiceAccount{}
-		// Lookup service account
-		if err := r.Get(ctx, types.NamespacedName{
-			Namespace: repo.GetNamespace(),
-			Name:      repo.Spec.ServiceAccountName,
-		}, &serviceAccount); err != nil {
-			return nil, err
+	if authenticator == nil {
+		var pullSecrets []corev1.Secret
+
+		if repo.Spec.SecretRef != nil {
+			var s corev1.Secret
+			key := types.NamespacedName{
+				Name:      repo.Spec.SecretRef.Name,
+				Namespace: repo.GetNamespace(),
+			}
+			if err := r.Get(ctx, key, &s); err != nil {
+				return nil, err
+			}
+			pullSecrets = append(pullSecrets, s)
 		}
 
-		if len(serviceAccount.ImagePullSecrets) > 0 {
-			imagePullSecrets := make([]corev1.Secret, len(serviceAccount.ImagePullSecrets))
-			for i, ips := range serviceAccount.ImagePullSecrets {
-				var saAuthSecret corev1.Secret
-				if err := r.Get(ctx, types.NamespacedName{
-					Namespace: repo.GetNamespace(),
-					Name:      ips.Name,
-				}, &saAuthSecret); err != nil {
-					return nil, err
-				}
-				imagePullSecrets[i] = saAuthSecret
+		if repo.Spec.ServiceAccountName != "" {
+			s, err := secrets.PullSecretsFromServiceAccount(ctx, r.Client,
+				repo.Spec.ServiceAccountName, repo.GetNamespace())
+			if err != nil {
+				return nil, err
 			}
-			keychain, err := k8schain.NewFromPullSecrets(ctx, imagePullSecrets)
+			pullSecrets = append(pullSecrets, s...)
+		}
+
+		if len(pullSecrets) > 0 {
+			keychain, err := k8schain.NewFromPullSecrets(ctx, pullSecrets)
 			if err != nil {
 				return nil, err
 			}
@@ -195,38 +171,4 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	}
 
 	return options, nil
-}
-
-// GetProxyURL gets the proxy configuration for the transport based on the
-// specified proxy secret reference in the ImageRepository object.
-func (r *AuthOptionsGetter) GetProxyURL(ctx context.Context, obj *imagev1.ImageRepository) (*url.URL, error) {
-	if obj.Spec.ProxySecretRef == nil || obj.Spec.ProxySecretRef.Name == "" {
-		return nil, nil
-	}
-
-	proxySecretName := types.NamespacedName{
-		Namespace: obj.Namespace,
-		Name:      obj.Spec.ProxySecretRef.Name,
-	}
-	var proxySecret corev1.Secret
-	if err := r.Get(ctx, proxySecretName, &proxySecret); err != nil {
-		return nil, err
-	}
-
-	proxyData := proxySecret.Data
-	address, ok := proxyData["address"]
-	if !ok {
-		return nil, fmt.Errorf("invalid proxy secret '%s/%s': key 'address' is missing",
-			obj.Namespace, obj.Spec.ProxySecretRef.Name)
-	}
-	proxyURL, err := url.Parse(string(address))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse proxy address '%s': %w", address, err)
-	}
-	user, hasUser := proxyData["username"]
-	password, hasPassword := proxyData["password"]
-	if hasUser || hasPassword {
-		proxyURL.User = url.UserPassword(string(user), string(password))
-	}
-	return proxyURL, nil
 }
