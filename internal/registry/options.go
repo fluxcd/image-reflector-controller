@@ -27,12 +27,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/fluxcd/pkg/auth"
 	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
+	"github.com/fluxcd/pkg/runtime/secrets"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/secret"
@@ -64,8 +64,8 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	// Load proxy configuration.
 	var proxyURL *url.URL
 	var err error
-	if repo.Spec.ProxySecretRef != nil {
-		proxyURL, err = r.GetProxyURL(ctx, repo)
+	if repo.Spec.ProxySecretRef != nil && repo.Spec.ProxySecretRef.Name != "" {
+		proxyURL, err = secrets.ProxyURLFromSecret(ctx, r.Client, repo.Spec.ProxySecretRef.Name, repo.Namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -134,19 +134,9 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			}
 		}
 
-		tlsConfig, err := secret.TLSConfigFromKubeTLSSecret(&certSecret)
+		tlsConfig, err := secrets.TLSConfigFromSecret(ctx, r.Client, certSecret.Name, certSecret.Namespace)
 		if err != nil {
 			return nil, err
-		}
-		if tlsConfig == nil {
-			tlsConfig, err = secret.TLSConfigFromSecret(&certSecret)
-			if err != nil {
-				return nil, err
-			}
-			if tlsConfig != nil {
-				ctrl.LoggerFrom(ctx).
-					Info("warning: specifying TLS auth data via `certFile`/`keyFile`/`caFile` is deprecated, please use `tls.crt`/`tls.key`/`ca.crt` instead")
-			}
 		}
 		if tlsConfig != nil {
 			transportOptions = append(transportOptions, func(t *http.Transport) {
@@ -195,38 +185,4 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	}
 
 	return options, nil
-}
-
-// GetProxyURL gets the proxy configuration for the transport based on the
-// specified proxy secret reference in the ImageRepository object.
-func (r *AuthOptionsGetter) GetProxyURL(ctx context.Context, obj *imagev1.ImageRepository) (*url.URL, error) {
-	if obj.Spec.ProxySecretRef == nil || obj.Spec.ProxySecretRef.Name == "" {
-		return nil, nil
-	}
-
-	proxySecretName := types.NamespacedName{
-		Namespace: obj.Namespace,
-		Name:      obj.Spec.ProxySecretRef.Name,
-	}
-	var proxySecret corev1.Secret
-	if err := r.Get(ctx, proxySecretName, &proxySecret); err != nil {
-		return nil, err
-	}
-
-	proxyData := proxySecret.Data
-	address, ok := proxyData["address"]
-	if !ok {
-		return nil, fmt.Errorf("invalid proxy secret '%s/%s': key 'address' is missing",
-			obj.Namespace, obj.Spec.ProxySecretRef.Name)
-	}
-	proxyURL, err := url.Parse(string(address))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse proxy address '%s': %w", address, err)
-	}
-	user, hasUser := proxyData["username"]
-	password, hasPassword := proxyData["password"]
-	if hasUser || hasPassword {
-		proxyURL.User = url.UserPassword(string(user), string(password))
-	}
-	return proxyURL, nil
 }

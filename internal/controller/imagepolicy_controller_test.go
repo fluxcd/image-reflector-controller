@@ -177,12 +177,11 @@ func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
 		return err == nil && conditions.IsReady(imagePolicy)
 	}).Should(BeTrue())
 
-	// Wait a bit and check that the ImagePolicy remains ready.
-	time.Sleep(time.Second)
+	// Check that the ImagePolicy remains ready.
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
 		return err == nil && conditions.IsReady(imagePolicy)
-	}).Should(BeTrue())
+	}, timeout, interval).Should(BeTrue())
 }
 
 func TestImagePolicyReconciler_imageRepoRevisionLifeCycle(t *testing.T) {
