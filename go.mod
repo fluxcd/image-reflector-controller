@@ -6,19 +6,19 @@ replace github.com/fluxcd/image-reflector-controller/api => ./api
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6
-	github.com/Masterminds/semver/v3 v3.3.0
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/elazarl/goproxy v1.7.2
 	github.com/fluxcd/image-reflector-controller/api v0.35.2
 	github.com/fluxcd/pkg/apis/acl v0.7.0
 	github.com/fluxcd/pkg/apis/event v0.17.0
-	github.com/fluxcd/pkg/apis/meta v1.12.0
+	github.com/fluxcd/pkg/apis/meta v1.13.0
 	github.com/fluxcd/pkg/auth v0.18.0
 	github.com/fluxcd/pkg/cache v0.9.0
 	github.com/fluxcd/pkg/runtime v0.63.0
-	github.com/fluxcd/pkg/version v0.7.0
-	github.com/go-logr/logr v1.4.2
-	github.com/google/go-containerregistry v0.20.5
+	github.com/fluxcd/pkg/version v0.8.0
+	github.com/go-logr/logr v1.4.3
+	github.com/google/go-containerregistry v0.20.6
 	github.com/google/go-containerregistry/pkg/authn/k8schain v0.0.0-20250225234217-098045d5e61f
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.37.0
@@ -33,7 +33,7 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.6.0 // indirect
+	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.9.0 // indirect
@@ -75,7 +75,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgraph-io/ristretto v0.2.0 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
-	github.com/docker/cli v28.1.1+incompatible // indirect
+	github.com/docker/cli v28.2.2+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -147,7 +147,7 @@ require (
 	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.14.0 // indirect
+	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
