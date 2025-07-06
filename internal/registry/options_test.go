@@ -22,6 +22,7 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/cache"
+	"github.com/fluxcd/pkg/runtime/secrets"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +31,6 @@ import (
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
-	"github.com/fluxcd/image-reflector-controller/internal/secret"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
@@ -69,9 +69,9 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	testTLSSecret.Namespace = testNamespace
 	testTLSSecret.Type = corev1.SecretTypeTLS
 	testTLSSecret.Data = map[string][]byte{
-		secret.CACrtKey:         rootCertPEM,
-		corev1.TLSCertKey:       clientCertPEM,
-		corev1.TLSPrivateKeyKey: clientKeyPEM,
+		secrets.CACertKey:  rootCertPEM,
+		secrets.TLSCertKey: clientCertPEM,
+		secrets.TLSKeyKey:  clientKeyPEM,
 	}
 
 	testProxySecret := &corev1.Secret{
@@ -90,17 +90,17 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	testDeprecatedTLSSecret.Namespace = testNamespace
 	testDeprecatedTLSSecret.Type = corev1.SecretTypeTLS
 	testDeprecatedTLSSecret.Data = map[string][]byte{
-		secret.CACert:     rootCertPEM,
-		secret.ClientCert: clientCertPEM,
-		secret.ClientKey:  clientKeyPEM,
+		secrets.CACertFileKey:  rootCertPEM,
+		secrets.TLSCertFileKey: clientCertPEM,
+		secrets.TLSKeyFileKey:  clientKeyPEM,
 	}
 
 	// Docker config secret with TLS data.
 	testDockerCfgSecretWithTLS := testSecret.DeepCopy()
 	testDockerCfgSecretWithTLS.Data = map[string][]byte{
-		secret.CACrtKey:         rootCertPEM,
-		corev1.TLSCertKey:       clientCertPEM,
-		corev1.TLSPrivateKeyKey: clientKeyPEM,
+		secrets.CACertKey:  rootCertPEM,
+		secrets.TLSCertKey: clientCertPEM,
+		secrets.TLSKeyKey:  clientKeyPEM,
 	}
 
 	// ServiceAccount without image pull secret.
@@ -233,7 +233,7 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 					Name: testSecretName,
 				},
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name:     "service account without pull secret",
@@ -347,188 +347,6 @@ func Test_ParseImageReference(t *testing.T) {
 				if tt.insecure {
 					g.Expect(ref.Context().Registry.Scheme()).To(Equal("http"))
 				}
-			}
-		})
-	}
-}
-
-func TestAuthOptionsGetter_GetProxyURL(t *testing.T) {
-	tests := []struct {
-		name    string
-		repo    *imagev1.ImageRepository
-		objects []client.Object
-		wantURL string
-		wantErr string
-	}{
-		{
-			name: "empty proxySecretRef",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: nil,
-				},
-			},
-		},
-		{
-			name: "non-existing proxySecretRef",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "non-existing",
-					},
-				},
-			},
-			wantErr: "secrets \"non-existing\" not found",
-		},
-		{
-			name: "missing address in proxySecretRef",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "dummy",
-					},
-				},
-			},
-			objects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "dummy",
-					},
-					Data: map[string][]byte{},
-				},
-			},
-			wantErr: "invalid proxy secret '/dummy': key 'address' is missing",
-		},
-		{
-			name: "invalid address in proxySecretRef",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "dummy",
-					},
-				},
-			},
-			objects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "dummy",
-					},
-					Data: map[string][]byte{
-						"address": {0x7f},
-					},
-				},
-			},
-			wantErr: "failed to parse proxy address '\x7f': parse \"\\x7f\": net/url: invalid control character in URL",
-		},
-		{
-			name: "no user, no password",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "dummy",
-					},
-				},
-			},
-			objects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "dummy",
-					},
-					Data: map[string][]byte{
-						"address": []byte("http://proxy.example.com"),
-					},
-				},
-			},
-			wantURL: "http://proxy.example.com",
-		},
-		{
-			name: "user, no password",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "dummy",
-					},
-				},
-			},
-			objects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "dummy",
-					},
-					Data: map[string][]byte{
-						"address":  []byte("http://proxy.example.com"),
-						"username": []byte("user"),
-					},
-				},
-			},
-			wantURL: "http://user:@proxy.example.com",
-		},
-		{
-			name: "no user, password",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "dummy",
-					},
-				},
-			},
-			objects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "dummy",
-					},
-					Data: map[string][]byte{
-						"address":  []byte("http://proxy.example.com"),
-						"password": []byte("password"),
-					},
-				},
-			},
-			wantURL: "http://:password@proxy.example.com",
-		},
-		{
-			name: "user, password",
-			repo: &imagev1.ImageRepository{
-				Spec: imagev1.ImageRepositorySpec{
-					ProxySecretRef: &meta.LocalObjectReference{
-						Name: "dummy",
-					},
-				},
-			},
-			objects: []client.Object{
-				&corev1.Secret{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "dummy",
-					},
-					Data: map[string][]byte{
-						"address":  []byte("http://proxy.example.com"),
-						"username": []byte("user"),
-						"password": []byte("password"),
-					},
-				},
-			},
-			wantURL: "http://user:password@proxy.example.com",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
-
-			c := fake.NewClientBuilder().
-				WithObjects(tt.objects...).
-				Build()
-
-			getter := &registry.AuthOptionsGetter{Client: c}
-
-			u, err := getter.GetProxyURL(context.Background(), tt.repo)
-			if tt.wantErr == "" {
-				g.Expect(err).To(BeNil())
-			} else {
-				g.Expect(err.Error()).To(ContainSubstring(tt.wantErr))
-			}
-			if tt.wantURL == "" {
-				g.Expect(u).To(BeNil())
-			} else {
-				g.Expect(u.String()).To(Equal(tt.wantURL))
 			}
 		})
 	}

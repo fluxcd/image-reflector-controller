@@ -43,10 +43,10 @@ import (
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
+	"github.com/fluxcd/pkg/runtime/secrets"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
-	"github.com/fluxcd/image-reflector-controller/internal/secret"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
@@ -688,9 +688,9 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 	testTLSSecret.Namespace = testNamespace
 	testTLSSecret.Type = corev1.SecretTypeTLS
 	testTLSSecret.Data = map[string][]byte{
-		secret.CACrtKey:         rootCertPEM,
-		corev1.TLSCertKey:       clientCertPEM,
-		corev1.TLSPrivateKeyKey: clientKeyPEM,
+		secrets.CACertKey:  rootCertPEM,
+		secrets.TLSCertKey: clientCertPEM,
+		secrets.TLSKeyKey:  clientKeyPEM,
 	}
 
 	// Construct ImageRepository.
