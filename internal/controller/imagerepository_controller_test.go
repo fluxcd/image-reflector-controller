@@ -688,9 +688,9 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 	testTLSSecret.Namespace = testNamespace
 	testTLSSecret.Type = corev1.SecretTypeTLS
 	testTLSSecret.Data = map[string][]byte{
-		secrets.CACertKey:  rootCertPEM,
-		secrets.TLSCertKey: clientCertPEM,
-		secrets.TLSKeyKey:  clientKeyPEM,
+		secrets.KeyCACert:        rootCertPEM,
+		secrets.KeyTLSCert:       clientCertPEM,
+		secrets.KeyTLSPrivateKey: clientKeyPEM,
 	}
 
 	// Construct ImageRepository.

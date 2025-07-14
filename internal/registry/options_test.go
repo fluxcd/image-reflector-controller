@@ -69,9 +69,9 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	testTLSSecret.Namespace = testNamespace
 	testTLSSecret.Type = corev1.SecretTypeTLS
 	testTLSSecret.Data = map[string][]byte{
-		secrets.CACertKey:  rootCertPEM,
-		secrets.TLSCertKey: clientCertPEM,
-		secrets.TLSKeyKey:  clientKeyPEM,
+		secrets.KeyCACert:        rootCertPEM,
+		secrets.KeyTLSCert:       clientCertPEM,
+		secrets.KeyTLSPrivateKey: clientKeyPEM,
 	}
 
 	testProxySecret := &corev1.Secret{
@@ -90,17 +90,17 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	testDeprecatedTLSSecret.Namespace = testNamespace
 	testDeprecatedTLSSecret.Type = corev1.SecretTypeTLS
 	testDeprecatedTLSSecret.Data = map[string][]byte{
-		secrets.CACertFileKey:  rootCertPEM,
-		secrets.TLSCertFileKey: clientCertPEM,
-		secrets.TLSKeyFileKey:  clientKeyPEM,
+		secrets.LegacyKeyCACert:        rootCertPEM,
+		secrets.LegacyKeyTLSCert:       clientCertPEM,
+		secrets.LegacyKeyTLSPrivateKey: clientKeyPEM,
 	}
 
 	// Docker config secret with TLS data.
 	testDockerCfgSecretWithTLS := testSecret.DeepCopy()
 	testDockerCfgSecretWithTLS.Data = map[string][]byte{
-		secrets.CACertKey:  rootCertPEM,
-		secrets.TLSCertKey: clientCertPEM,
-		secrets.TLSKeyKey:  clientKeyPEM,
+		secrets.KeyCACert:        rootCertPEM,
+		secrets.KeyTLSCert:       clientCertPEM,
+		secrets.KeyTLSPrivateKey: clientKeyPEM,
 	}
 
 	// ServiceAccount without image pull secret.

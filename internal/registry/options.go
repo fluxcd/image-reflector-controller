@@ -63,7 +63,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	var proxyURL *url.URL
 	var err error
 	if repo.Spec.ProxySecretRef != nil {
-		proxyURL, err = secrets.ProxyURLFromSecret(ctx, r.Client, repo.Spec.ProxySecretRef.Name, repo.Namespace)
+		proxySecretRef := types.NamespacedName{
+			Name:      repo.Spec.ProxySecretRef.Name,
+			Namespace: repo.Namespace,
+		}
+		proxyURL, err = secrets.ProxyURLFromSecretRef(ctx, r.Client, proxySecretRef)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +121,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			}
 		}
 
-		tlsConfig, err := secrets.TLSConfigFromSecret(ctx, r.Client, certSecret.Name, certSecret.Namespace)
+		certSecretRef := types.NamespacedName{
+			Name:      certSecret.Name,
+			Namespace: certSecret.Namespace,
+		}
+		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef)
 		if err != nil {
 			return nil, err
 		}
@@ -153,8 +161,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		}
 
 		if repo.Spec.ServiceAccountName != "" {
-			s, err := secrets.PullSecretsFromServiceAccount(ctx, r.Client,
-				repo.Spec.ServiceAccountName, repo.GetNamespace())
+			saRef := types.NamespacedName{
+				Name:      repo.Spec.ServiceAccountName,
+				Namespace: repo.GetNamespace(),
+			}
+			s, err := secrets.PullSecretsFromServiceAccountRef(ctx, r.Client, saRef)
 			if err != nil {
 				return nil, err
 			}
