@@ -69,6 +69,11 @@ type ImagePolicySpec struct {
 	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty"`
+
+	// This flag tells the controller to suspend subsequent policy reconciliations.
+	// It does not apply to already started reconciliations. Defaults to false.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 // ReflectionPolicy describes a policy for if/when to reflect a value from the registry in a certain resource field.
@@ -178,6 +183,8 @@ type ImagePolicyStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	meta.ReconcileRequestStatus `json:",inline"`
 }
 
 // GetConditions returns the status conditions of the object.
@@ -219,8 +226,13 @@ func (in *ImagePolicy) GetDigestReflectionPolicy() ReflectionPolicy {
 
 func (in *ImagePolicy) GetInterval() time.Duration {
 	if in.GetDigestReflectionPolicy() == ReflectAlways {
+		if in.Spec.Interval == nil || in.Spec.Interval.Duration == 0 {
+			return 10 * time.Minute
+		}
+
 		return in.Spec.Interval.Duration
 	}
+
 	return 0
 }
 
