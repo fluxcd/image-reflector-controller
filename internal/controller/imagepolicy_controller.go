@@ -264,10 +264,12 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	// Migrate old status fields to new ones.
 	migrateImageToRef(obj.Status.LatestImage, &obj.Status.LatestRef)
 	migrateImageToRef(obj.Status.ObservedPreviousImage, &obj.Status.ObservedPreviousRef)
+	// Set a default next reconcile time before processing the object.
+	nextReconcileTime := obj.GetInterval()
 
 	// If there's no error and no requeue is requested, it's a success.
 	isSuccess := func(res ctrl.Result, err error) bool {
-		if err != nil || res.Requeue {
+		if err != nil || res.RequeueAfter != nextReconcileTime || res.Requeue {
 			return false
 		}
 		return true
@@ -391,7 +393,8 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	// Let result finalizer compute the Ready condition.
 	conditions.Delete(obj, meta.ReadyCondition)
 
-	result, retErr = ctrl.Result{RequeueAfter: obj.GetInterval()}, nil
+	// Set the next reconcile time in the result based on the interval.
+	result, retErr = ctrl.Result{RequeueAfter: nextReconcileTime}, nil
 	return
 }
 
