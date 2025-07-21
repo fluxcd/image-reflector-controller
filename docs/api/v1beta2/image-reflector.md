@@ -167,6 +167,19 @@ reflection policy is set to &ldquo;Always&rdquo;.</p>
 <p>Defaults to 10m.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>suspend</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>This flag tells the controller to suspend subsequent policy reconciliations.
+It does not apply to already started reconciliations. Defaults to false.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -349,6 +362,19 @@ reflection policy is set to &ldquo;Always&rdquo;.</p>
 <p>Defaults to 10m.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>suspend</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>This flag tells the controller to suspend subsequent policy reconciliations.
+It does not apply to already started reconciliations. Defaults to false.</p>
+</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -422,6 +448,21 @@ int64
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>ReconcileRequestStatus</code><br>
+<em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#ReconcileRequestStatus">
+github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
+</a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>ReconcileRequestStatus</code> are embedded into this type.)
+</p>
 </td>
 </tr>
 </tbody>

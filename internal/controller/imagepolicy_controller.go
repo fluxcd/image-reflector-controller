@@ -179,6 +179,7 @@ func (imageRepositoryPredicate) Update(e event.UpdateEvent) bool {
 
 func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	start := time.Now()
+	log := ctrl.LoggerFrom(ctx)
 
 	// Fetch the ImagePolicy.
 	obj := &imagev1.ImagePolicy{}
@@ -191,6 +192,13 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Always attempt to patch the object after each reconciliation.
 	defer func() {
+		// If the reconcile request annotation was set, consider it
+		// handled (NB it doesn't matter here if it was changed since last
+		// time)
+		if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+			obj.Status.SetLastHandledReconcileRequest(token)
+		}
+
 		// Create patch options for patching the object.
 		patchOpts := pkgreconcile.AddPatchOptions(obj, r.patchOptions, imagePolicyOwnedConditions, r.ControllerName)
 		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
@@ -219,6 +227,12 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Return if the object is suspended.
+	if obj.Spec.Suspend {
+		log.Info("reconciliation is suspended for this object")
+		return ctrl.Result{}, nil
+	}
+
 	// Call subreconciler.
 	result, retErr = r.reconcile(ctx, serialPatcher, obj)
 	return
@@ -245,9 +259,12 @@ func composeImagePolicyReadyMessage(obj *imagev1.ImagePolicy) string {
 func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
+	// Set a default next reconcile time before processing the object.
+	nextReconcileTime := obj.GetInterval()
+
 	// If there's no error and no requeue is requested, it's a success.
 	isSuccess := func(res ctrl.Result, err error) bool {
-		if err != nil || res.Requeue {
+		if err != nil || res.RequeueAfter != nextReconcileTime {
 			return false
 		}
 		return true
@@ -365,7 +382,8 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	// Let result finalizer compute the Ready condition.
 	conditions.Delete(obj, meta.ReadyCondition)
 
-	result, retErr = ctrl.Result{RequeueAfter: obj.GetInterval()}, nil
+	// Set the next reconcile time in the result based on the interval.
+	result, retErr = ctrl.Result{RequeueAfter: nextReconcileTime}, nil
 	return
 }
 

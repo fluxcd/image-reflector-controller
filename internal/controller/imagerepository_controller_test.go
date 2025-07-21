@@ -282,7 +282,6 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 		name          string
 		tags          []string
 		exclusionList []string
-		annotation    string
 		db            *mockDatabase
 		proxyURL      *url.URL
 		wantErr       string
@@ -360,13 +359,6 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			db:      &mockDatabase{WriteError: errors.New("fail")},
 			wantErr: "failed to set tags",
 		},
-		{
-			name:       "with reconcile annotation",
-			tags:       []string{"a", "b"},
-			annotation: "foo",
-			db:         &mockDatabase{},
-			wantTags:   []string{"b", "a"},
-		},
 	}
 
 	for _, tt := range tests {
@@ -386,10 +378,6 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			repo.Spec = imagev1.ImageRepositorySpec{
 				Image:         imgRepo,
 				ExclusionList: tt.exclusionList,
-			}
-
-			if tt.annotation != "" {
-				repo.SetAnnotations(map[string]string{meta.ReconcileRequestAnnotation: tt.annotation})
 			}
 
 			ref, err := registry.ParseImageReference(imgRepo, false)
@@ -418,9 +406,6 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 				g.Expect(repo.Status.LastScanResult.ScanTime).ToNot(BeZero())
 				g.Expect(len(repo.Status.LastScanResult.LatestTags)).To(BeNumerically("<=", latestTagsCount))
 				g.Expect(repo.Status.LastScanResult.LatestTags).To(Equal(tt.wantTags[:min(len(tt.wantTags), latestTagsCount)]))
-				if tt.annotation != "" {
-					g.Expect(repo.Status.LastHandledReconcileAt).To(Equal(tt.annotation))
-				}
 			}
 		})
 	}
@@ -725,4 +710,41 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 	_, err = r.reconcile(ctx, sp, obj, time.Now())
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(conditions.IsReady(obj)).To(BeTrue())
+}
+
+func TestImageRepositoryReconciler_reconcileRequestStatus(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imageRepo := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "repo",
+			Annotations: map[string]string{
+				"reconcile.fluxcd.io/requestedAt": "some-string",
+			},
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "ghcr.io/stefanprodan/podinfo",
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil &&
+			conditions.IsReady(imageRepo) &&
+			imageRepo.Status.LastHandledReconcileAt == "some-string"
+	}, timeout).Should(BeTrue())
 }
