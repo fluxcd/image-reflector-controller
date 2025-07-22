@@ -12,10 +12,10 @@ require (
 	github.com/fluxcd/image-reflector-controller/api v0.35.2
 	github.com/fluxcd/pkg/apis/acl v0.8.0
 	github.com/fluxcd/pkg/apis/event v0.18.0
-	github.com/fluxcd/pkg/apis/meta v1.17.0
+	github.com/fluxcd/pkg/apis/meta v1.18.0
 	github.com/fluxcd/pkg/auth v0.21.0
 	github.com/fluxcd/pkg/cache v0.10.0
-	github.com/fluxcd/pkg/runtime v0.69.0
+	github.com/fluxcd/pkg/runtime v0.75.0
 	github.com/fluxcd/pkg/version v0.9.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.20.6

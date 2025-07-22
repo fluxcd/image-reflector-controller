@@ -125,7 +125,20 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			Name:      certSecret.Name,
 			Namespace: certSecret.Namespace,
 		}
-		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef)
+
+		// Build target URL for TLS server name validation.
+		// The image spec contains repository name without scheme (e.g., "127.0.0.1:5000/foo/bar"),
+		// but TLSConfigFromSecretRef requires a proper URL for ServerName extraction.
+		ref, err := ParseImageReference(repo.Spec.Image, repo.Spec.Insecure)
+		if err != nil {
+			return nil, err
+		}
+		registry := ref.Context().Registry
+		registryURL := &url.URL{
+			Scheme: registry.Scheme(),
+			Host:   registry.Name(),
+		}
+		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef, registryURL.String(), repo.Spec.Insecure)
 		if err != nil {
 			return nil, err
 		}
