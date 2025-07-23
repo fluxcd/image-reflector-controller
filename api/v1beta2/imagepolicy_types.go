@@ -69,6 +69,11 @@ type ImagePolicySpec struct {
 	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty"`
+
+	// This flag tells the controller to suspend subsequent policy evaluations.
+	// It does not apply to already started evaluations. Defaults to false.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 // ReflectionPolicy describes a policy for if/when to reflect a value from the registry in a certain resource field.
@@ -190,6 +195,12 @@ type ImagePolicyStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	meta.ReconcileRequestStatus `json:",inline"`
+
+	// LastHandledReconcileRequest holds the value of the most recent
+	// reconcile request value, so a change can be detected.
+	LastHandledReconcileRequest string `json:"lastHandledReconcileRequest,omitempty"`
 }
 
 // GetConditions returns the status conditions of the object.
@@ -247,4 +258,9 @@ type ImagePolicyList struct {
 
 func init() {
 	SchemeBuilder.Register(&ImagePolicy{}, &ImagePolicyList{})
+}
+
+// GetLastHandledReconcileRequest returns the last handled reconcile request value
+func (in ImagePolicyStatus) GetLastHandledReconcileRequest() string {
+	return in.LastHandledReconcileRequest
 }
