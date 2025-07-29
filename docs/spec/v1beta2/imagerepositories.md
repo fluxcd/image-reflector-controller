@@ -188,53 +188,98 @@ see the integration [docs](/flux/integrations/).
 ### Certificate secret reference
 
 `.spec.certSecretRef.name` is an optional field to specify a secret containing
-TLS certificate data. The secret can contain the following keys:
+TLS certificate data for secure communication. The secret must be of type 
+`Opaque` or `kubernetes.io/tls`.
 
-* `tls.crt` and `tls.key`, to specify the client certificate and private key used
-for TLS client authentication. These must be used in conjunction, i.e.
-specifying one without the other will lead to an error.
-* `ca.crt`, to specify the CA certificate used to verify the server, which is
-required if the server is using a self-signed certificate.
+#### Supported configurations
 
-If the server is using a self-signed certificate and has TLS client
-authentication enabled, all three values are required.
+- **Mutual TLS (mTLS)**: Client certificate authentication (provide `tls.crt` + `tls.key`, optionally with `ca.crt`)
+- **CA-only**: Server authentication (provide `ca.crt` only)
 
-The Secret should be of type `Opaque` or `kubernetes.io/tls`. All the files in
-the Secret are expected to be [PEM-encoded][pem-encoding]. Assuming you have
-three files; `client.key`, `client.crt` and `ca.crt` for the client private key,
-client certificate and the CA certificate respectively, you can generate the
-required Secret using the `flux create secret tls` command:
+#### Mutual TLS Authentication
+
+Mutual TLS authentication allows for secure client-server communication using
+client certificates stored in Kubernetes secrets. Both `tls.crt` and `tls.key`
+must be specified together for client certificate authentication. The `ca.crt`
+field is optional but required when connecting to servers with self-signed certificates.
+
+All the files in the Secret are expected to be [PEM-encoded][pem-encoding]. 
+Assuming you have three files; `client.key`, `client.crt` and `ca.crt` for the 
+client private key, client certificate and the CA certificate respectively, you 
+can generate the required Secret using the `flux create secret tls` command:
 
 ```sh
 flux create secret tls --tls-key-file=client.key --tls-crt-file=client.crt --ca-crt-file=ca.crt
 ```
 
-Example usage:
+##### Example: mTLS Configuration
 
 ```yaml
 ---
 apiVersion: image.toolkit.fluxcd.io/v1beta2
 kind: ImageRepository
 metadata:
-  name: example
+  name: example-mtls
   namespace: default
 spec:
   interval: 5m0s
   image: example.com
   certSecretRef:
-    name: example-tls
+    name: example-mtls-certs
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: example-tls
+  name: example-mtls-certs
   namespace: default
 type: kubernetes.io/tls # or Opaque
-data:
-  tls.crt: <BASE64>
-  tls.key: <BASE64>
-  # NOTE: Can be supplied without the above values
-  ca.crt: <BASE64>
+stringData:
+  tls.crt: |
+    -----BEGIN CERTIFICATE-----
+    <client certificate>
+    -----END CERTIFICATE-----
+  tls.key: |
+    -----BEGIN PRIVATE KEY-----
+    <client private key>
+    -----END PRIVATE KEY-----
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <certificate authority certificate>
+    -----END CERTIFICATE-----
+```
+
+#### CA Certificate Authentication
+
+CA certificate authentication provides server authentication when connecting to
+container registries with self-signed or custom CA certificates. Only the `ca.crt`
+field is required for this configuration.
+
+##### Example: CA Certificate Configuration
+
+```yaml
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: example-ca
+  namespace: default
+spec:
+  interval: 5m0s
+  image: example.com
+  certSecretRef:
+    name: example-ca-cert
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: example-ca-cert
+  namespace: default
+type: kubernetes.io/tls # or Opaque
+stringData:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    <certificate authority certificate>
+    -----END CERTIFICATE-----
 ```
 
 **Warning:** Support for the `caFile`, `certFile` and `keyFile` keys have been
