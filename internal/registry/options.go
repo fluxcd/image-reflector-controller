@@ -138,7 +138,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			Scheme: registry.Scheme(),
 			Host:   registry.Name(),
 		}
-		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef, registryURL.String(), repo.Spec.Insecure)
+		// NOTE: Use WithSystemCertPool to maintain backward compatibility with the existing
+		// extend approach (system CAs + user CA) rather than the default replace approach (user CA only).
+		// This ensures image-reflector-controller continues to work with both system and user-provided CA certificates.
+		var tlsOpts = []secrets.TLSConfigOption{secrets.WithSystemCertPool()}
+		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef, registryURL.String(), tlsOpts...)
 		if err != nil {
 			return nil, err
 		}
