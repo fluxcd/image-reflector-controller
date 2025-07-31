@@ -361,6 +361,11 @@ spec:
                     - range
                     type: object
                 type: object
+              suspend:
+                description: |-
+                  This flag tells the controller to suspend subsequent policy evaluations.
+                  It does not apply to already started evaluations. Defaults to false.
+                type: boolean
             required:
             - imageRepositoryRef
             - policy
@@ -435,6 +440,12 @@ spec:
                   - type
                   type: object
                 type: array
+              lastHandledReconcileAt:
+                description: |-
+                  LastHandledReconcileAt holds the value of the most recent
+                  reconcile request value, so a change of the annotation value
+                  can be detected.
+                type: string
               latestImage:
                 description: |-
                   LatestImage gives the first in the list of images scanned by
