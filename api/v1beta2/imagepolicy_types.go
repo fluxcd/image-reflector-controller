@@ -166,18 +166,6 @@ func (in *ImageRef) String() string {
 
 // ImagePolicyStatus defines the observed state of ImagePolicy
 type ImagePolicyStatus struct {
-	// LatestImage gives the first in the list of images scanned by
-	// the image repository, when filtered and ordered according to
-	// the policy.
-	//
-	// Deprecated: Replaced by the composite "latestRef" field.
-	LatestImage string `json:"latestImage,omitempty"`
-	// ObservedPreviousImage is the observed previous LatestImage. It is used
-	// to keep track of the previous and current images.
-	//
-	// Deprecated: Replaced by the composite "observedPreviousRef" field.
-	// +optional
-	ObservedPreviousImage string `json:"observedPreviousImage,omitempty"`
 	// LatestRef gives the first in the list of images scanned by
 	// the image repository, when filtered and ordered according
 	// to the policy.

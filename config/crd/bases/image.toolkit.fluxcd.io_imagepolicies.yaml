@@ -435,14 +435,6 @@ spec:
                   - type
                   type: object
                 type: array
-              latestImage:
-                description: |-
-                  LatestImage gives the first in the list of images scanned by
-                  the image repository, when filtered and ordered according to
-                  the policy.
-
-                  Deprecated: Replaced by the composite "latestRef" field.
-                type: string
               latestRef:
                 description: |-
                   LatestRef gives the first in the list of images scanned by
@@ -465,13 +457,6 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
-              observedPreviousImage:
-                description: |-
-                  ObservedPreviousImage is the observed previous LatestImage. It is used
-                  to keep track of the previous and current images.
-
-                  Deprecated: Replaced by the composite "observedPreviousRef" field.
-                type: string
               observedPreviousRef:
                 description: |-
                   ObservedPreviousRef is the observed previous LatestRef. It is used

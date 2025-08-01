@@ -372,34 +372,6 @@ reflection policy is set to &ldquo;Always&rdquo;.</p>
 <tbody>
 <tr>
 <td>
-<code>latestImage</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>LatestImage gives the first in the list of images scanned by
-the image repository, when filtered and ordered according to
-the policy.</p>
-<p>Deprecated: Replaced by the composite &ldquo;latestRef&rdquo; field.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>observedPreviousImage</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>ObservedPreviousImage is the observed previous LatestImage. It is used
-to keep track of the previous and current images.</p>
-<p>Deprecated: Replaced by the composite &ldquo;observedPreviousRef&rdquo; field.</p>
-</td>
-</tr>
-<tr>
-<td>
 <code>latestRef</code><br>
 <em>
 <a href="#image.toolkit.fluxcd.io/v1beta2.ImageRef">
