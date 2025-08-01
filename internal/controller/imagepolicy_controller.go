@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -243,27 +242,8 @@ func composeImagePolicyReadyMessage(obj *imagev1.ImagePolicy) string {
 	return readyMsg
 }
 
-// migrateImageToRef migrates the old status.LatestImage and
-// status.ObservedPreviousImage fields to the new status.LatestRef and
-// status.ObservedPreviousRef fields.
-func migrateImageToRef(imgWithTag string, ref **imagev1.ImageRef) {
-	if *ref != nil || imgWithTag == "" {
-		return
-	}
-
-	idx := strings.LastIndex(imgWithTag, ":")
-	*ref = &imagev1.ImageRef{
-		Name: imgWithTag[:idx],
-		Tag:  imgWithTag[idx+1:],
-	}
-}
-
 func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
-
-	// Migrate old status fields to new ones.
-	migrateImageToRef(obj.Status.LatestImage, &obj.Status.LatestRef)
-	migrateImageToRef(obj.Status.ObservedPreviousImage, &obj.Status.ObservedPreviousRef)
 
 	// If there's no error and no requeue is requested, it's a success.
 	isSuccess := func(res ctrl.Result, err error) bool {
@@ -381,12 +361,6 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 
 	// Compute ready message.
 	readyMsg = composeImagePolicyReadyMessage(obj)
-
-	// Update deprecated status fields with the latest tag.
-	obj.Status.LatestImage = repo.Spec.Image + ":" + latest
-	if prev := obj.Status.ObservedPreviousRef; prev != nil {
-		obj.Status.ObservedPreviousImage = prev.Name + ":" + prev.Tag
-	}
 
 	// Let result finalizer compute the Ready condition.
 	conditions.Delete(obj, meta.ReadyCondition)
