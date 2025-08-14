@@ -126,23 +126,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			Namespace: certSecret.Namespace,
 		}
 
-		// Build target URL for TLS server name validation.
-		// The image spec contains repository name without scheme (e.g., "127.0.0.1:5000/foo/bar"),
-		// but TLSConfigFromSecretRef requires a proper URL for ServerName extraction.
-		ref, err := ParseImageReference(repo.Spec.Image, repo.Spec.Insecure)
-		if err != nil {
-			return nil, err
-		}
-		registry := ref.Context().Registry
-		registryURL := &url.URL{
-			Scheme: registry.Scheme(),
-			Host:   registry.Name(),
-		}
 		// NOTE: Use WithSystemCertPool to maintain backward compatibility with the existing
 		// extend approach (system CAs + user CA) rather than the default replace approach (user CA only).
 		// This ensures image-reflector-controller continues to work with both system and user-provided CA certificates.
 		var tlsOpts = []secrets.TLSConfigOption{secrets.WithSystemCertPool()}
-		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef, registryURL.String(), tlsOpts...)
+		tlsConfig, err := secrets.TLSConfigFromSecretRef(ctx, r.Client, certSecretRef, tlsOpts...)
 		if err != nil {
 			return nil, err
 		}
