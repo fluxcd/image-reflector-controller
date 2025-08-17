@@ -85,16 +85,15 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 
 	if provider := repo.GetProvider(); provider != "" && provider != "generic" {
 		// Build login provider options and use it to attempt registry login.
-		var opts []auth.Option
+		opts := []auth.Option{
+			auth.WithClient(r.Client),
+			auth.WithServiceAccountNamespace(repo.GetNamespace()),
+		}
 		if proxyURL != nil {
 			opts = append(opts, auth.WithProxyURL(*proxyURL))
 		}
 		if repo.Spec.ServiceAccountName != "" {
-			serviceAccount := client.ObjectKey{
-				Name:      repo.Spec.ServiceAccountName,
-				Namespace: repo.GetNamespace(),
-			}
-			opts = append(opts, auth.WithServiceAccount(serviceAccount, r.Client))
+			opts = append(opts, auth.WithServiceAccountName(repo.Spec.ServiceAccountName))
 		}
 		if r.TokenCache != nil {
 			opts = append(opts, auth.WithCache(*r.TokenCache, *involvedObject))
