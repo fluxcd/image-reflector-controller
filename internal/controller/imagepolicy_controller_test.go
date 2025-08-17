@@ -461,7 +461,8 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 	t.Run("enabled", func(t *testing.T) {
 		g := NewWithT(t)
 
-		t.Setenv(auth.EnvVarEnableObjectLevelWorkloadIdentity, "true")
+		auth.EnableObjectLevelWorkloadIdentity()
+		t.Cleanup(auth.DisableObjectLevelWorkloadIdentity)
 
 		namespaceName := "imagepolicy-" + randStringRunes(5)
 		namespace := &corev1.Namespace{

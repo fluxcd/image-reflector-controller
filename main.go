@@ -96,6 +96,7 @@ func main() {
 		rateLimiterOptions      helper.RateLimiterOptions
 		featureGates            feathelper.FeatureGates
 		tokenCacheOptions       pkgcache.TokenFlags
+		defaultServiceAccount   string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -114,10 +115,16 @@ func main() {
 	featureGates.BindFlags(flag.CommandLine)
 	watchOptions.BindFlags(flag.CommandLine)
 	tokenCacheOptions.BindFlags(flag.CommandLine, tokenCacheDefaultMaxSize)
+	flag.StringVar(&defaultServiceAccount, auth.ControllerFlagDefaultServiceAccount,
+		"", "Default service account to use for workload identity when not specified in resources.")
 
 	flag.Parse()
 
 	logger.SetLogger(logger.NewLogger(logOptions))
+
+	if defaultServiceAccount != "" {
+		auth.SetDefaultServiceAccount(defaultServiceAccount)
+	}
 
 	if err := featureGates.WithLogger(setupLog).SupportedFeatures(features.FeatureGates()); err != nil {
 		setupLog.Error(err, "unable to load feature gates")
@@ -130,6 +137,11 @@ func main() {
 		os.Exit(1)
 	case enabled:
 		auth.EnableObjectLevelWorkloadIdentity()
+	}
+
+	if auth.InconsistentObjectLevelConfiguration() {
+		setupLog.Error(auth.ErrInconsistentObjectLevelConfiguration, "invalid configuration")
+		os.Exit(1)
 	}
 
 	badgerOpts := badger.DefaultOptions(storagePath)
