@@ -25,6 +25,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	aclapis "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
@@ -1377,4 +1379,207 @@ func TestComposeImagePolicyReadyMessage(t *testing.T) {
 			g.Expect(result).To(Equal(tt.wantMessage))
 		})
 	}
+}
+
+func TestImagePolicyReconciler_intervalBasedReconciliation(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imageRepo := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "repo",
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "ghcr.io/stefanprodan/podinfo",
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+			return apierrors.IsNotFound(err)
+		}, timeout).Should(BeTrue())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo)
+	}, timeout).Should(BeTrue())
+
+	// Create ImagePolicy with DigestReflectionPolicy=Always and 1-minute interval
+	imagePolicy := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "test-imagepolicy",
+		},
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{
+				Name: imageRepo.Name,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+			DigestReflectionPolicy: imagev1.ReflectAlways,
+			Interval:               &metav1.Duration{Duration: time.Minute},
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+			return apierrors.IsNotFound(err)
+		}, timeout).Should(BeTrue())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy) &&
+			imagePolicy.Status.LatestRef != nil &&
+			imagePolicy.Status.LatestRef.Digest != "" // Should have digest when Always policy
+	}, timeout).Should(BeTrue())
+
+	g.Expect(imagePolicy.Status.LatestRef.Digest).ToNot(BeEmpty())
+
+	// Create another ImagePolicy without interval (DigestReflectionPolicy=Never by default)
+	imagePolicyNoInterval := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "test-imagepolicy-no-interval",
+		},
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{
+				Name: imageRepo.Name,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imagePolicyNoInterval)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imagePolicyNoInterval)).NotTo(HaveOccurred())
+		g.Eventually(func() bool {
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicyNoInterval), imagePolicyNoInterval)
+			return apierrors.IsNotFound(err)
+		}, timeout).Should(BeTrue())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicyNoInterval), imagePolicyNoInterval)
+		return err == nil && conditions.IsReady(imagePolicyNoInterval) &&
+			imagePolicyNoInterval.Status.LatestRef != nil
+	}, timeout).Should(BeTrue())
+
+	g.Expect(imagePolicyNoInterval.Status.LatestRef.Digest).To(BeEmpty())
+}
+
+func TestImagePolicyReconciler_suspend(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	obj := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "test-imagepolicy",
+		},
+		Spec: imagev1.ImagePolicySpec{
+			Suspend: true,
+		},
+	}
+
+	g.Expect(k8sClient.Create(ctx, obj)).NotTo(HaveOccurred())
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+		return err == nil &&
+			controllerutil.ContainsFinalizer(obj, imagev1.ImageFinalizer)
+	}, timeout).Should(BeTrue())
+
+	// Wait a bit and observe that the policy status did not change.
+	time.Sleep(time.Second)
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), obj)
+		return err == nil && obj.Status.ObservedGeneration == -1
+	}, timeout).Should(BeTrue())
+}
+
+func TestImagePolicyReconciler_reconcileRequestStatus(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imageRepo := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "repo",
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "ghcr.io/stefanprodan/podinfo",
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo)
+	}, timeout).Should(BeTrue())
+
+	imagePolicy := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "test-imagepolicy",
+			Annotations: map[string]string{
+				"reconcile.fluxcd.io/requestedAt": "some-string",
+			},
+		},
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{
+				Name: imageRepo.Name,
+			},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imagePolicy)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil &&
+			conditions.IsReady(imagePolicy) &&
+			imagePolicy.Status.LastHandledReconcileAt == "some-string"
+	}).Should(BeTrue())
 }

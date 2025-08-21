@@ -148,6 +148,13 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Always attempt to patch the object after each reconciliation.
 	defer func() {
+		// If the reconcile request annotation was set, consider it
+		// handled (NB it doesn't matter here if it was changed since last
+		// time)
+		if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+			obj.Status.SetLastHandledReconcileRequest(token)
+		}
+
 		// Create patch options for the final patch of the object.
 		patchOpts := reconcile.AddPatchOptions(obj, r.patchOptions, imageRepositoryOwnedConditions, r.ControllerName)
 		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
@@ -443,13 +450,6 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 		TagCount:   len(filteredTags),
 		ScanTime:   metav1.Now(),
 		LatestTags: latestTags,
-	}
-
-	// If the reconcile request annotation was set, consider it
-	// handled (NB it doesn't matter here if it was changed since last
-	// time)
-	if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
-		obj.Status.SetLastHandledReconcileRequest(token)
 	}
 
 	return nil
