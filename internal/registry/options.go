@@ -22,7 +22,7 @@ import (
 	"net/url"
 
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/authn/k8schain"
+	kauth "github.com/google/go-containerregistry/pkg/authn/kubernetes"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -177,7 +177,7 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		}
 
 		if len(pullSecrets) > 0 {
-			keychain, err := k8schain.NewFromPullSecrets(ctx, pullSecrets)
+			keychain, err := kauth.NewFromPullSecrets(ctx, pullSecrets)
 			if err != nil {
 				return nil, err
 			}
