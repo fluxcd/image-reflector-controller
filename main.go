@@ -233,7 +233,11 @@ func main() {
 	}
 
 	if badgerGC != nil {
-		mgr.Add(badgerGC)
+		err := mgr.Add(badgerGC)
+		if err != nil {
+			setupLog.Error(err, "unable to add GC to manager")
+			os.Exit(1)
+		}
 	}
 
 	probes.SetupChecks(mgr, setupLog)
