@@ -35,7 +35,7 @@ import (
 
 	"go.uber.org/zap/zapcore"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	. "github.com/onsi/ginkgo"
 
 	"k8s.io/apimachinery/pkg/types"

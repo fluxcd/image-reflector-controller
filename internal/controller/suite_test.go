@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"

@@ -21,7 +21,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -233,7 +233,11 @@ func main() {
 	}
 
 	if badgerGC != nil {
-		mgr.Add(badgerGC)
+		err := mgr.Add(badgerGC)
+		if err != nil {
+			setupLog.Error(err, "unable to add GC to manager")
+			os.Exit(1)
+		}
 	}
 
 	probes.SetupChecks(mgr, setupLog)

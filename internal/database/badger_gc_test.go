@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 )
