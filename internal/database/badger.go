@@ -18,8 +18,9 @@ package database
 import (
 	"encoding/json"
 	"fmt"
+	"hash/adler32"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 )
 
 const tagsPrefix = "tags"
@@ -54,15 +55,19 @@ func (a *BadgerDatabase) Tags(repo string) ([]string, error) {
 // the repo.
 //
 // It overwrites existing tag sets for the provided repo.
-func (a *BadgerDatabase) SetTags(repo string, tags []string) error {
+func (a *BadgerDatabase) SetTags(repo string, tags []string) (string, error) {
 	b, err := marshal(tags)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return a.db.Update(func(txn *badger.Txn) error {
+	err = a.db.Update(func(txn *badger.Txn) error {
 		e := badger.NewEntry(keyForRepo(tagsPrefix, repo), b)
 		return txn.SetEntry(e)
 	})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", adler32.Checksum(b)), nil
 }
 
 func keyForRepo(prefix, repo string) []byte {

@@ -22,8 +22,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"hash/adler32"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,10 +43,10 @@ import (
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/patch"
+	"github.com/fluxcd/pkg/runtime/secrets"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
-	"github.com/fluxcd/image-reflector-controller/internal/secret"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
@@ -56,12 +58,12 @@ type mockDatabase struct {
 }
 
 // SetTags implements the DatabaseWriter interface of the Database.
-func (db *mockDatabase) SetTags(repo string, tags []string) error {
+func (db *mockDatabase) SetTags(repo string, tags []string) (string, error) {
 	if db.WriteError != nil {
-		return db.WriteError
+		return "", db.WriteError
 	}
 	db.TagData = append(db.TagData, tags...)
-	return nil
+	return fmt.Sprintf("%v", adler32.Checksum([]byte(strings.Join(tags, ",")))), nil
 }
 
 // Tags implements the DatabaseReader interface of the Database.
@@ -277,66 +279,73 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 	proxyAddr, proxyPort := test.NewProxy(t)
 
 	tests := []struct {
-		name           string
-		tags           []string
-		exclusionList  []string
-		annotation     string
-		db             *mockDatabase
-		proxyURL       *url.URL
-		wantErr        string
-		wantTags       []string
-		wantLatestTags []string
+		name          string
+		tags          []string
+		exclusionList []string
+		db            *mockDatabase
+		proxyURL      *url.URL
+		wantErr       string
+		wantChecksum  string
+		wantTags      []string
 	}{
 		{
 			name:    "no tags",
 			wantErr: "404 Not Found",
 		},
 		{
-			name:           "simple tags",
-			tags:           []string{"a", "b", "c", "d"},
-			db:             &mockDatabase{},
-			wantTags:       []string{"a", "b", "c", "d"},
-			wantLatestTags: []string{"d", "c", "b", "a"},
+			name:     "simple tags",
+			tags:     []string{"a", "b", "c", "d"},
+			db:       &mockDatabase{},
+			wantTags: []string{"d", "c", "b", "a"},
 		},
 		{
-			name:           "simple tags with proxy",
-			tags:           []string{"a", "b", "c", "d"},
-			db:             &mockDatabase{},
-			proxyURL:       &url.URL{Scheme: "http", Host: proxyAddr},
-			wantTags:       []string{"a", "b", "c", "d"},
-			wantLatestTags: []string{"d", "c", "b", "a"},
+			name:         "tags are sorted for checksum - order 1",
+			tags:         []string{"c", "d", "a", "b"},
+			db:           &mockDatabase{},
+			wantChecksum: "139002383",
+			wantTags:     []string{"d", "c", "b", "a"},
 		},
 		{
-			name:           "simple tags with incorrect proxy",
-			tags:           []string{"a", "b", "c", "d"},
-			db:             &mockDatabase{},
-			proxyURL:       &url.URL{Scheme: "http", Host: fmt.Sprintf("localhost:%d", proxyPort+1)},
-			wantErr:        "connection refused",
-			wantTags:       []string{"a", "b", "c", "d"},
-			wantLatestTags: []string{"d", "c", "b", "a"},
+			name:         "tags are sorted for checksum - order 2",
+			tags:         []string{"c", "b", "a", "d"},
+			db:           &mockDatabase{},
+			wantChecksum: "139002383",
+			wantTags:     []string{"d", "c", "b", "a"},
 		},
 		{
-			name:           "simple tags, 10+",
-			tags:           []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-			db:             &mockDatabase{},
-			wantTags:       []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
-			wantLatestTags: []string{"k", "j", "i", "h, g, f, e, d, c, b"},
+			name:     "simple tags with proxy",
+			tags:     []string{"a", "b", "c", "d"},
+			db:       &mockDatabase{},
+			proxyURL: &url.URL{Scheme: "http", Host: proxyAddr},
+			wantTags: []string{"d", "c", "b", "a"},
 		},
 		{
-			name:           "with single exclusion pattern",
-			tags:           []string{"a", "b", "c", "d"},
-			exclusionList:  []string{"c"},
-			db:             &mockDatabase{},
-			wantTags:       []string{"a", "b", "d"},
-			wantLatestTags: []string{"d", "b", "a"},
+			name:     "simple tags with incorrect proxy",
+			tags:     []string{"a", "b", "c", "d"},
+			db:       &mockDatabase{},
+			proxyURL: &url.URL{Scheme: "http", Host: fmt.Sprintf("localhost:%d", proxyPort+1)},
+			wantErr:  "connection refused",
+			wantTags: []string{"d", "c", "b", "a"},
 		},
 		{
-			name:           "with multiple exclusion pattern",
-			tags:           []string{"a", "b", "c", "d"},
-			exclusionList:  []string{"c", "a"},
-			db:             &mockDatabase{},
-			wantTags:       []string{"b", "d"},
-			wantLatestTags: []string{"d", "b"},
+			name:     "more than maximum amount of tags for latest tags",
+			tags:     []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"},
+			db:       &mockDatabase{},
+			wantTags: []string{"k", "j", "i", "h", "g", "f", "e", "d", "c", "b", "a"},
+		},
+		{
+			name:          "with single exclusion pattern",
+			tags:          []string{"a", "b", "c", "d"},
+			exclusionList: []string{"c"},
+			db:            &mockDatabase{},
+			wantTags:      []string{"d", "b", "a"},
+		},
+		{
+			name:          "with multiple exclusion pattern",
+			tags:          []string{"a", "b", "c", "d"},
+			exclusionList: []string{"c", "a"},
+			db:            &mockDatabase{},
+			wantTags:      []string{"d", "b"},
 		},
 		{
 			name:          "bad exclusion pattern",
@@ -349,14 +358,6 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			tags:    []string{"a", "b"},
 			db:      &mockDatabase{WriteError: errors.New("fail")},
 			wantErr: "failed to set tags",
-		},
-		{
-			name:           "with reconcile annotation",
-			tags:           []string{"a", "b"},
-			annotation:     "foo",
-			db:             &mockDatabase{},
-			wantTags:       []string{"a", "b"},
-			wantLatestTags: []string{"b", "a"},
 		},
 	}
 
@@ -379,10 +380,6 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 				ExclusionList: tt.exclusionList,
 			}
 
-			if tt.annotation != "" {
-				repo.SetAnnotations(map[string]string{meta.ReconcileRequestAnnotation: tt.annotation})
-			}
-
 			ref, err := registry.ParseImageReference(imgRepo, false)
 			g.Expect(err).ToNot(HaveOccurred())
 
@@ -393,7 +390,7 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 				opts = append(opts, remote.WithTransport(tr))
 			}
 
-			tagCount, err := r.scan(context.TODO(), repo, ref, opts)
+			err = r.scan(context.TODO(), repo, ref, opts)
 			if tt.wantErr != "" {
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(err.Error()).To(ContainSubstring(tt.wantErr))
@@ -401,19 +398,20 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 			if err == nil {
-				g.Expect(tagCount).To(Equal(len(tt.wantTags)))
 				g.Expect(r.Database.Tags(imgRepo)).To(Equal(tt.wantTags))
+				if tt.wantChecksum != "" {
+					g.Expect(repo.Status.LastScanResult.Revision).To(Equal(tt.wantChecksum))
+				}
 				g.Expect(repo.Status.LastScanResult.TagCount).To(Equal(len(tt.wantTags)))
 				g.Expect(repo.Status.LastScanResult.ScanTime).ToNot(BeZero())
-				if tt.annotation != "" {
-					g.Expect(repo.Status.LastHandledReconcileAt).To(Equal(tt.annotation))
-				}
+				g.Expect(len(repo.Status.LastScanResult.LatestTags)).To(BeNumerically("<=", latestTagsCount))
+				g.Expect(repo.Status.LastScanResult.LatestTags).To(Equal(tt.wantTags[:min(len(tt.wantTags), latestTagsCount)]))
 			}
 		})
 	}
 }
 
-func TestGetLatestTags(t *testing.T) {
+func TestSortTagsAndGetLatestTags(t *testing.T) {
 	tests := []struct {
 		name           string
 		tags           []string
@@ -464,7 +462,7 @@ func TestGetLatestTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			g.Expect(getLatestTags(tt.tags)).To(Equal(tt.wantLatestTags))
+			g.Expect(sortTagsAndGetLatestTags(tt.tags)).To(Equal(tt.wantLatestTags))
 		})
 	}
 }
@@ -675,9 +673,9 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 	testTLSSecret.Namespace = testNamespace
 	testTLSSecret.Type = corev1.SecretTypeTLS
 	testTLSSecret.Data = map[string][]byte{
-		secret.CACrtKey:         rootCertPEM,
-		corev1.TLSCertKey:       clientCertPEM,
-		corev1.TLSPrivateKeyKey: clientKeyPEM,
+		secrets.KeyCACert:        rootCertPEM,
+		secrets.KeyTLSCert:       clientCertPEM,
+		secrets.KeyTLSPrivateKey: clientKeyPEM,
 	}
 
 	// Construct ImageRepository.
@@ -712,4 +710,41 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 	_, err = r.reconcile(ctx, sp, obj, time.Now())
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(conditions.IsReady(obj)).To(BeTrue())
+}
+
+func TestImageRepositoryReconciler_reconcileRequestStatus(t *testing.T) {
+	g := NewWithT(t)
+
+	namespaceName := "imagepolicy-" + randStringRunes(5)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+	}
+	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, namespace)).NotTo(HaveOccurred())
+	})
+
+	imageRepo := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespaceName,
+			Name:      "repo",
+			Annotations: map[string]string{
+				"reconcile.fluxcd.io/requestedAt": "some-string",
+			},
+		},
+		Spec: imagev1.ImageRepositorySpec{
+			Image: "ghcr.io/stefanprodan/podinfo",
+		},
+	}
+	g.Expect(k8sClient.Create(ctx, imageRepo)).NotTo(HaveOccurred())
+	t.Cleanup(func() {
+		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
+	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil &&
+			conditions.IsReady(imageRepo) &&
+			imageRepo.Status.LastHandledReconcileAt == "some-string"
+	}, timeout).Should(BeTrue())
 }

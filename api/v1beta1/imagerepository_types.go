@@ -149,9 +149,7 @@ func (in ImageRepository) GetTimeout() time.Duration {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Last scan",type=string,JSONPath=`.status.lastScanResult.scanTime`
-// +kubebuilder:printcolumn:name="Tags",type=string,JSONPath=`.status.lastScanResult.tagCount`
+// +kubebuilder:skipversion
 
 // ImageRepository is the Schema for the imagerepositories API
 type ImageRepository struct {

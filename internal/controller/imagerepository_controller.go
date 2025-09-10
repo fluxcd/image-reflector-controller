@@ -21,7 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -111,8 +112,7 @@ type ImageRepositoryReconciler struct {
 		DatabaseWriter
 		DatabaseReader
 	}
-	DeprecatedLoginOpts []auth.Provider
-	AuthOptionsGetter   *registry.AuthOptionsGetter
+	AuthOptionsGetter *registry.AuthOptionsGetter
 
 	patchOptions []patch.Option
 }
@@ -148,6 +148,13 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Always attempt to patch the object after each reconciliation.
 	defer func() {
+		// If the reconcile request annotation was set, consider it
+		// handled (NB it doesn't matter here if it was changed since last
+		// time)
+		if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+			obj.Status.SetLastHandledReconcileRequest(token)
+		}
+
 		// Create patch options for the final patch of the object.
 		patchOpts := reconcile.AddPatchOptions(obj, r.patchOptions, imageRepositoryOwnedConditions, r.ControllerName)
 		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
@@ -191,7 +198,8 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	obj *imagev1.ImageRepository, startTime time.Time) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
-	var foundTags int
+	var tagsChecksum string
+	var numFoundTags int
 	// Store a message about current reconciliation and next scan.
 	var nextScanMsg string
 	// Set a default next scan time before processing the object.
@@ -206,7 +214,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 			return true
 		}
 
-		readyMsg := fmt.Sprintf("successful scan: found %d tags", foundTags)
+		readyMsg := fmt.Sprintf("successful scan: found %d tags with checksum %s", numFoundTags, tagsChecksum)
 		rs := reconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
 
@@ -270,7 +278,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		Namespace: obj.GetNamespace(),
 		Operation: cache.OperationReconcile,
 	}
-	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject, r.DeprecatedLoginOpts...)
+	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
 		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, "%s", e)
@@ -290,26 +298,29 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	// Scan the repository if it's scan time. No scan is a no-op reconciliation.
 	// The next scan time is not reset in case of no-op reconciliation.
 	if ok {
-		reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
+		// When the database is empty, we need to set the Ready condition to
+		// Unknown to force a transition when the controller restarts.
+		// This transition is required to unblock the ImagePolicy object
+		// from the Ready condition stuck in False with reason DependencyNotReady.
+		drift := reasonMsg == scanReasonEmptyDatabase
+		reconcile.ProgressiveStatus(drift, obj, meta.ProgressingReason, "scanning: %s", reasonMsg)
 		if err := sp.Patch(ctx, obj, r.patchOptions...); err != nil {
 			result, retErr = ctrl.Result{}, err
 			return
 		}
 
-		tags, err := r.scan(ctx, obj, ref, opts)
-		if err != nil {
+		if err := r.scan(ctx, obj, ref, opts); err != nil {
 			e := fmt.Errorf("scan failed: %w", err)
 			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.ReadOperationFailedReason, "%s", e)
 			result, retErr = ctrl.Result{}, e
 			return
 		}
-		foundTags = tags
 
 		nextScanMsg = fmt.Sprintf("next scan in %s", when.String())
 		// Check if new tags were found.
 		if oldObj.Status.LastScanResult != nil &&
-			oldObj.Status.LastScanResult.TagCount == foundTags {
-			nextScanMsg = "no new tags found, " + nextScanMsg
+			oldObj.Status.LastScanResult.Revision == obj.Status.LastScanResult.Revision {
+			nextScanMsg = "tags did not change, " + nextScanMsg
 		} else {
 			// When new tags are found, this message will be suppressed by
 			// another event based on the new Ready=true status value. This is
@@ -317,9 +328,10 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 			nextScanMsg = "successful scan, " + nextScanMsg
 		}
 	} else {
-		foundTags = obj.Status.LastScanResult.TagCount
 		nextScanMsg = fmt.Sprintf("no change in repository configuration since last scan, next scan in %s", when.String())
 	}
+	tagsChecksum = obj.Status.LastScanResult.Revision
+	numFoundTags = obj.Status.LastScanResult.TagCount
 
 	// Set the observations on the status.
 	obj.Status.CanonicalImageName = ref.Context().String()
@@ -405,7 +417,7 @@ func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now 
 
 // scan performs repository scanning and writes the scanned result in the
 // internal database and populates the status of the ImageRepository.
-func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference, options []remote.Option) (int, error) {
+func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference, options []remote.Option) error {
 	timeout := obj.GetTimeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -414,34 +426,33 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 
 	tags, err := remote.List(ref.Context(), options...)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	filteredTags, err := filterOutTags(tags, obj.GetExclusionList())
 	if err != nil {
-		return 0, err
+		return err
+	}
+
+	latestTags := sortTagsAndGetLatestTags(filteredTags)
+	if len(latestTags) == 0 {
+		latestTags = nil // for omission in json serialization when empty
 	}
 
 	canonicalName := ref.Context().String()
-	if err := r.Database.SetTags(canonicalName, filteredTags); err != nil {
-		return 0, fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
+	checksum, err := r.Database.SetTags(canonicalName, filteredTags)
+	if err != nil {
+		return fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
 	}
 
-	scanTime := metav1.Now()
 	obj.Status.LastScanResult = &imagev1.ScanResult{
+		Revision:   checksum,
 		TagCount:   len(filteredTags),
-		ScanTime:   scanTime,
-		LatestTags: getLatestTags(filteredTags),
+		ScanTime:   metav1.Now(),
+		LatestTags: latestTags,
 	}
 
-	// If the reconcile request annotation was set, consider it
-	// handled (NB it doesn't matter here if it was changed since last
-	// time)
-	if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
-		obj.Status.SetLastHandledReconcileRequest(token)
-	}
-
-	return len(filteredTags), nil
+	return nil
 }
 
 // reconcileDelete handles the deletion of the object.
@@ -503,19 +514,15 @@ func filterOutTags(tags []string, patterns []string) ([]string, error) {
 	return filteredTags, nil
 }
 
-// getLatestTags takes a slice of tags, sorts them in descending order of their
-// values and returns the 10 latest tags.
-func getLatestTags(tags []string) []string {
-	var result []string
-	sort.SliceStable(tags, func(i, j int) bool { return tags[i] > tags[j] })
-
-	if len(tags) >= latestTagsCount {
-		latestTags := tags[0:latestTagsCount]
-		result = append(result, latestTags...)
-	} else {
-		result = append(result, tags...)
-	}
-	return result
+// sortTagsAndGetLatestTags takes a slice of tags, sorts them in-place
+// in descending order of their values and returns the 10 latest tags.
+func sortTagsAndGetLatestTags(tags []string) []string {
+	slices.SortStableFunc(tags, func(a, b string) int { return -strings.Compare(a, b) })
+	latestTags := tags[:min(len(tags), latestTagsCount)]
+	// We can't return a slice of the original slice here because the original
+	// slice can be too large and we want to free up that memory. Our copy has
+	// at most latestTagsCount elements, which is specifically a small number.
+	return slices.Clone(latestTags)
 }
 
 // isEqualSliceContent compares two string slices to check if they have the same

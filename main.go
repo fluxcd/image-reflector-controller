@@ -17,12 +17,11 @@ limitations under the License.
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/dgraph-io/badger/v4"
 	flag "github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,9 +37,6 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/fluxcd/pkg/auth"
-	"github.com/fluxcd/pkg/auth/aws"
-	"github.com/fluxcd/pkg/auth/azure"
-	"github.com/fluxcd/pkg/auth/gcp"
 	pkgcache "github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/client"
@@ -96,13 +92,11 @@ func main() {
 		storageValueLogFileSize int64
 		gcInterval              uint16 // max value is 65535 minutes (~ 45 days) which is well under the maximum time.Duration
 		concurrent              int
-		awsAutoLogin            bool
-		gcpAutoLogin            bool
-		azureAutoLogin          bool
 		aclOptions              acl.Options
 		rateLimiterOptions      helper.RateLimiterOptions
 		featureGates            feathelper.FeatureGates
 		tokenCacheOptions       pkgcache.TokenFlags
+		defaultServiceAccount   string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -113,11 +107,6 @@ func main() {
 	flag.Uint16Var(&gcInterval, "gc-interval", 10, "The number of minutes to wait between garbage collections. 0 disables the garbage collector.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
 
-	// NOTE: Deprecated flags.
-	flag.BoolVar(&awsAutoLogin, "aws-autologin-for-ecr", false, "(AWS) Attempt to get credentials for images in Elastic Container Registry, when no secret is referenced")
-	flag.BoolVar(&gcpAutoLogin, "gcp-autologin-for-gcr", false, "(GCP) Attempt to get credentials for images in Google Container Registry, when no secret is referenced")
-	flag.BoolVar(&azureAutoLogin, "azure-autologin-for-acr", false, "(Azure) Attempt to get credentials for images in Azure Container Registry, when no secret is referenced")
-
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
 	leaderElectionOptions.BindFlags(flag.CommandLine)
@@ -126,15 +115,15 @@ func main() {
 	featureGates.BindFlags(flag.CommandLine)
 	watchOptions.BindFlags(flag.CommandLine)
 	tokenCacheOptions.BindFlags(flag.CommandLine, tokenCacheDefaultMaxSize)
+	flag.StringVar(&defaultServiceAccount, auth.ControllerFlagDefaultServiceAccount,
+		"", "Default service account to use for workload identity when not specified in resources.")
 
 	flag.Parse()
 
 	logger.SetLogger(logger.NewLogger(logOptions))
 
-	if awsAutoLogin || gcpAutoLogin || azureAutoLogin {
-		setupLog.Error(errors.New("use of deprecated flags"),
-			"autologin flags have been deprecated. These flags will be removed in a future release."+
-				" Please update the respective ImageRepository objects with .spec.provider field.")
+	if defaultServiceAccount != "" {
+		auth.SetDefaultServiceAccount(defaultServiceAccount)
 	}
 
 	if err := featureGates.WithLogger(setupLog).SupportedFeatures(features.FeatureGates()); err != nil {
@@ -148,6 +137,11 @@ func main() {
 		os.Exit(1)
 	case enabled:
 		auth.EnableObjectLevelWorkloadIdentity()
+	}
+
+	if auth.InconsistentObjectLevelConfiguration() {
+		setupLog.Error(auth.ErrInconsistentObjectLevelConfiguration, "invalid configuration")
+		os.Exit(1)
 	}
 
 	badgerOpts := badger.DefaultOptions(storagePath)
@@ -239,7 +233,11 @@ func main() {
 	}
 
 	if badgerGC != nil {
-		mgr.Add(badgerGC)
+		err := mgr.Add(badgerGC)
+		if err != nil {
+			setupLog.Error(err, "unable to add GC to manager")
+			os.Exit(1)
+		}
 	}
 
 	probes.SetupChecks(mgr, setupLog)
@@ -265,31 +263,19 @@ func main() {
 		}
 	}
 
-	var deprecatedLoginOpts []auth.Provider
-	if awsAutoLogin {
-		deprecatedLoginOpts = append(deprecatedLoginOpts, aws.Provider{})
-	}
-	if azureAutoLogin {
-		deprecatedLoginOpts = append(deprecatedLoginOpts, azure.Provider{})
-	}
-	if gcpAutoLogin {
-		deprecatedLoginOpts = append(deprecatedLoginOpts, gcp.Provider{})
-	}
-
 	authOptionsGetter := &registry.AuthOptionsGetter{
 		Client:     mgr.GetClient(),
 		TokenCache: tokenCache,
 	}
 
 	if err := (&controller.ImageRepositoryReconciler{
-		Client:              mgr.GetClient(),
-		EventRecorder:       eventRecorder,
-		Metrics:             metricsH,
-		Database:            db,
-		ControllerName:      controllerName,
-		TokenCache:          tokenCache,
-		AuthOptionsGetter:   authOptionsGetter,
-		DeprecatedLoginOpts: deprecatedLoginOpts,
+		Client:            mgr.GetClient(),
+		EventRecorder:     eventRecorder,
+		Metrics:           metricsH,
+		Database:          db,
+		ControllerName:    controllerName,
+		TokenCache:        tokenCache,
+		AuthOptionsGetter: authOptionsGetter,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

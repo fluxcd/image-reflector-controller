@@ -69,6 +69,11 @@ type ImagePolicySpec struct {
 	// +kubebuilder:validation:Pattern="^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty"`
+
+	// This flag tells the controller to suspend subsequent policy reconciliations.
+	// It does not apply to already started reconciliations. Defaults to false.
+	// +optional
+	Suspend bool `json:"suspend,omitempty"`
 }
 
 // ReflectionPolicy describes a policy for if/when to reflect a value from the registry in a certain resource field.
@@ -166,18 +171,6 @@ func (in *ImageRef) String() string {
 
 // ImagePolicyStatus defines the observed state of ImagePolicy
 type ImagePolicyStatus struct {
-	// LatestImage gives the first in the list of images scanned by
-	// the image repository, when filtered and ordered according to
-	// the policy.
-	//
-	// Deprecated: Replaced by the composite "latestRef" field.
-	LatestImage string `json:"latestImage,omitempty"`
-	// ObservedPreviousImage is the observed previous LatestImage. It is used
-	// to keep track of the previous and current images.
-	//
-	// Deprecated: Replaced by the composite "observedPreviousRef" field.
-	// +optional
-	ObservedPreviousImage string `json:"observedPreviousImage,omitempty"`
 	// LatestRef gives the first in the list of images scanned by
 	// the image repository, when filtered and ordered according
 	// to the policy.
@@ -190,6 +183,8 @@ type ImagePolicyStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	meta.ReconcileRequestStatus `json:",inline"`
 }
 
 // GetConditions returns the status conditions of the object.
@@ -205,7 +200,12 @@ func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
 // +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`
+// +kubebuilder:resource:shortName=imgpol;imagepol
+// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestRef.name`
+// +kubebuilder:printcolumn:name="Tag",type=string,JSONPath=`.status.latestRef.tag`
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].message",description=""
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description=""
 
 // ImagePolicy is the Schema for the imagepolicies API
 type ImagePolicy struct {
@@ -226,8 +226,13 @@ func (in *ImagePolicy) GetDigestReflectionPolicy() ReflectionPolicy {
 
 func (in *ImagePolicy) GetInterval() time.Duration {
 	if in.GetDigestReflectionPolicy() == ReflectAlways {
+		if in.Spec.Interval == nil || in.Spec.Interval.Duration == 0 {
+			return 10 * time.Minute
+		}
+
 		return in.Spec.Interval.Duration
 	}
+
 	return 0
 }
 

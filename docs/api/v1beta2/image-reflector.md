@@ -167,6 +167,19 @@ reflection policy is set to &ldquo;Always&rdquo;.</p>
 <p>Defaults to 10m.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>suspend</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>This flag tells the controller to suspend subsequent policy reconciliations.
+It does not apply to already started reconciliations. Defaults to false.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -349,6 +362,19 @@ reflection policy is set to &ldquo;Always&rdquo;.</p>
 <p>Defaults to 10m.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>suspend</code><br>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>This flag tells the controller to suspend subsequent policy reconciliations.
+It does not apply to already started reconciliations. Defaults to false.</p>
+</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -370,34 +396,6 @@ reflection policy is set to &ldquo;Always&rdquo;.</p>
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>
-<code>latestImage</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<p>LatestImage gives the first in the list of images scanned by
-the image repository, when filtered and ordered according to
-the policy.</p>
-<p>Deprecated: Replaced by the composite &ldquo;latestRef&rdquo; field.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>observedPreviousImage</code><br>
-<em>
-string
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>ObservedPreviousImage is the observed previous LatestImage. It is used
-to keep track of the previous and current images.</p>
-<p>Deprecated: Replaced by the composite &ldquo;observedPreviousRef&rdquo; field.</p>
-</td>
-</tr>
 <tr>
 <td>
 <code>latestRef</code><br>
@@ -450,6 +448,21 @@ int64
 </td>
 <td>
 <em>(Optional)</em>
+</td>
+</tr>
+<tr>
+<td>
+<code>ReconcileRequestStatus</code><br>
+<em>
+<a href="https://godoc.org/github.com/fluxcd/pkg/apis/meta#ReconcileRequestStatus">
+github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
+</a>
+</em>
+</td>
+<td>
+<p>
+(Members of <code>ReconcileRequestStatus</code> are embedded into this type.)
+</p>
 </td>
 </tr>
 </tbody>
@@ -1098,6 +1111,8 @@ would select 0.</p>
 (<em>Appears on:</em>
 <a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepositoryStatus">ImageRepositoryStatus</a>)
 </p>
+<p>ScanResult contains information about the last scan of the image repository.
+TODO: Make all fields except for LatestTags required in v1.</p>
 <div class="md-typeset__scrollwrap">
 <div class="md-typeset__table">
 <table>
@@ -1110,12 +1125,25 @@ would select 0.</p>
 <tbody>
 <tr>
 <td>
+<code>revision</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Revision is a stable hash of the scanned tags.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>tagCount</code><br>
 <em>
 int
 </em>
 </td>
 <td>
+<p>TagCount is the number of tags found in the last scan.</p>
 </td>
 </tr>
 <tr>
@@ -1128,6 +1156,8 @@ Kubernetes meta/v1.Time
 </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>ScanTime is the time when the last scan was performed.</p>
 </td>
 </tr>
 <tr>
@@ -1138,6 +1168,10 @@ Kubernetes meta/v1.Time
 </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>LatestTags is a small sample of the tags found in the last scan.
+It&rsquo;s the first 10 tags when sorting all the tags in descending
+alphabetical order.</p>
 </td>
 </tr>
 </tbody>

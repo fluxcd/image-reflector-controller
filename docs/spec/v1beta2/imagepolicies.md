@@ -52,12 +52,12 @@ kubectl apply -f imagepolicy.yaml
 2. Run `kubectl get imagepolicy` to see the ImagePolicy:
 
 ```console
-NAME      LATESTIMAGE
-podinfo   ghcr.io/stefanprodan/podinfo:5.1.4
+NAME      IMAGE                          TAG     READY   STATUS                                                                  AGE
+podinfo   ghcr.io/stefanprodan/podinfo   5.1.4   True    Latest image tag for 'ghcr.io/stefanprodan/podinfo' resolved to 5.1.4   5m
 ```
 
-3. Run `kubectl describe imagepolicy podinfo` to see the [Latest Image](#latest-image)
-and [Conditions](#conditions) in the ImagePolicy's Status:
+3. Run `kubectl describe imagepolicy podinfo` to see the [Latest Ref](#latest-ref)
+   and [Conditions](#conditions) in the ImagePolicy's Status:
 
 ```console
 Status:
@@ -68,7 +68,6 @@ Status:
     Reason:                Succeeded
     Status:                True
     Type:                  Ready
-  Latest Image:            ghcr.io/stefanprodan/podinfo:5.1.4
   Latest Ref:
     Digest:                 sha256:2d9a00b3981628a533ff43352193b1838b0a4bf6b0033444286f563205e51a2c
     Image:                  ghcr.io/stefanprodan/podinfo
@@ -355,49 +354,6 @@ specific ImagePolicy, e.g.
 `flux logs --level=error --kind=ImagePolicy --name=<policy-name>`.
 
 ## ImagePolicy Status
-
-### Latest Image
-
-**Warning:** This field is deprecated in favor of `.status.latestRef.image` and will be
-removed in a future release.
-
-The ImagePolicy reports the latest select image from the ImageRepository tags in
-`.status.latestImage` for the resource.
-
-Example:
-
-```yaml
----
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: <policy-name>
-status:
-  latestImage: ghcr.io/stefanprodan/podinfo:5.1.4
-```
-
-### Observed Previous Image
-
-**Warning:** This field is deprecated in favor of `.status.observedPreviousRef.image`
-and will be removed in a future release.
-
-The ImagePolicy reports the previously observed latest image in
-`.status.observedPreviousImage` for the resource. This is used by the
-ImagePolicy to determine an upgrade path of an ImagePolicy update. This field
-is reset when the ImagePolicy fails due to some reason to be able to distinguish
-between a failure recovery and a genuine latest image upgrade.
-
-Example:
-
-```yaml
-apiVersion: image.toolkit.fluxcd.io/v1beta2
-kind: ImagePolicy
-metadata:
-  name: <policy-name>
-status:
-  latestImage: ghcr.io/stefanprodan/podinfo:6.2.1
-  observedPreviousImage: ghcr.io/stefanprodan/podinfo:5.1.4
-```
 
 ### Latest Ref
 

@@ -14,10 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1beta1 contains API types for the image API group, version
-// v1beta1. These types are concerned with reflecting metadata from
-// OCI image repositories into a cluster, so they can be consulted for
-// e.g., automation.
+// Package v1beta1 contains API types for the image v1beta1 API group
+//
+// Deprecated: v1beta1 is no longer supported, use v1 instead.
 //
 // +kubebuilder:object:generate=true
 // +groupName=image.toolkit.fluxcd.io

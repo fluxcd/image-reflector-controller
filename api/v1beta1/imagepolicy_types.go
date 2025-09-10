@@ -130,8 +130,7 @@ func SetImagePolicyReadiness(p *ImagePolicy, status metav1.ConditionStatus, reas
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="LatestImage",type=string,JSONPath=`.status.latestImage`
+// +kubebuilder:skipversion
 
 // ImagePolicy is the Schema for the imagepolicies API
 type ImagePolicy struct {

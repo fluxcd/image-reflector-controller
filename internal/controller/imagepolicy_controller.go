@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -36,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -143,6 +143,7 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 		Watches(
 			&imagev1.ImageRepository{},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),
+			builder.WithPredicates(imageRepositoryPredicate{}),
 		).
 		WithOptions(controller.Options{
 			RateLimiter: opts.RateLimiter,
@@ -150,8 +151,35 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 		Complete(r)
 }
 
+// imageRepositoryPredicate is used for watching changes to
+// ImageRepository objects that are referenced by ImagePolicy
+// objects.
+type imageRepositoryPredicate struct {
+	predicate.Funcs
+}
+
+func (imageRepositoryPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil || e.ObjectNew == nil {
+		return false
+	}
+
+	newRepo := e.ObjectNew.(*imagev1.ImageRepository)
+	if newRepo.Status.LastScanResult == nil {
+		return false
+	}
+
+	oldRepo := e.ObjectOld.(*imagev1.ImageRepository)
+	if oldRepo.Status.LastScanResult == nil ||
+		oldRepo.Status.LastScanResult.Revision != newRepo.Status.LastScanResult.Revision {
+		return true
+	}
+
+	return false
+}
+
 func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, retErr error) {
 	start := time.Now()
+	log := ctrl.LoggerFrom(ctx)
 
 	// Fetch the ImagePolicy.
 	obj := &imagev1.ImagePolicy{}
@@ -164,6 +192,13 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// Always attempt to patch the object after each reconciliation.
 	defer func() {
+		// If the reconcile request annotation was set, consider it
+		// handled (NB it doesn't matter here if it was changed since last
+		// time)
+		if token, ok := meta.ReconcileAnnotationValue(obj.GetAnnotations()); ok {
+			obj.Status.SetLastHandledReconcileRequest(token)
+		}
+
 		// Create patch options for patching the object.
 		patchOpts := pkgreconcile.AddPatchOptions(obj, r.patchOptions, imagePolicyOwnedConditions, r.ControllerName)
 		if err := serialPatcher.Patch(ctx, obj, patchOpts...); err != nil {
@@ -192,6 +227,12 @@ func (r *ImagePolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	// Return if the object is suspended.
+	if obj.Spec.Suspend {
+		log.Info("reconciliation is suspended for this object")
+		return ctrl.Result{}, nil
+	}
+
 	// Call subreconciler.
 	result, retErr = r.reconcile(ctx, serialPatcher, obj)
 	return
@@ -215,31 +256,15 @@ func composeImagePolicyReadyMessage(obj *imagev1.ImagePolicy) string {
 	return readyMsg
 }
 
-// migrateImageToRef migrates the old status.LatestImage and
-// status.ObservedPreviousImage fields to the new status.LatestRef and
-// status.ObservedPreviousRef fields.
-func migrateImageToRef(imgWithTag string, ref **imagev1.ImageRef) {
-	if *ref != nil || imgWithTag == "" {
-		return
-	}
-
-	idx := strings.LastIndex(imgWithTag, ":")
-	*ref = &imagev1.ImageRef{
-		Name: imgWithTag[:idx],
-		Tag:  imgWithTag[idx+1:],
-	}
-}
-
 func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialPatcher, obj *imagev1.ImagePolicy) (result ctrl.Result, retErr error) {
 	oldObj := obj.DeepCopy()
 
-	// Migrate old status fields to new ones.
-	migrateImageToRef(obj.Status.LatestImage, &obj.Status.LatestRef)
-	migrateImageToRef(obj.Status.ObservedPreviousImage, &obj.Status.ObservedPreviousRef)
+	// Set a default next reconcile time before processing the object.
+	nextReconcileTime := obj.GetInterval()
 
 	// If there's no error and no requeue is requested, it's a success.
 	isSuccess := func(res ctrl.Result, err error) bool {
-		if err != nil || res.Requeue {
+		if err != nil || res.RequeueAfter != nextReconcileTime {
 			return false
 		}
 		return true
@@ -305,16 +330,6 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		return
 	}
 
-	// Proceed only if the ImageRepository has scan result.
-	if !conditions.IsReady(repo) {
-		// Mark not ready but don't requeue. When the repository becomes ready,
-		// it'll trigger a policy reconciliation. No runtime error to prevent
-		// requeue.
-		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "referenced ImageRepository has not been scanned yet")
-		result, retErr = ctrl.Result{}, nil
-		return
-	}
-
 	// Check if the image is valid and mark stalled if not.
 	if _, err := registry.ParseImageReference(repo.Spec.Image, repo.Spec.Insecure); err != nil {
 		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, "%s", err)
@@ -343,10 +358,10 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 			return
 		}
 
-		// If there's no tag in the database, mark not ready and retry.
+		// If there's no tag in the database, mark not ready.
 		if err == errNoTagsInDatabase {
 			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "%s", err)
-			result, retErr = ctrl.Result{}, err
+			result, retErr = ctrl.Result{}, nil
 			return
 		}
 
@@ -364,16 +379,11 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	// Compute ready message.
 	readyMsg = composeImagePolicyReadyMessage(obj)
 
-	// Update deprecated status fields with the latest tag.
-	obj.Status.LatestImage = repo.Spec.Image + ":" + latest
-	if prev := obj.Status.ObservedPreviousRef; prev != nil {
-		obj.Status.ObservedPreviousImage = prev.Name + ":" + prev.Tag
-	}
-
 	// Let result finalizer compute the Ready condition.
 	conditions.Delete(obj, meta.ReadyCondition)
 
-	result, retErr = ctrl.Result{RequeueAfter: obj.GetInterval()}, nil
+	// Set the next reconcile time in the result based on the interval.
+	result, retErr = ctrl.Result{RequeueAfter: nextReconcileTime}, nil
 	return
 }
 
