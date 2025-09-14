@@ -69,13 +69,13 @@ manifests: controller-gen
 
 # Generate API reference documentation
 api-docs: gen-crd-api-reference-docs
-	$(GEN_CRD_API_REFERENCE_DOCS) -api-dir=./api/v1beta2 -config=./hack/api-docs/config.json -template-dir=./hack/api-docs/template -out-file=./docs/api/v1beta2/image-reflector.md
+	$(GEN_CRD_API_REFERENCE_DOCS) -api-dir=./api/v1 -config=./hack/api-docs/config.json -template-dir=./hack/api-docs/template -out-file=./docs/api/v1/image-reflector.md
 
 # Run go mod tidy
 tidy:
-	cd api; rm -f go.sum; go mod tidy -compat=1.24
-	cd tests/integration; rm -f go.sum; go mod tidy -compat=1.24
-	rm -f go.sum; go mod tidy -compat=1.24
+	cd api; rm -f go.sum; go mod tidy -compat=1.25
+	cd tests/integration; rm -f go.sum; go mod tidy -compat=1.25
+	rm -f go.sum; go mod tidy -compat=1.25
 
 # Run go fmt against code
 fmt:
