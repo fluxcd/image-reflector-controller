@@ -3,10 +3,10 @@ repo: github.com/fluxcd/image-reflector-controller
 resources:
 - group: image
   kind: ImageRepository
-  version: v1beta1
+  version: v1
 - group: image
   kind: ImagePolicy
-  version: v1beta1
+  version: v1
 - group: image
   kind: ImageRepository
   version: v1beta2

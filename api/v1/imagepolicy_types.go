@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The Flux authors
+Copyright 2025 The Flux authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1beta2
+package v1
 
 import (
 	"time"
@@ -24,9 +24,6 @@ import (
 )
 
 const ImagePolicyKind = "ImagePolicy"
-
-// Deprecated: Use ImageFinalizer.
-const ImagePolicyFinalizer = ImageFinalizer
 
 // ImagePolicySpec defines the parameters for calculating the
 // ImagePolicy.
@@ -197,10 +194,10 @@ func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
 	in.Status.Conditions = conditions
 }
 
+// +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=imgpol;imagepol
-// +kubebuilder:deprecatedversion:warning="v1beta2 ImagePolicy is deprecated, upgrade to v1"
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestRef.name`
 // +kubebuilder:printcolumn:name="Tag",type=string,JSONPath=`.status.latestRef.tag`
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""

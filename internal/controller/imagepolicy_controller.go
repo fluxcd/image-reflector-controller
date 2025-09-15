@@ -50,7 +50,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/patch"
 	pkgreconcile "github.com/fluxcd/pkg/runtime/reconcile"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
 )

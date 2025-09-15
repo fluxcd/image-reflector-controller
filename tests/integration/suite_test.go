@@ -30,7 +30,7 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	"github.com/fluxcd/test-infra/tftestenv"
 )
 

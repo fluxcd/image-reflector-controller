@@ -1,22 +1,22 @@
-<h1>Image reflector API reference v1beta2</h1>
+<h1>Image reflector API reference v1</h1>
 <p>Packages:</p>
 <ul class="simple">
 <li>
-<a href="#image.toolkit.fluxcd.io%2fv1beta2">image.toolkit.fluxcd.io/v1beta2</a>
+<a href="#image.toolkit.fluxcd.io%2fv1">image.toolkit.fluxcd.io/v1</a>
 </li>
 </ul>
-<h2 id="image.toolkit.fluxcd.io/v1beta2">image.toolkit.fluxcd.io/v1beta2</h2>
-<p>Package v1beta2 contains API types for the image API group, version
-v1beta2. These types are concerned with reflecting metadata from
+<h2 id="image.toolkit.fluxcd.io/v1">image.toolkit.fluxcd.io/v1</h2>
+<p>Package v1 contains API types for the image API group, version
+v1. These types are concerned with reflecting metadata from
 OCI image repositories into a cluster, so they can be consulted for
 e.g., automation.</p>
 Resource Types:
 <ul class="simple"></ul>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.AlphabeticalPolicy">AlphabeticalPolicy
+<h3 id="image.toolkit.fluxcd.io/v1.AlphabeticalPolicy">AlphabeticalPolicy
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyChoice">ImagePolicyChoice</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyChoice">ImagePolicyChoice</a>)
 </p>
 <p>AlphabeticalPolicy specifies a alphabetical ordering policy.</p>
 <div class="md-typeset__scrollwrap">
@@ -47,7 +47,7 @@ would select A.</p>
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImagePolicy">ImagePolicy
+<h3 id="image.toolkit.fluxcd.io/v1.ImagePolicy">ImagePolicy
 </h3>
 <p>ImagePolicy is the Schema for the imagepolicies API</p>
 <div class="md-typeset__scrollwrap">
@@ -78,7 +78,7 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 <code>spec</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicySpec">
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicySpec">
 ImagePolicySpec
 </a>
 </em>
@@ -105,7 +105,7 @@ being scanned</p>
 <td>
 <code>policy</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyChoice">
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyChoice">
 ImagePolicyChoice
 </a>
 </em>
@@ -119,7 +119,7 @@ selecting the most recent image</p>
 <td>
 <code>filterTags</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.TagFilter">
+<a href="#image.toolkit.fluxcd.io/v1.TagFilter">
 TagFilter
 </a>
 </em>
@@ -135,7 +135,7 @@ ordered and compared.</p>
 <td>
 <code>digestReflectionPolicy</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ReflectionPolicy">
+<a href="#image.toolkit.fluxcd.io/v1.ReflectionPolicy">
 ReflectionPolicy
 </a>
 </em>
@@ -187,7 +187,7 @@ It does not apply to already started reconciliations. Defaults to false.</p>
 <td>
 <code>status</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyStatus">
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyStatus">
 ImagePolicyStatus
 </a>
 </em>
@@ -199,11 +199,11 @@ ImagePolicyStatus
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImagePolicyChoice">ImagePolicyChoice
+<h3 id="image.toolkit.fluxcd.io/v1.ImagePolicyChoice">ImagePolicyChoice
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicySpec">ImagePolicySpec</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicySpec">ImagePolicySpec</a>)
 </p>
 <p>ImagePolicyChoice is a union of all the types of policy that can be
 supplied.</p>
@@ -221,7 +221,7 @@ supplied.</p>
 <td>
 <code>semver</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.SemVerPolicy">
+<a href="#image.toolkit.fluxcd.io/v1.SemVerPolicy">
 SemVerPolicy
 </a>
 </em>
@@ -236,7 +236,7 @@ available.</p>
 <td>
 <code>alphabetical</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.AlphabeticalPolicy">
+<a href="#image.toolkit.fluxcd.io/v1.AlphabeticalPolicy">
 AlphabeticalPolicy
 </a>
 </em>
@@ -250,7 +250,7 @@ AlphabeticalPolicy
 <td>
 <code>numerical</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.NumericalPolicy">
+<a href="#image.toolkit.fluxcd.io/v1.NumericalPolicy">
 NumericalPolicy
 </a>
 </em>
@@ -264,11 +264,11 @@ NumericalPolicy
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImagePolicySpec">ImagePolicySpec
+<h3 id="image.toolkit.fluxcd.io/v1.ImagePolicySpec">ImagePolicySpec
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicy">ImagePolicy</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicy">ImagePolicy</a>)
 </p>
 <p>ImagePolicySpec defines the parameters for calculating the
 ImagePolicy.</p>
@@ -300,7 +300,7 @@ being scanned</p>
 <td>
 <code>policy</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyChoice">
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyChoice">
 ImagePolicyChoice
 </a>
 </em>
@@ -314,7 +314,7 @@ selecting the most recent image</p>
 <td>
 <code>filterTags</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.TagFilter">
+<a href="#image.toolkit.fluxcd.io/v1.TagFilter">
 TagFilter
 </a>
 </em>
@@ -330,7 +330,7 @@ ordered and compared.</p>
 <td>
 <code>digestReflectionPolicy</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ReflectionPolicy">
+<a href="#image.toolkit.fluxcd.io/v1.ReflectionPolicy">
 ReflectionPolicy
 </a>
 </em>
@@ -379,11 +379,11 @@ It does not apply to already started reconciliations. Defaults to false.</p>
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImagePolicyStatus">ImagePolicyStatus
+<h3 id="image.toolkit.fluxcd.io/v1.ImagePolicyStatus">ImagePolicyStatus
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicy">ImagePolicy</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicy">ImagePolicy</a>)
 </p>
 <p>ImagePolicyStatus defines the observed state of ImagePolicy</p>
 <div class="md-typeset__scrollwrap">
@@ -400,7 +400,7 @@ It does not apply to already started reconciliations. Defaults to false.</p>
 <td>
 <code>latestRef</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRef">
+<a href="#image.toolkit.fluxcd.io/v1.ImageRef">
 ImageRef
 </a>
 </em>
@@ -415,7 +415,7 @@ to the policy.</p>
 <td>
 <code>observedPreviousRef</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRef">
+<a href="#image.toolkit.fluxcd.io/v1.ImageRef">
 ImageRef
 </a>
 </em>
@@ -469,11 +469,11 @@ github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImageRef">ImageRef
+<h3 id="image.toolkit.fluxcd.io/v1.ImageRef">ImageRef
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyStatus">ImagePolicyStatus</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyStatus">ImagePolicyStatus</a>)
 </p>
 <p>ImageRef represents an image reference.</p>
 <div class="md-typeset__scrollwrap">
@@ -524,7 +524,7 @@ string
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImageRepository">ImageRepository
+<h3 id="image.toolkit.fluxcd.io/v1.ImageRepository">ImageRepository
 </h3>
 <p>ImageRepository is the Schema for the imagerepositories API</p>
 <div class="md-typeset__scrollwrap">
@@ -555,7 +555,7 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 <code>spec</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepositorySpec">
+<a href="#image.toolkit.fluxcd.io/v1.ImageRepositorySpec">
 ImageRepositorySpec
 </a>
 </em>
@@ -749,7 +749,7 @@ bool
 <td>
 <code>status</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepositoryStatus">
+<a href="#image.toolkit.fluxcd.io/v1.ImageRepositoryStatus">
 ImageRepositoryStatus
 </a>
 </em>
@@ -761,11 +761,11 @@ ImageRepositoryStatus
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImageRepositorySpec">ImageRepositorySpec
+<h3 id="image.toolkit.fluxcd.io/v1.ImageRepositorySpec">ImageRepositorySpec
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepository">ImageRepository</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImageRepository">ImageRepository</a>)
 </p>
 <p>ImageRepositorySpec defines the parameters for scanning an image
 repository, e.g., <code>fluxcd/flux</code>.</p>
@@ -961,11 +961,11 @@ bool
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ImageRepositoryStatus">ImageRepositoryStatus
+<h3 id="image.toolkit.fluxcd.io/v1.ImageRepositoryStatus">ImageRepositoryStatus
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepository">ImageRepository</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImageRepository">ImageRepository</a>)
 </p>
 <p>ImageRepositoryStatus defines the observed state of ImageRepository</p>
 <div class="md-typeset__scrollwrap">
@@ -1021,7 +1021,7 @@ rather than <code>alpine</code>.</p>
 <td>
 <code>lastScanResult</code><br>
 <em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ScanResult">
+<a href="#image.toolkit.fluxcd.io/v1.ScanResult">
 ScanResult
 </a>
 </em>
@@ -1063,11 +1063,11 @@ github.com/fluxcd/pkg/apis/meta.ReconcileRequestStatus
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.NumericalPolicy">NumericalPolicy
+<h3 id="image.toolkit.fluxcd.io/v1.NumericalPolicy">NumericalPolicy
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyChoice">ImagePolicyChoice</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyChoice">ImagePolicyChoice</a>)
 </p>
 <p>NumericalPolicy specifies a numerical ordering policy.</p>
 <div class="md-typeset__scrollwrap">
@@ -1098,18 +1098,18 @@ would select 0.</p>
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ReflectionPolicy">ReflectionPolicy
+<h3 id="image.toolkit.fluxcd.io/v1.ReflectionPolicy">ReflectionPolicy
 (<code>string</code> alias)</h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicySpec">ImagePolicySpec</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicySpec">ImagePolicySpec</a>)
 </p>
 <p>ReflectionPolicy describes a policy for if/when to reflect a value from the registry in a certain resource field.</p>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.ScanResult">ScanResult
+<h3 id="image.toolkit.fluxcd.io/v1.ScanResult">ScanResult
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImageRepositoryStatus">ImageRepositoryStatus</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImageRepositoryStatus">ImageRepositoryStatus</a>)
 </p>
 <p>ScanResult contains information about the last scan of the image repository.
 TODO: Make all fields except for LatestTags required in v1.</p>
@@ -1178,11 +1178,11 @@ alphabetical order.</p>
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.SemVerPolicy">SemVerPolicy
+<h3 id="image.toolkit.fluxcd.io/v1.SemVerPolicy">SemVerPolicy
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicyChoice">ImagePolicyChoice</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicyChoice">ImagePolicyChoice</a>)
 </p>
 <p>SemVerPolicy specifies a semantic version policy.</p>
 <div class="md-typeset__scrollwrap">
@@ -1211,11 +1211,11 @@ version within the range that&rsquo;s a tag yields the latest image.</p>
 </table>
 </div>
 </div>
-<h3 id="image.toolkit.fluxcd.io/v1beta2.TagFilter">TagFilter
+<h3 id="image.toolkit.fluxcd.io/v1.TagFilter">TagFilter
 </h3>
 <p>
 (<em>Appears on:</em>
-<a href="#image.toolkit.fluxcd.io/v1beta2.ImagePolicySpec">ImagePolicySpec</a>)
+<a href="#image.toolkit.fluxcd.io/v1.ImagePolicySpec">ImagePolicySpec</a>)
 </p>
 <p>TagFilter enables filtering tags based on a set of defined rules</p>
 <div class="md-typeset__scrollwrap">

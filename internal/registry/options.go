@@ -33,7 +33,7 @@ import (
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/secrets"
 
-	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1beta2"
+	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 )
 
 // AuthOptionsGetter builds a slice of options from an ImageRepository by looking up references to Secrets etc.
