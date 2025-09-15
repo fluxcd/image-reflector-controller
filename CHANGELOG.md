@@ -1,5 +1,77 @@
 # Changelog
 
+## 1.0.0
+
+**Release date:** 2025-09-15
+
+This is the first GA release of the image-reflector-controller. It comes with
+various bug fixes and improvements.
+
+⚠️ The `v1beta1` APIs were removed. Before upgrading the CRDs, Flux users must run [`flux migrate`](https://github.com/fluxcd/flux2/pull/5473) to migrate the cluster storage off `v1beta1`. After the upgrade, all manifests in Git which contain `ImagePolicy`, `ImageRepository` and `ImageUpdateAutomation` definitions must be updated to:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1
+```
+
+### ImageRepository
+
+The `ImageRepository` API has been promoted to `v1` (GA) status. The `v1` API is backwards compatible with `v1beta2`.
+
+### ImagePolicy
+
+The `ImagePolicy` API has been promoted to `v1` (GA) status. The `v1` API is backwards compatible with `v1beta2`.
+
+The `ImagePolicy` now supports the `.spec.suspend` field and includes `.status.lastHandledReconcileAt` for better reconciliation tracking. Deprecated status fields have been removed from the ImagePolicy status to clean up the API surface.
+
+### General updates
+
+The controller now supports system certificate pools for improved CA compatibility, and TLS ServerName pinning has been removed from TLS configuration for better flexibility. A `--default-service-account=<sa name>` flag was introduced for workload identity multi-tenancy lockdown. The auto-login flags for cloud providers have been removed; users should now specify the `.spec.provider` field in `ImageRepository` resources for contextual authentication.
+
+In addition, the Kubernetes dependencies have been updated to v1.34, BadgerDB has been updated to v4.8
+and various other controller dependencies have been updated to their latest
+version. The controller is now built with Go 1.25.
+
+Fixes:
+- Fix missing TLS ServerName in ImageRepository
+  [#797](https://github.com/fluxcd/image-reflector-controller/pull/797)
+
+Improvements:
+- Promote `ImagePolicy` and `ImageRepository` APIs to v1 (GA)
+  [#818](https://github.com/fluxcd/image-reflector-controller/pull/818)
+- Add `.spec.suspend` and `.status.lastHandledReconcileAt` for ImagePolicy
+  [#799](https://github.com/fluxcd/image-reflector-controller/pull/799)
+- Add default-service-account flag for lockdown
+  [#807](https://github.com/fluxcd/image-reflector-controller/pull/807)
+- Remove TLS ServerName pinning in TLS config creation
+  [#806](https://github.com/fluxcd/image-reflector-controller/pull/806)
+- Remove deprecated APIs in group `image.toolkit.fluxcd.io/v1beta1`
+  [#805](https://github.com/fluxcd/image-reflector-controller/pull/805)
+- Remove deprecated ImagePolicy status fields
+  [#803](https://github.com/fluxcd/image-reflector-controller/pull/803)
+- Add WithSystemCertPool for CA compatibility
+  [#801](https://github.com/fluxcd/image-reflector-controller/pull/801)
+- Improve mTLS documentation structure and visibility
+  [#800](https://github.com/fluxcd/image-reflector-controller/pull/800)
+- Migrate secrets handling to pkg/runtime/secrets
+  [#791](https://github.com/fluxcd/image-reflector-controller/pull/791)
+- Add new printcolumn names
+  [#787](https://github.com/fluxcd/image-reflector-controller/pull/787)
+- Store checksum of ImageRepository tags and trigger ImagePolicy watch only when it changes
+  [#780](https://github.com/fluxcd/image-reflector-controller/pull/780)
+- Remove deprecated auto-login flags
+  [#786](https://github.com/fluxcd/image-reflector-controller/pull/786)
+- Add shortNames for ImageRepository and ImagePolicy
+  [#785](https://github.com/fluxcd/image-reflector-controller/pull/785)
+- Update BadgerDB to v4.8
+  [#816](https://github.com/fluxcd/image-reflector-controller/pull/816)
+- Various dependency updates
+  [#815](https://github.com/fluxcd/image-reflector-controller/pull/815)
+  [#813](https://github.com/fluxcd/image-reflector-controller/pull/813)
+  [#812](https://github.com/fluxcd/image-reflector-controller/pull/812)
+  [#810](https://github.com/fluxcd/image-reflector-controller/pull/810)
+  [#795](https://github.com/fluxcd/image-reflector-controller/pull/795)
+  [#793](https://github.com/fluxcd/image-reflector-controller/pull/793)
+
 ## 0.35.2
 
 **Release date:** 2025-06-13
