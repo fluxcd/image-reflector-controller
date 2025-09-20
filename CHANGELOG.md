@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.1
+
+**Release date:** 2025-09-20
+
+This patch release fixes the ImagePolicy controller not watching
+reconcile requests performed by adding the reconcile annotation
+to the object.
+
+Fixes:
+- Fix controllers not watching reconcile requests from annotations
+  [#824](https://github.com/fluxcd/image-reflector-controller/pull/824)
+
 ## 1.0.0
 
 **Release date:** 2025-09-15
