@@ -1558,9 +1558,6 @@ func TestImagePolicyReconciler_reconcileRequestStatus(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespaceName,
 			Name:      "test-imagepolicy",
-			Annotations: map[string]string{
-				"reconcile.fluxcd.io/requestedAt": "some-string",
-			},
 		},
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
@@ -1578,8 +1575,27 @@ func TestImagePolicyReconciler_reconcileRequestStatus(t *testing.T) {
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		return err == nil && conditions.IsReady(imagePolicy)
+	}, timeout).Should(BeTrue())
+
+	// Patch the annotation to simulate a reconcile request.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
+		if err != nil {
+			return false
+		}
+		p := patch.NewSerialPatcher(imagePolicy, k8sClient)
+		if imagePolicy.Annotations == nil {
+			imagePolicy.Annotations = map[string]string{}
+		}
+		imagePolicy.Annotations["reconcile.fluxcd.io/requestedAt"] = "some-string"
+		return p.Patch(ctx, imagePolicy) == nil
+	}, timeout).Should(BeTrue())
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
 		return err == nil &&
 			conditions.IsReady(imagePolicy) &&
 			imagePolicy.Status.LastHandledReconcileAt == "some-string"
-	}).Should(BeTrue())
+	}, timeout).Should(BeTrue())
 }
