@@ -48,6 +48,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/patch"
+	"github.com/fluxcd/pkg/runtime/predicates"
 	pkgreconcile "github.com/fluxcd/pkg/runtime/reconcile"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
@@ -139,7 +140,9 @@ func (r *ImagePolicyReconciler) SetupWithManager(mgr ctrl.Manager, opts ImagePol
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&imagev1.ImagePolicy{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&imagev1.ImagePolicy{}, builder.WithPredicates(
+			predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{}),
+		)).
 		Watches(
 			&imagev1.ImageRepository{},
 			handler.EnqueueRequestsFromMapFunc(r.imagePoliciesForRepository),

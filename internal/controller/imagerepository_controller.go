@@ -35,6 +35,7 @@ import (
 	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -125,8 +126,9 @@ func (r *ImageRepositoryReconciler) SetupWithManager(mgr ctrl.Manager, opts Imag
 	r.patchOptions = getPatchOptions(imageRepositoryOwnedConditions, r.ControllerName)
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&imagev1.ImageRepository{}).
-		WithEventFilter(predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{})).
+		For(&imagev1.ImageRepository{}, builder.WithPredicates(
+			predicate.Or(predicate.GenerationChangedPredicate{}, predicates.ReconcileRequestedPredicate{}),
+		)).
 		WithOptions(controller.Options{
 			RateLimiter: opts.RateLimiter,
 		}).

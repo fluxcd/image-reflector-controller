@@ -728,9 +728,6 @@ func TestImageRepositoryReconciler_reconcileRequestStatus(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespaceName,
 			Name:      "repo",
-			Annotations: map[string]string{
-				"reconcile.fluxcd.io/requestedAt": "some-string",
-			},
 		},
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/stefanprodan/podinfo",
@@ -740,6 +737,25 @@ func TestImageRepositoryReconciler_reconcileRequestStatus(t *testing.T) {
 	t.Cleanup(func() {
 		g.Expect(k8sClient.Delete(ctx, imageRepo)).NotTo(HaveOccurred())
 	})
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		return err == nil && conditions.IsReady(imageRepo)
+	}, timeout).Should(BeTrue())
+
+	// Update the annotation to trigger a new reconcile.
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
+		if err != nil {
+			return false
+		}
+		p := patch.NewSerialPatcher(imageRepo, k8sClient)
+		if imageRepo.Annotations == nil {
+			imageRepo.Annotations = map[string]string{}
+		}
+		imageRepo.Annotations["reconcile.fluxcd.io/requestedAt"] = "some-string"
+		return p.Patch(ctx, imageRepo) == nil
+	}, timeout).Should(BeTrue())
 
 	g.Eventually(func() bool {
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
