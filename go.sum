@@ -121,8 +121,8 @@ github.com/fluxcd/pkg/auth v0.31.0 h1:PIwSn7Onq74cGDTocZJZ6P47FxGvbT8NIW7UKFm51r
 github.com/fluxcd/pkg/auth v0.31.0/go.mod h1:Qxc5OKRMLBwtxO0nf2stm4ZkgzXcrvF6x6BSquiAMW8=
 github.com/fluxcd/pkg/cache v0.11.0 h1:fsE8S+una21fSNw4MDXGUIf0Gf1J+pqa4RbsVKf2aTI=
 github.com/fluxcd/pkg/cache v0.11.0/go.mod h1:2RTIU6PsJniHmfnllQWFEo7fa5V8KQlnMgn4o0sme40=
-github.com/fluxcd/pkg/runtime v0.85.0 h1:oOIeK2XvvsnvB0b1l/2pDuNzhFKSqP6UM+CirRLQvF0=
-github.com/fluxcd/pkg/runtime v0.85.0/go.mod h1:Wt9mUzQgMPQMu2D/wKl5pG4zh5vu/tfF5wq9pPobxOQ=
+github.com/fluxcd/pkg/runtime v0.86.0 h1:q7aBSerJwt0N9hpurPVElG+HWpVhZcs6t96bcNQj43w=
+github.com/fluxcd/pkg/runtime v0.86.0/go.mod h1:Wt9mUzQgMPQMu2D/wKl5pG4zh5vu/tfF5wq9pPobxOQ=
 github.com/fluxcd/pkg/version v0.10.0 h1:WETlCRbfbocsDItkCCeh/4x4zQkZ5i/lUe7P7VaQBrI=
 github.com/fluxcd/pkg/version v0.10.0/go.mod h1:dgmjEq4ykvBnqK1oVXM+hcXx3kAY/b4uZDYUn8XnHjk=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
@@ -300,8 +300,8 @@ github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVs
 github.com/spf13/cobra v1.9.1 h1:CXSaggrXdbHK9CF+8ywj8Amf7PBRmPCOJugH954Nnlo=
 github.com/spf13/cobra v1.9.1/go.mod h1:nDyEzZ8ogv936Cinf6g1RU9MRY64Ir93oCnqb9wxYW0=
 github.com/spf13/pflag v1.0.6/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
-github.com/spf13/pflag v1.0.9 h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=
-github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.5.2 h1:xuMeJ0Sdp5ZMRXx/aWO6RZxdr3beISkG5/G/aIRr3pY=
 github.com/stretchr/objx v0.5.2/go.mod h1:FRsXN1f5AsAjCGJKqEizvkpNtU+EGNCLh3NxZ/8L+MA=

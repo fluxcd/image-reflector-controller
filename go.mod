@@ -15,14 +15,14 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.21.0
 	github.com/fluxcd/pkg/auth v0.31.0
 	github.com/fluxcd/pkg/cache v0.11.0
-	github.com/fluxcd/pkg/runtime v0.85.0
+	github.com/fluxcd/pkg/runtime v0.86.0
 	github.com/fluxcd/pkg/version v0.10.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.20.6
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20250613215107-59a4b8593039
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.38.2
-	github.com/spf13/pflag v1.0.9
+	github.com/spf13/pflag v1.0.10
 	go.uber.org/zap v1.27.0
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
