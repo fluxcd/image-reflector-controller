@@ -5,4 +5,4 @@ resources:
 images:
   - name: fluxcd/image-reflector-controller
     newName: fluxcd/image-reflector-controller
-    newTag: v1.0.1
+    newTag: v1.0.2
