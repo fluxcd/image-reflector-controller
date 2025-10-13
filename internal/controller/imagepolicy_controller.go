@@ -28,7 +28,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 	kuberecorder "k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -105,11 +107,12 @@ type ImagePolicyReconciler struct {
 	kuberecorder.EventRecorder
 	helper.Metrics
 
-	ControllerName    string
-	Database          DatabaseReader
-	ACLOptions        acl.Options
-	AuthOptionsGetter *registry.AuthOptionsGetter
-	TokenCache        *cache.TokenCache
+	ControllerName            string
+	Database                  DatabaseReader
+	ACLOptions                acl.Options
+	AuthOptionsGetter         *registry.AuthOptionsGetter
+	TokenCache                *cache.TokenCache
+	DependencyRequeueInterval time.Duration
 
 	patchOptions []patch.Option
 }
@@ -361,10 +364,12 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 			return
 		}
 
-		// If there's no tag in the database, mark not ready.
-		if err == errNoTagsInDatabase {
-			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "%s", err)
-			result, retErr = ctrl.Result{}, nil
+		// If there's no tag in the database, mark not ready and
+		// requeue according to --requeue-dependency flag.
+		if errors.Is(err, errNoTagsInDatabase) {
+			depsErr := fmt.Errorf("retrying in %s error: %w", r.DependencyRequeueInterval.Round(time.Second), err)
+			conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.DependencyNotReadyReason, "%s", depsErr)
+			result, retErr = ctrl.Result{RequeueAfter: r.DependencyRequeueInterval}, nil
 			return
 		}
 
@@ -510,15 +515,10 @@ func (r *ImagePolicyReconciler) applyPolicy(obj *imagev1.ImagePolicy, repo *imag
 		return "", errInvalidPolicy{err: fmt.Errorf("invalid policy: %w", err)}
 	}
 
-	// Read tags from database, apply and filter is configured and compute the
-	// result.
-	tags, err := r.Database.Tags(repo.Status.CanonicalImageName)
+	// Read tags from database with a maximum of 3 retries.
+	tags, err := r.listTagsWithBackoff(repo.Status.CanonicalImageName)
 	if err != nil {
-		return "", fmt.Errorf("failed to read tags from database: %w", err)
-	}
-
-	if len(tags) == 0 {
-		return "", errNoTagsInDatabase
+		return "", err
 	}
 
 	// Apply tag filter.
@@ -565,4 +565,33 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(ctx context.Context, 
 		reqs[i].NamespacedName.Namespace = policies.Items[i].GetNamespace()
 	}
 	return reqs
+}
+
+// listTagsWithBackoff lists the tags of the given image from the
+// internal database with retries if there are no tags in the database.
+func (r *ImagePolicyReconciler) listTagsWithBackoff(canonicalImageName string) ([]string, error) {
+	var backoff = wait.Backoff{
+		Steps:    4,
+		Duration: 1 * time.Second,
+		Factor:   1.5,
+		Jitter:   0.1,
+	}
+
+	var tags []string
+
+	err := retry.OnError(backoff, func(err error) bool {
+		return errors.Is(err, errNoTagsInDatabase)
+	}, func() error {
+		var err error
+		tags, err = r.Database.Tags(canonicalImageName)
+		if err != nil {
+			return fmt.Errorf("failed to read tags from database: %w", err)
+		}
+		if len(tags) == 0 {
+			return errNoTagsInDatabase
+		}
+		return nil
+	})
+
+	return tags, err
 }
