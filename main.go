@@ -97,6 +97,7 @@ func main() {
 		featureGates            feathelper.FeatureGates
 		tokenCacheOptions       pkgcache.TokenFlags
 		defaultServiceAccount   string
+		requeueDependency       time.Duration
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -106,6 +107,7 @@ func main() {
 	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
 	flag.Uint16Var(&gcInterval, "gc-interval", 10, "The number of minutes to wait between garbage collections. 0 disables the garbage collector.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
+	flag.DurationVar(&requeueDependency, "requeue-dependency", 30*time.Second, "The interval at which failing dependencies are reevaluated.")
 
 	clientOptions.BindFlags(flag.CommandLine)
 	logOptions.BindFlags(flag.CommandLine)
@@ -283,14 +285,15 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ImagePolicyReconciler{
-		Client:            mgr.GetClient(),
-		EventRecorder:     eventRecorder,
-		Metrics:           metricsH,
-		Database:          db,
-		ACLOptions:        aclOptions,
-		ControllerName:    controllerName,
-		AuthOptionsGetter: authOptionsGetter,
-		TokenCache:        tokenCache,
+		Client:                    mgr.GetClient(),
+		EventRecorder:             eventRecorder,
+		Metrics:                   metricsH,
+		Database:                  db,
+		ACLOptions:                aclOptions,
+		ControllerName:            controllerName,
+		AuthOptionsGetter:         authOptionsGetter,
+		TokenCache:                tokenCache,
+		DependencyRequeueInterval: requeueDependency,
 	}).SetupWithManager(mgr, controller.ImagePolicyReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

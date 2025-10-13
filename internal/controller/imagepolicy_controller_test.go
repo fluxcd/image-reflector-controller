@@ -98,7 +98,9 @@ func TestImagePolicyReconciler_imageRepoHasNoTags(t *testing.T) {
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
 		return err == nil && !conditions.IsReady(imagePolicy) &&
 			conditions.GetReason(imagePolicy, meta.ReadyCondition) == imagev1.DependencyNotReadyReason
-	}).Should(BeTrue())
+	}, 6*time.Second).Should(BeTrue())
+
+	g.Expect(conditions.GetMessage(imagePolicy, meta.ReadyCondition)).To(BeEquivalentTo("retrying in 30s error: no tags in database"))
 }
 
 func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
@@ -527,10 +529,9 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 
 		g.Eventually(func() bool {
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imagePolicy), imagePolicy)
-			logPolicyStatus(t, imagePolicy)
 			return err == nil && !conditions.IsReady(imagePolicy) &&
 				conditions.GetReason(imagePolicy, meta.ReadyCondition) == imagev1.DependencyNotReadyReason
-		}).Should(BeTrue())
+		}, 6*time.Second).Should(BeTrue())
 	})
 }
 

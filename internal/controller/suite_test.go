@@ -49,7 +49,7 @@ import (
 
 // for Eventually
 const (
-	timeout                = time.Second * 30
+	timeout                = time.Second * 25
 	contextTimeout         = time.Second * 20
 	interval               = time.Second * 1
 	reconciliationInterval = time.Second * 2
@@ -101,10 +101,11 @@ func TestMain(m *testing.M) {
 	}
 
 	if err = (&ImagePolicyReconciler{
-		Client:            testEnv,
-		Database:          database.NewBadgerDatabase(testBadgerDB),
-		EventRecorder:     record.NewFakeRecorder(256),
-		AuthOptionsGetter: optGetter,
+		Client:                    testEnv,
+		Database:                  database.NewBadgerDatabase(testBadgerDB),
+		EventRecorder:             record.NewFakeRecorder(256),
+		AuthOptionsGetter:         optGetter,
+		DependencyRequeueInterval: 30 * time.Second,
 	}).SetupWithManager(testEnv, ImagePolicyReconcilerOptions{
 		RateLimiter: controller.GetDefaultRateLimiter(),
 	}); err != nil {
