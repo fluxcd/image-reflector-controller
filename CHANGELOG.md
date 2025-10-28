@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.3
+
+**Release date:** 2025-10-28
+
+This patch release fixes support for SOCKS5 proxy in the controller APIs
+and implements automated retries for `ImagePolicy` when no image tags
+are found in the database.
+
+Fixes:
+- Retry policy resolution when no tags found in database
+  [#845](https://github.com/fluxcd/image-reflector-controller/pull/845)
+- Restore SOCKS5 proxy support
+  [#840](https://github.com/fluxcd/image-reflector-controller/pull/840)
+
 ## 1.0.2
 
 **Release date:** 2025-10-08
