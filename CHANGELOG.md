@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.4
+
+**Release date:** 2025-11-19
+
+This patch release fixes Azure Workload Identity in Azure China Cloud.
+
+Improvements:
+- Upgrade k8s to 1.34.2 and c-r to 0.22.4
+  [#850](https://github.com/fluxcd/image-reflector-controller/pull/850)
+
 ## 1.0.3
 
 **Release date:** 2025-10-28
