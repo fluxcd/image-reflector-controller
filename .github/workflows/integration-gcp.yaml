@@ -12,7 +12,7 @@ jobs:
         working-directory: ./tests/integration
     steps:
       - name: Test suite setup
-        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.4.0
+        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.5.0
         with:
           go-version: 1.25.x
       - name: Setup Terraform
@@ -26,13 +26,13 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
       - name: Log into gcr.io
-        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: gcr.io
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
       - name: Log into us-central1-docker.pkg.dev
-        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: us-central1-docker.pkg.dev
           username: oauth2accesstoken
