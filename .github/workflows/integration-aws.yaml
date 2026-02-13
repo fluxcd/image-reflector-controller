@@ -12,9 +12,9 @@ jobs:
         working-directory: ./tests/integration
     steps:
       - name: Test suite setup
-        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.4.0
+        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.6.0
         with:
-          go-version: 1.25.x
+          go-version: 1.26.x
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       - name: Configure AWS credentials
