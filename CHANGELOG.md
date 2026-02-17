@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0
+
+**Release date:** 2026-02-17
+
+This minor release comes with various dependency updates.
+
+The Kubernetes dependencies have been updated to v1.35.0 and
+the controller is now built with Go 1.26.
+
+Improvements:
+- Various dependency updates
+  [#859](https://github.com/fluxcd/image-reflector-controller/pull/859)
+  [#862](https://github.com/fluxcd/image-reflector-controller/pull/862)
+  [#864](https://github.com/fluxcd/image-reflector-controller/pull/864)
+  [#865](https://github.com/fluxcd/image-reflector-controller/pull/865)
+  [#866](https://github.com/fluxcd/image-reflector-controller/pull/866)
+
 ## 1.0.4
 
 **Release date:** 2025-11-19
