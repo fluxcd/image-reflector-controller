@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.1
+
+**Release date:** 2026-03-12
+
+This patch release fixes Azure Container Registry authentication by using the
+ACR-specific auth scope instead of the generic registry scope.
+
+Improvements:
+- Remove no longer needed workaround for Flux 2.8
+  [#872](https://github.com/fluxcd/image-reflector-controller/pull/872)
+- Update fluxcd/pkg dependencies
+  [#874](https://github.com/fluxcd/image-reflector-controller/pull/874)
+  [#876](https://github.com/fluxcd/image-reflector-controller/pull/876)
+
 ## 1.1.0
 
 **Release date:** 2026-02-17
