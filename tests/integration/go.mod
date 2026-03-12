@@ -6,12 +6,12 @@ replace github.com/fluxcd/image-reflector-controller/api => ../../api
 
 require (
 	github.com/fluxcd/image-reflector-controller/api v0.35.2
-	github.com/fluxcd/pkg/apis/meta v1.25.0
+	github.com/fluxcd/pkg/apis/meta v1.26.0
 	github.com/fluxcd/test-infra/tftestenv v0.0.0-20260207180006-e65b0cc60305
 	github.com/hashicorp/terraform-exec v0.24.0
 	github.com/hashicorp/terraform-json v0.27.2
 	github.com/onsi/gomega v1.39.1
-	k8s.io/apimachinery v0.35.0
+	k8s.io/apimachinery v0.35.2
 )
 
 require (
