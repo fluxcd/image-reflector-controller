@@ -13,7 +13,7 @@ require (
 	github.com/fluxcd/pkg/apis/acl v0.9.0
 	github.com/fluxcd/pkg/apis/event v0.24.1
 	github.com/fluxcd/pkg/apis/meta v1.25.1
-	github.com/fluxcd/pkg/auth v0.38.4
+	github.com/fluxcd/pkg/auth v0.38.5
 	github.com/fluxcd/pkg/cache v0.13.0
 	github.com/fluxcd/pkg/runtime v0.100.4
 	github.com/fluxcd/pkg/version v0.12.0
