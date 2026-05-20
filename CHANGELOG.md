@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.2
+
+**Release date:** 2026-05-20
+
+This patch release comes with dependency updates, adding support for GCP
+sovereign cloud artifact registries.
+
+Improvements:
+- Update fluxcd/pkg dependencies
+  [#883](https://github.com/fluxcd/image-reflector-controller/pull/883)
+
 ## 1.1.1
 
 **Release date:** 2026-03-12
