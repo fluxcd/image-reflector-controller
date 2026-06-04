@@ -483,7 +483,7 @@ func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Ob
 	} else {
 		ctrl.LoggerFrom(ctx).Info(msg)
 	}
-	r.Eventf(obj, eventType, reason, msg)
+	r.Eventf(obj, eventType, reason, "%s", msg)
 }
 
 // filterOutTags filters the given tags through the given regular expression

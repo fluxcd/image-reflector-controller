@@ -14,7 +14,7 @@ BUILD_PLATFORMS ?= linux/amd64
 FUZZ_TIME ?= 1m
 
 # API (doc) generation utilities
-CONTROLLER_GEN_VERSION ?= v0.19.0
+CONTROLLER_GEN_VERSION ?= v0.21.0
 GEN_API_REF_DOCS_VERSION ?= e327d0730470cbd61b06300f81c5fcf91c23c113
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
