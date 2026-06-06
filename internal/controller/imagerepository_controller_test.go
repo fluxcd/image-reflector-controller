@@ -35,13 +35,13 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/secrets"
 
@@ -107,7 +107,7 @@ func TestImageRepositoryReconciler_deleteBeforeFinalizer(t *testing.T) {
 
 	r := &ImageRepositoryReconciler{
 		Client:        k8sClient,
-		EventRecorder: record.NewFakeRecorder(32),
+		EventRecorder: events.NewFakeRecorder(32, false),
 	}
 	// NOTE: Only a real API server responds with an error in this scenario.
 	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(imagerepo)})
@@ -254,7 +254,7 @@ func TestImageRepositoryReconciler_shouldScan(t *testing.T) {
 			g := NewWithT(t)
 
 			r := &ImageRepositoryReconciler{
-				EventRecorder: record.NewFakeRecorder(32),
+				EventRecorder: events.NewFakeRecorder(32, false),
 				Database:      tt.db,
 				patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 			}
@@ -375,7 +375,7 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 			g.Expect(err).ToNot(HaveOccurred())
 
 			r := ImageRepositoryReconciler{
-				EventRecorder: record.NewFakeRecorder(32),
+				EventRecorder: events.NewFakeRecorder(32, false),
 				Database:      tt.db,
 				patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 			}
@@ -448,7 +448,7 @@ func TestImageRepositoryReconciler_scan_noOwnTimeout(t *testing.T) {
 	g.Expect(err).ToNot(HaveOccurred())
 
 	r := ImageRepositoryReconciler{
-		EventRecorder: record.NewFakeRecorder(32),
+		EventRecorder: events.NewFakeRecorder(32, false),
 		Database:      &mockDatabase{},
 		patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 	}
@@ -669,7 +669,7 @@ func TestNotify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			recorder := record.NewFakeRecorder(32)
+			recorder := events.NewFakeRecorder(32, false)
 
 			oldObj := &imagev1.ImageRepository{}
 			newObj := oldObj.DeepCopy()
@@ -678,13 +678,14 @@ func TestNotify(t *testing.T) {
 				tt.beforeFunc(oldObj, newObj)
 			}
 
-			notify(context.TODO(), recorder, oldObj, newObj, nextScanMsg)
+			notify(recorder, oldObj, newObj, nextScanMsg)
 
 			select {
 			case x, ok := <-recorder.Events:
 				g.Expect(ok).To(Equal(tt.wantEvent != ""), "unexpected event received")
 				if tt.wantEvent != "" {
-					g.Expect(x).To(ContainSubstring(tt.wantEvent))
+					got := fmt.Sprintf("%s %s %s", x.Type, x.Reason, x.Note)
+					g.Expect(got).To(ContainSubstring(tt.wantEvent))
 				}
 			default:
 				if tt.wantEvent != "" {
@@ -763,7 +764,7 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 		Build()
 
 	r := &ImageRepositoryReconciler{
-		EventRecorder:     record.NewFakeRecorder(32),
+		EventRecorder:     events.NewFakeRecorder(32, false),
 		Client:            client,
 		patchOptions:      getPatchOptions(imageRepositoryOwnedConditions, "irc"),
 		Database:          &mockDatabase{},

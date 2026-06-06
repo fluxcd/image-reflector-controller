@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -41,6 +40,7 @@ import (
 	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
@@ -540,7 +540,7 @@ func TestImagePolicyReconciler_intervalNotConfigured(t *testing.T) {
 
 	r := &ImagePolicyReconciler{
 		Client:        k8sClient,
-		EventRecorder: record.NewFakeRecorder(32),
+		EventRecorder: events.NewFakeRecorder(32, false),
 	}
 
 	obj := &imagev1.ImagePolicy{
@@ -632,7 +632,7 @@ func TestImagePolicyReconciler_deleteBeforeFinalizer(t *testing.T) {
 
 	r := &ImagePolicyReconciler{
 		Client:        k8sClient,
-		EventRecorder: record.NewFakeRecorder(32),
+		EventRecorder: events.NewFakeRecorder(32, false),
 	}
 	// NOTE: Only a real API server responds with an error in this scenario.
 	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(imagePolicy)})
@@ -805,7 +805,7 @@ func TestImagePolicyReconciler_getImageRepository(t *testing.T) {
 			clientBuilder.WithObjects(imagePolicyNS, imageRepoNS, imageRepo)
 
 			r := &ImagePolicyReconciler{
-				EventRecorder: record.NewFakeRecorder(32),
+				EventRecorder: events.NewFakeRecorder(32, false),
 				Client:        clientBuilder.Build(),
 				ACLOptions:    tt.aclOpts,
 				patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
@@ -845,7 +845,7 @@ func TestImagePolicyReconciler_fetchDigest_respectsContext(t *testing.T) {
 	g.Expect(err).ToNot(HaveOccurred())
 
 	r := &ImagePolicyReconciler{
-		EventRecorder:     record.NewFakeRecorder(32),
+		EventRecorder:     events.NewFakeRecorder(32, false),
 		AuthOptionsGetter: &registry.AuthOptionsGetter{Client: fake.NewClientBuilder().Build()},
 	}
 
@@ -1142,7 +1142,7 @@ func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 			).To(Succeed(), "failed getting image repo")
 
 			r := &ImagePolicyReconciler{
-				EventRecorder:     record.NewFakeRecorder(32),
+				EventRecorder:     events.NewFakeRecorder(32, false),
 				Client:            c,
 				Database:          &mockDatabase{TagData: imageRepo.Status.LastScanResult.LatestTags},
 				AuthOptionsGetter: &registry.AuthOptionsGetter{Client: c},
@@ -1298,7 +1298,7 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 			g := NewWithT(t)
 
 			r := &ImagePolicyReconciler{
-				EventRecorder: record.NewFakeRecorder(32),
+				EventRecorder: events.NewFakeRecorder(32, false),
 				Database:      tt.db,
 				patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
 			}
