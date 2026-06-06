@@ -26,10 +26,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
-	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,6 +49,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 	pkgreconcile "github.com/fluxcd/pkg/runtime/reconcile"
@@ -105,7 +106,7 @@ const imageRepoKey = ".spec.imageRepository"
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	kuberecorder.EventRecorder
+	events.Recorder
 	helper.Metrics
 
 	ControllerName            string
@@ -278,6 +279,11 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	}
 
 	var readyMsg string
+	// relatedRepo is the ImageRepository referenced by this ImagePolicy. It is
+	// recorded as the related object on emitted events once resolved. It stays
+	// nil on early returns (not found, access denied, etc.) so no dangling
+	// reference is annotated.
+	var relatedRepo *imagev1.ImageRepository
 	defer func() {
 		rs := pkgreconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
@@ -291,7 +297,11 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 			conditions.Set(obj, reconciling)
 		}
 
-		notify(ctx, r.EventRecorder, oldObj, obj, readyMsg)
+		var related runtime.Object
+		if relatedRepo != nil {
+			related = relatedRepo
+		}
+		notify(ctx, r.Recorder, oldObj, obj, related, imagev1.ActionSelectImage, readyMsg)
 	}()
 
 	// Validate errors in the spec before proceeding.
@@ -336,6 +346,8 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 		result, retErr = ctrl.Result{}, e
 		return
 	}
+	// Record the resolved ImageRepository as the related object for events.
+	relatedRepo = repo
 
 	// Check if the image is valid and mark stalled if not.
 	if _, err := registry.ParseImageReference(repo.Spec.Image, repo.Spec.Insecure); err != nil {
