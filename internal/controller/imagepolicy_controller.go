@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
-	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,6 +48,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 	pkgreconcile "github.com/fluxcd/pkg/runtime/reconcile"
@@ -104,7 +104,7 @@ const imageRepoKey = ".spec.imageRepository"
 // ImagePolicyReconciler reconciles a ImagePolicy object
 type ImagePolicyReconciler struct {
 	client.Client
-	kuberecorder.EventRecorder
+	events.EventRecorder
 	helper.Metrics
 
 	ControllerName            string
@@ -290,7 +290,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 			conditions.Set(obj, reconciling)
 		}
 
-		notify(ctx, r.EventRecorder, oldObj, obj, readyMsg)
+		notify(r.EventRecorder, oldObj, obj, readyMsg)
 	}()
 
 	// Validate errors in the spec before proceeding.

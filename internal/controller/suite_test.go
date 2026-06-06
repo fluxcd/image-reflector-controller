@@ -27,12 +27,12 @@ import (
 	"github.com/dgraph-io/badger/v4"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	"github.com/fluxcd/pkg/runtime/controller"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/testenv"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
@@ -92,7 +92,7 @@ func TestMain(m *testing.M) {
 	if err = (&ImageRepositoryReconciler{
 		Client:            testEnv,
 		Database:          database.NewBadgerDatabase(testBadgerDB),
-		EventRecorder:     record.NewFakeRecorder(256),
+		EventRecorder:     events.NewFakeRecorder(256, false),
 		AuthOptionsGetter: optGetter,
 	}).SetupWithManager(testEnv, ImageRepositoryReconcilerOptions{
 		RateLimiter: controller.GetDefaultRateLimiter(),
@@ -103,7 +103,7 @@ func TestMain(m *testing.M) {
 	if err = (&ImagePolicyReconciler{
 		Client:                    testEnv,
 		Database:                  database.NewBadgerDatabase(testBadgerDB),
-		EventRecorder:             record.NewFakeRecorder(256),
+		EventRecorder:             events.NewFakeRecorder(256, false),
 		AuthOptionsGetter:         optGetter,
 		DependencyRequeueInterval: 30 * time.Second,
 	}).SetupWithManager(testEnv, ImagePolicyReconcilerOptions{
