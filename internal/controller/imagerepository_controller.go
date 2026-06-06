@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -27,12 +26,9 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
-	kuberecorder "k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -42,12 +38,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	ctrreconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	eventv1 "github.com/fluxcd/pkg/apis/event/v1beta1"
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 	"github.com/fluxcd/pkg/runtime/predicates"
 	"github.com/fluxcd/pkg/runtime/reconcile"
@@ -105,7 +101,7 @@ func getPatchOptions(ownedConditions []string, controllerName string) []patch.Op
 // ImageRepositoryReconciler reconciles a ImageRepository object
 type ImageRepositoryReconciler struct {
 	client.Client
-	kuberecorder.EventRecorder
+	events.Recorder
 	helper.Metrics
 
 	ControllerName    string
@@ -227,7 +223,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 			conditions.Set(obj, reconciling)
 		}
 
-		notify(ctx, r.EventRecorder, oldObj, obj, nextScanMsg)
+		notify(ctx, r.Recorder, oldObj, obj, imagev1.ActionScan, nextScanMsg)
 	}()
 
 	// Check object-level workload identity feature gate.
@@ -476,22 +472,6 @@ func (r *ImageRepositoryReconciler) reconcileDelete(ctx context.Context, obj *im
 	return ctrl.Result{}, nil
 }
 
-// eventLogf records events, and logs at the same time.
-//
-// This log is different from the debug log in the EventRecorder, in the sense
-// that this is a simple log. While the debug log contains complete details
-// about the event.
-func eventLogf(ctx context.Context, r kuberecorder.EventRecorder, obj runtime.Object, eventType string, reason string, messageFmt string, args ...interface{}) {
-	msg := fmt.Sprintf(messageFmt, args...)
-	// Log and emit event.
-	if eventType == corev1.EventTypeWarning {
-		ctrl.LoggerFrom(ctx).Error(errors.New(reason), msg)
-	} else {
-		ctrl.LoggerFrom(ctx).Info(msg)
-	}
-	r.Eventf(obj, eventType, reason, "%s", msg)
-}
-
 // filterOutTags filters the given tags through the given regular expression
 // patterns and returns a list of tags that don't match with the pattern.
 func filterOutTags(tags []string, patterns []string) ([]string, error) {
@@ -552,32 +532,4 @@ func isEqualSliceContent(a, b []string) bool {
 		}
 	}
 	return true
-}
-
-// notify emits events, logs and notification based on the resulting objects
-// before and after the reconciliation.
-func notify(ctx context.Context, r kuberecorder.EventRecorder, oldObj, newObj conditions.Setter, nextScanMsg string) {
-	ready := conditions.Get(newObj, meta.ReadyCondition)
-
-	// Was ready before and is ready now, but the scan results have changed.
-	if conditions.IsReady(oldObj) && conditions.IsReady(newObj) &&
-		(conditions.GetMessage(oldObj, meta.ReadyCondition)) != ready.Message {
-		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, "%s", ready.Message)
-		return
-	}
-
-	// Emit events when reconciliation fails or recovers from failure.
-
-	// Became ready from not ready.
-	if !conditions.IsReady(oldObj) && conditions.IsReady(newObj) {
-		eventLogf(ctx, r, newObj, corev1.EventTypeNormal, ready.Reason, "%s", ready.Message)
-		return
-	}
-	// Not ready, failed.
-	if !conditions.IsReady(newObj) {
-		eventLogf(ctx, r, newObj, corev1.EventTypeWarning, ready.Reason, "%s", ready.Message)
-		return
-	}
-
-	eventLogf(ctx, r, newObj, eventv1.EventTypeTrace, meta.SucceededReason, "%s", nextScanMsg)
 }

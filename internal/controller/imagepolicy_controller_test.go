@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -41,6 +40,7 @@ import (
 	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
@@ -424,7 +424,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			return err == nil && conditions.IsStalled(imageRepo) &&
 				conditions.GetReason(imageRepo, meta.StalledCondition) == meta.FeatureGateDisabledReason &&
 				conditions.GetMessage(imageRepo, meta.StalledCondition) == "to use spec.serviceAccountName for provider authentication please enable the ObjectLevelWorkloadIdentity feature gate in the controller"
-		}).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		g.Eventually(func() bool {
 			p := patch.NewSerialPatcher(imageRepo, k8sClient)
@@ -432,7 +432,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			imageRepo.Status.Conditions = nil
 			conditions.MarkTrue(imageRepo, meta.ReadyCondition, "success", "image repository is ready")
 			return p.Patch(ctx, imageRepo) == nil
-		}).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		imagePolicy := &imagev1.ImagePolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -459,7 +459,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			return err == nil && conditions.IsStalled(imagePolicy) &&
 				conditions.GetReason(imagePolicy, meta.StalledCondition) == meta.FeatureGateDisabledReason &&
 				conditions.GetMessage(imagePolicy, meta.StalledCondition) == "to use spec.serviceAccountName in the ImageRepository for provider authentication please enable the ObjectLevelWorkloadIdentity feature gate in the controller"
-		}).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 	})
 
 	t.Run("enabled", func(t *testing.T) {
@@ -498,7 +498,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			logRepoStatus(t, imageRepo)
 			return err == nil && !conditions.IsReady(imageRepo) &&
 				conditions.GetReason(imageRepo, meta.ReadyCondition) == imagev1.ReadOperationFailedReason
-		}).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		g.Eventually(func() bool {
 			p := patch.NewSerialPatcher(imageRepo, k8sClient)
@@ -506,7 +506,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			imageRepo.Status.Conditions = nil
 			conditions.MarkTrue(imageRepo, meta.ReadyCondition, "success", "image repository is ready")
 			return p.Patch(ctx, imageRepo) == nil
-		}).Should(BeTrue())
+		}, timeout, interval).Should(BeTrue())
 
 		imagePolicy := &imagev1.ImagePolicy{
 			ObjectMeta: metav1.ObjectMeta{
@@ -538,9 +538,10 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 func TestImagePolicyReconciler_intervalNotConfigured(t *testing.T) {
 	g := NewWithT(t)
 
+	recorder := events.NewFakeRecorder(32, false)
 	r := &ImagePolicyReconciler{
-		Client:        k8sClient,
-		EventRecorder: record.NewFakeRecorder(32),
+		Client:   k8sClient,
+		Recorder: recorder,
 	}
 
 	obj := &imagev1.ImagePolicy{
@@ -559,6 +560,15 @@ func TestImagePolicyReconciler_intervalNotConfigured(t *testing.T) {
 	g.Expect(conditions.GetReason(obj, meta.ReadyCondition)).To(Equal(imagev1.IntervalNotConfiguredReason))
 	g.Expect(conditions.GetMessage(obj, meta.StalledCondition)).To(Equal("spec.interval must be set when spec.digestReflectionPolicy is set to 'Always'"))
 	g.Expect(conditions.GetMessage(obj, meta.ReadyCondition)).To(Equal("spec.interval must be set when spec.digestReflectionPolicy is set to 'Always'"))
+
+	// The not-ready outcome is reported via a Warning event carrying the
+	// ActionSelectImage action.
+	expectEvent(g, recorder, &corev1.Event{
+		Type:    corev1.EventTypeWarning,
+		Reason:  imagev1.IntervalNotConfiguredReason,
+		Action:  imagev1.ActionSelectImage.String(),
+		Message: "spec.interval must be set when spec.digestReflectionPolicy is set to 'Always'",
+	})
 }
 
 func TestImagePolicyReconciler_apiServerValidation(t *testing.T) {
@@ -631,8 +641,8 @@ func TestImagePolicyReconciler_deleteBeforeFinalizer(t *testing.T) {
 	g.Expect(k8sClient.Delete(ctx, imagePolicy)).NotTo(HaveOccurred())
 
 	r := &ImagePolicyReconciler{
-		Client:        k8sClient,
-		EventRecorder: record.NewFakeRecorder(32),
+		Client:   k8sClient,
+		Recorder: events.NewFakeRecorder(32, false),
 	}
 	// NOTE: Only a real API server responds with an error in this scenario.
 	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(imagePolicy)})
@@ -805,10 +815,10 @@ func TestImagePolicyReconciler_getImageRepository(t *testing.T) {
 			clientBuilder.WithObjects(imagePolicyNS, imageRepoNS, imageRepo)
 
 			r := &ImagePolicyReconciler{
-				EventRecorder: record.NewFakeRecorder(32),
-				Client:        clientBuilder.Build(),
-				ACLOptions:    tt.aclOpts,
-				patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
+				Recorder:     events.NewFakeRecorder(32, false),
+				Client:       clientBuilder.Build(),
+				ACLOptions:   tt.aclOpts,
+				patchOptions: getPatchOptions(imagePolicyOwnedConditions, "irc"),
 			}
 
 			obj := &imagev1.ImagePolicy{
@@ -845,7 +855,7 @@ func TestImagePolicyReconciler_fetchDigest_respectsContext(t *testing.T) {
 	g.Expect(err).ToNot(HaveOccurred())
 
 	r := &ImagePolicyReconciler{
-		EventRecorder:     record.NewFakeRecorder(32),
+		Recorder:          events.NewFakeRecorder(32, false),
 		AuthOptionsGetter: &registry.AuthOptionsGetter{Client: fake.NewClientBuilder().Build()},
 	}
 
@@ -1142,7 +1152,7 @@ func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 			).To(Succeed(), "failed getting image repo")
 
 			r := &ImagePolicyReconciler{
-				EventRecorder:     record.NewFakeRecorder(32),
+				Recorder:          events.NewFakeRecorder(32, false),
 				Client:            c,
 				Database:          &mockDatabase{TagData: imageRepo.Status.LastScanResult.LatestTags},
 				AuthOptionsGetter: &registry.AuthOptionsGetter{Client: c},
@@ -1298,9 +1308,9 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 			g := NewWithT(t)
 
 			r := &ImagePolicyReconciler{
-				EventRecorder: record.NewFakeRecorder(32),
-				Database:      tt.db,
-				patchOptions:  getPatchOptions(imagePolicyOwnedConditions, "irc"),
+				Recorder:     events.NewFakeRecorder(32, false),
+				Database:     tt.db,
+				patchOptions: getPatchOptions(imagePolicyOwnedConditions, "irc"),
 			}
 
 			obj := &imagev1.ImagePolicy{
