@@ -6,8 +6,10 @@ CRD_OPTIONS ?= crd:crdVersions=v1
 GO_TEST_ARGS ?=
 # Allows for defining additional Docker buildx arguments, e.g. '--push'.
 BUILD_ARGS ?=
-# Architectures to build images for.
-BUILD_PLATFORMS ?= linux/amd64
+# Host architecture, used so local builds and envtest target the host.
+LOCALARCH ?= $(shell go env GOARCH)
+# Architectures to build images for; defaults to the host architecture.
+BUILD_PLATFORMS ?= linux/$(LOCALARCH)
 
 # FUZZ_TIME defines the max amount of time, in Go Duration,
 # each fuzzer should run for.
@@ -24,8 +26,8 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-# Architecture to use envtest with
-ENVTEST_ARCH ?= amd64
+# Architecture to use envtest with; defaults to the host architecture.
+ENVTEST_ARCH ?= $(LOCALARCH)
 
 all: manager
 
