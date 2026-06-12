@@ -15,7 +15,7 @@ require (
 	github.com/fluxcd/pkg/apis/meta v1.29.0
 	github.com/fluxcd/pkg/auth v0.52.0
 	github.com/fluxcd/pkg/cache v0.14.0
-	github.com/fluxcd/pkg/runtime v0.108.0
+	github.com/fluxcd/pkg/runtime v0.109.0
 	github.com/fluxcd/pkg/version v0.15.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.21.6
