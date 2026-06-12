@@ -11,12 +11,12 @@ require (
 	github.com/elazarl/goproxy v1.8.4
 	github.com/fluxcd/image-reflector-controller/api v1.1.0
 	github.com/fluxcd/pkg/apis/acl v0.10.0
-	github.com/fluxcd/pkg/apis/event v0.26.0
-	github.com/fluxcd/pkg/apis/meta v1.29.0
-	github.com/fluxcd/pkg/auth v0.52.0
+	github.com/fluxcd/pkg/apis/event v0.27.0
+	github.com/fluxcd/pkg/apis/meta v1.30.0
+	github.com/fluxcd/pkg/auth v0.53.0
 	github.com/fluxcd/pkg/cache v0.14.0
-	github.com/fluxcd/pkg/runtime v0.109.0
-	github.com/fluxcd/pkg/version v0.15.0
+	github.com/fluxcd/pkg/runtime v0.110.0
+	github.com/fluxcd/pkg/version v0.16.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.21.6
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20260205022027-93aa2732266a
@@ -76,7 +76,7 @@ require (
 	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fluxcd/cli-utils v1.2.0 // indirect
+	github.com/fluxcd/cli-utils v1.2.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
