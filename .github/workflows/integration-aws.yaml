@@ -12,13 +12,13 @@ jobs:
         working-directory: ./tests/integration
     steps:
       - name: Test suite setup
-        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.9.0
+        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.11.0
         with:
           go-version: 1.26.x
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@a03048d87541d1d9fcf2ecf528a4a65ba9bd7838 # v5.0.0
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v6.2.0
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.IRC_E2E_AWS_ASSUME_ROLE_NAME }}
           role-session-name: IRC_GH_Actions
