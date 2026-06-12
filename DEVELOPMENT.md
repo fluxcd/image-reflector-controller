@@ -78,7 +78,7 @@ follow a serial trace; pass `--concurrent=1` so reconciles run one at a
 time:
 
 ```sh
-go run ./main.go --concurrent=1
+go run ./main.go --storage-path=./data --concurrent=1
 ```
 
 ### Suspend unrelated objects
