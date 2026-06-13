@@ -219,6 +219,12 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		readyMsg := fmt.Sprintf("successful scan: found %d tags with checksum %s", numFoundTags, tagsChecksum)
 		rs := reconcile.NewResultFinalizer(isSuccess, readyMsg)
 		retErr = rs.Finalize(obj, result, retErr)
+		// controller-runtime logs a warning and ignores Result when Reconcile
+		// returns both a non-zero Result and a non-nil error. Clear the Result
+		// whenever there is an error so the log stays clean.
+		if retErr != nil {
+			result = ctrl.Result{}
+		}
 
 		// Presence of reconciling means that the reconciliation didn't succeed.
 		// Set the Reconciling reason to ProgressingWithRetry to indicate a
