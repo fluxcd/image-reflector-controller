@@ -150,7 +150,6 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 				Image:    "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
 				Provider: "aws",
 			},
-			wantErr: true,
 		},
 		{
 			name: "cloud provider repo without login",

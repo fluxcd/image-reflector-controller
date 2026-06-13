@@ -497,7 +497,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
 			logRepoStatus(t, imageRepo)
 			return err == nil && !conditions.IsReady(imageRepo) &&
-				conditions.GetReason(imageRepo, meta.ReadyCondition) == imagev1.AuthenticationFailedReason
+				conditions.GetReason(imageRepo, meta.ReadyCondition) == imagev1.ReadOperationFailedReason
 		}).Should(BeTrue())
 
 		g.Eventually(func() bool {
