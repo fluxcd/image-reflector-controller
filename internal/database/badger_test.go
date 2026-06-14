@@ -16,12 +16,15 @@ limitations under the License.
 package database
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/dgraph-io/badger/v4"
+
+	tagstorage "github.com/fluxcd/image-reflector-controller/internal/storage"
 )
 
 const testRepo = "testing/testing"
@@ -29,7 +32,7 @@ const testRepo = "testing/testing"
 func TestGetWithUnknownRepo(t *testing.T) {
 	db := createBadgerDatabase(t)
 
-	tags, err := db.Tags(testRepo)
+	tags, err := db.Tags(context.Background(), repoIdentity(testRepo))
 	fatalIfError(t, err)
 
 	if !reflect.DeepEqual([]string{}, tags) {
@@ -43,7 +46,7 @@ func TestSetTags(t *testing.T) {
 
 	fatalIfError(t, setTags(t, db, testRepo, tags, "1943865137"))
 
-	loaded, err := db.Tags(testRepo)
+	loaded, err := db.Tags(context.Background(), repoIdentity(testRepo))
 	fatalIfError(t, err)
 	if !reflect.DeepEqual(tags, loaded) {
 		t.Fatalf("SetTags failed, got %#v want %#v", loaded, tags)
@@ -58,7 +61,7 @@ func TestSetTagsOverwrites(t *testing.T) {
 
 	fatalIfError(t, setTags(t, db, testRepo, tags2, "3168012550"))
 
-	loaded, err := db.Tags(testRepo)
+	loaded, err := db.Tags(context.Background(), repoIdentity(testRepo))
 	fatalIfError(t, err)
 	if !reflect.DeepEqual(tags2, loaded) {
 		t.Fatalf("failed to overwrite with SetTags: got %#v, want %#v", loaded, tags2)
@@ -73,7 +76,7 @@ func TestGetOnlyFetchesForRepo(t *testing.T) {
 	tags2 := []string{"v0.0.3", "v0.0.4"}
 	fatalIfError(t, setTags(t, db, testRepo2, tags2, "728958008"))
 
-	loaded, err := db.Tags(testRepo)
+	loaded, err := db.Tags(context.Background(), repoIdentity(testRepo))
 	fatalIfError(t, err)
 	if !reflect.DeepEqual(tags1, loaded) {
 		t.Fatalf("Tags() failed got %#v, want %#v", loaded, tags2)
@@ -99,7 +102,7 @@ func createBadgerDatabase(t *testing.T) *BadgerDatabase {
 
 func setTags(t *testing.T, db *BadgerDatabase, repo string, tags []string, expectedChecksum string) error {
 	t.Helper()
-	checksum, err := db.SetTags(repo, tags)
+	checksum, err := db.SetTags(context.Background(), repoIdentity(repo), tags)
 	if err != nil {
 		return err
 	}
@@ -107,6 +110,10 @@ func setTags(t *testing.T, db *BadgerDatabase, repo string, tags []string, expec
 		return fmt.Errorf("SetTags returned unexpected checksum: got %s, want %s", checksum, expectedChecksum)
 	}
 	return nil
+}
+
+func repoIdentity(repo string) tagstorage.RepoIdentity {
+	return tagstorage.RepoIdentity{CanonicalName: repo}
 }
 
 func fatalIfError(t *testing.T, err error) {

@@ -30,12 +30,20 @@ const (
 	// When enabled, it will cache both object types, resulting in increased
 	// memory usage and cluster-wide RBAC permissions (list and watch).
 	CacheSecretsAndConfigMaps = "CacheSecretsAndConfigMaps"
+
+	// FluxStorage controls whether tags are stored with fluxcd/pkg/artifact/storage
+	// instead of BadgerDB.
+	FluxStorage = "FluxStorage"
 )
 
 var features = map[string]bool{
 	// CacheSecretsAndConfigMaps
 	// opt-in from v0.24
 	CacheSecretsAndConfigMaps: false,
+
+	// FluxStorage
+	// opt-in from v1.2
+	FluxStorage: false,
 }
 
 func init() {

@@ -16,11 +16,14 @@ limitations under the License.
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"hash/adler32"
 
 	"github.com/dgraph-io/badger/v4"
+
+	"github.com/fluxcd/image-reflector-controller/internal/storage"
 )
 
 const tagsPrefix = "tags"
@@ -41,11 +44,17 @@ func NewBadgerDatabase(db *badger.DB) *BadgerDatabase {
 // Tags implements the DatabaseReader interface, fetching the tags for the repo.
 //
 // If the repo does not exist, an empty set of tags is returned.
-func (a *BadgerDatabase) Tags(repo string) ([]string, error) {
+func (a *BadgerDatabase) Tags(ctx context.Context, repo storage.RepoIdentity) ([]string, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	var tags []string
 	err := a.db.View(func(txn *badger.Txn) error {
 		var err error
-		tags, err = getOrEmpty(txn, repo)
+		tags, err = getOrEmpty(txn, repo.CanonicalName)
 		return err
 	})
 	return tags, err
@@ -55,19 +64,37 @@ func (a *BadgerDatabase) Tags(repo string) ([]string, error) {
 // the repo.
 //
 // It overwrites existing tag sets for the provided repo.
-func (a *BadgerDatabase) SetTags(repo string, tags []string) (string, error) {
+func (a *BadgerDatabase) SetTags(ctx context.Context, repo storage.RepoIdentity, tags []string) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
 	b, err := marshal(tags)
 	if err != nil {
 		return "", err
 	}
 	err = a.db.Update(func(txn *badger.Txn) error {
-		e := badger.NewEntry(keyForRepo(tagsPrefix, repo), b)
+		e := badger.NewEntry(keyForRepo(tagsPrefix, repo.CanonicalName), b)
 		return txn.SetEntry(e)
 	})
 	if err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%v", adler32.Checksum(b)), nil
+}
+
+// Delete implements the DatabaseWriter interface. Badger keys tags by canonical
+// image name, which may be shared by multiple ImageRepository objects, so delete
+// is intentionally a no-op to preserve existing behavior.
+func (a *BadgerDatabase) Delete(ctx context.Context, repo storage.RepoIdentity) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	return nil
 }
 
 func keyForRepo(prefix, repo string) []byte {

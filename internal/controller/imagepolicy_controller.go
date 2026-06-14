@@ -56,6 +56,7 @@ import (
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	"github.com/fluxcd/image-reflector-controller/internal/policy"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
+	"github.com/fluxcd/image-reflector-controller/internal/storage"
 )
 
 // errAccessDenied is returned when an ImageRepository reference in ImagePolicy
@@ -108,7 +109,7 @@ type ImagePolicyReconciler struct {
 	helper.Metrics
 
 	ControllerName            string
-	Database                  DatabaseReader
+	Database                  storage.DatabaseReader
 	ACLOptions                acl.Options
 	AuthOptionsGetter         *registry.AuthOptionsGetter
 	TokenCache                *cache.TokenCache
@@ -355,7 +356,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	// Construct a policer from the spec.policy.
 	// Read the tags from database and use the policy to obtain a result for the
 	// latest tag.
-	latest, err := r.applyPolicy(obj, repo)
+	latest, err := r.applyPolicy(ctx, obj, repo)
 	if err != nil {
 		// Stall if it's an invalid policy.
 		if _, ok := err.(errInvalidPolicy); ok {
@@ -509,14 +510,14 @@ func (r *ImagePolicyReconciler) getImageRepository(ctx context.Context, obj *ima
 
 // applyPolicy reads the tags of the given repository from the internal database
 // and applies the tag filters and constraints to return the latest image.
-func (r *ImagePolicyReconciler) applyPolicy(obj *imagev1.ImagePolicy, repo *imagev1.ImageRepository) (string, error) {
+func (r *ImagePolicyReconciler) applyPolicy(ctx context.Context, obj *imagev1.ImagePolicy, repo *imagev1.ImageRepository) (string, error) {
 	policer, err := policy.PolicerFromSpec(obj.Spec.Policy)
 	if err != nil {
 		return "", errInvalidPolicy{err: fmt.Errorf("invalid policy: %w", err)}
 	}
 
 	// Read tags from database with a maximum of 3 retries.
-	tags, err := r.listTagsWithBackoff(repo.Status.CanonicalImageName)
+	tags, err := r.listTagsWithBackoff(ctx, storage.RepoIdentity{Namespace: repo.Namespace, Name: repo.Name, CanonicalName: repo.Status.CanonicalImageName})
 	if err != nil {
 		return "", err
 	}
@@ -569,7 +570,7 @@ func (r *ImagePolicyReconciler) imagePoliciesForRepository(ctx context.Context, 
 
 // listTagsWithBackoff lists the tags of the given image from the
 // internal database with retries if there are no tags in the database.
-func (r *ImagePolicyReconciler) listTagsWithBackoff(canonicalImageName string) ([]string, error) {
+func (r *ImagePolicyReconciler) listTagsWithBackoff(ctx context.Context, repo storage.RepoIdentity) ([]string, error) {
 	var backoff = wait.Backoff{
 		Steps:    4,
 		Duration: 1 * time.Second,
@@ -583,7 +584,7 @@ func (r *ImagePolicyReconciler) listTagsWithBackoff(canonicalImageName string) (
 		return errors.Is(err, errNoTagsInDatabase)
 	}, func() error {
 		var err error
-		tags, err = r.Database.Tags(canonicalImageName)
+		tags, err = r.Database.Tags(ctx, repo)
 		if err != nil {
 			return fmt.Errorf("failed to read tags from database: %w", err)
 		}
