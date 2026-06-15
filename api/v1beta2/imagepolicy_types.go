@@ -198,14 +198,8 @@ func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=imgpol;imagepol
-// +kubebuilder:deprecatedversion:warning="v1beta2 ImagePolicy is deprecated, upgrade to v1"
-// +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestRef.name`
-// +kubebuilder:printcolumn:name="Tag",type=string,JSONPath=`.status.latestRef.tag`
-// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].message",description=""
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description=""
+// +kubebuilder:skipversion
 
 // ImagePolicy is the Schema for the imagepolicies API
 type ImagePolicy struct {
