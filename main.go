@@ -28,7 +28,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +35,7 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	artifactstorage "github.com/fluxcd/pkg/artifact/storage"
 	"github.com/fluxcd/pkg/auth"
 	pkgcache "github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/acl"
@@ -56,6 +56,7 @@ import (
 	"github.com/fluxcd/image-reflector-controller/internal/database"
 	"github.com/fluxcd/image-reflector-controller/internal/features"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
+	tagstorage "github.com/fluxcd/image-reflector-controller/internal/storage"
 )
 
 const (
@@ -81,30 +82,32 @@ func main() {
 	)
 
 	var (
-		metricsAddr             string
-		eventsAddr              string
-		healthAddr              string
-		clientOptions           client.Options
-		logOptions              logger.Options
-		leaderElectionOptions   leaderelection.Options
-		watchOptions            helper.WatchOptions
-		storagePath             string
-		storageValueLogFileSize int64
-		gcInterval              uint16 // max value is 65535 minutes (~ 45 days) which is well under the maximum time.Duration
-		concurrent              int
-		aclOptions              acl.Options
-		rateLimiterOptions      helper.RateLimiterOptions
-		featureGates            feathelper.FeatureGates
-		tokenCacheOptions       pkgcache.TokenFlags
-		defaultServiceAccount   string
-		requeueDependency       time.Duration
+		metricsAddr                    string
+		eventsAddr                     string
+		healthAddr                     string
+		clientOptions                  client.Options
+		logOptions                     logger.Options
+		leaderElectionOptions          leaderelection.Options
+		watchOptions                   helper.WatchOptions
+		storagePath                    string
+		storageValueLogFileSize        int64
+		storageCompressionThresholdKiB int
+		gcInterval                     uint16 // max value is 65535 minutes (~ 45 days) which is well under the maximum time.Duration
+		concurrent                     int
+		aclOptions                     acl.Options
+		rateLimiterOptions             helper.RateLimiterOptions
+		featureGates                   feathelper.FeatureGates
+		tokenCacheOptions              pkgcache.TokenFlags
+		defaultServiceAccount          string
+		requeueDependency              time.Duration
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&eventsAddr, "events-addr", "", "The address of the events receiver.")
 	flag.StringVar(&healthAddr, "health-addr", ":9440", "The address the health endpoint binds to.")
 	flag.StringVar(&storagePath, "storage-path", "/data", "Where to store the persistent database of image metadata")
-	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
+	flag.Int64Var(&storageValueLogFileSize, "storage-value-log-file-size", 1<<28, "Set the Badger database's memory mapped value log file size in bytes. Effective memory usage is about two times this size.")
+	flag.IntVar(&storageCompressionThresholdKiB, "storage-compression-threshold", 64, "Minimum uncompressed tag data size in KiB before filesystem storage compresses it.")
 	flag.Uint16Var(&gcInterval, "gc-interval", 10, "The number of minutes to wait between garbage collections. 0 disables the garbage collector.")
 	flag.IntVar(&concurrent, "concurrent", 4, "The number of concurrent resource reconciles.")
 	flag.DurationVar(&requeueDependency, "requeue-dependency", 30*time.Second, "The interval at which failing dependencies are reevaluated.")
@@ -146,21 +149,37 @@ func main() {
 		os.Exit(1)
 	}
 
-	badgerOpts := badger.DefaultOptions(storagePath)
-	badgerOpts.ValueLogFileSize = storageValueLogFileSize
-	badgerDB, err := badger.Open(badgerOpts)
+	useFilesystemStorage, err := features.Enabled(features.FluxStorage)
 	if err != nil {
-		setupLog.Error(err, "unable to open the Badger database")
+		setupLog.Error(err, "unable to check feature gate "+features.FluxStorage)
 		os.Exit(1)
 	}
-	defer badgerDB.Close()
+	if useFilesystemStorage && storageCompressionThresholdKiB <= 0 {
+		setupLog.Error(fmt.Errorf("value must be greater than zero"), "invalid --storage-compression-threshold")
+		os.Exit(1)
+	}
 
-	db := database.NewBadgerDatabase(badgerDB)
-	var badgerGC *database.BadgerGarbageCollector
-	if gcInterval > 0 {
-		badgerGC = database.NewBadgerGarbageCollector("badger-gc", badgerDB, time.Duration(gcInterval)*time.Minute, discardRatio)
+	if err := tagstorage.ReconcileFormat(storagePath, useFilesystemStorage); err != nil {
+		setupLog.Error(err, "unable to reconcile storage format")
+		os.Exit(1)
+	}
+
+	var db tagstorage.Database
+	var artifactStorage *artifactstorage.Storage
+	var badgerDB *badger.DB
+	if useFilesystemStorage {
+		artifactStorage = &artifactstorage.Storage{BasePath: storagePath}
+		db = tagstorage.NewFilesystemDatabase(artifactStorage, storageCompressionThresholdKiB*1024)
 	} else {
-		setupLog.V(1).Info("Badger garbage collector is disabled")
+		badgerOpts := badger.DefaultOptions(storagePath)
+		badgerOpts.ValueLogFileSize = storageValueLogFileSize
+		badgerDB, err = badger.Open(badgerOpts)
+		if err != nil {
+			setupLog.Error(err, "unable to open the Badger database")
+			os.Exit(1)
+		}
+		defer badgerDB.Close()
+		db = database.NewBadgerDatabase(badgerDB)
 	}
 
 	watchNamespace := ""
@@ -217,14 +236,14 @@ func main() {
 			ExtraHandlers: pprof.GetHandlers(),
 		},
 		Controller: config.Controller{
-			RecoverPanic:            pointer.Bool(true),
+			RecoverPanic:            new(true),
 			MaxConcurrentReconciles: concurrent,
 		},
 	}
 
 	if watchNamespace != "" {
 		mgrConfig.Cache.DefaultNamespaces = map[string]ctrlcache.Config{
-			watchNamespace: ctrlcache.Config{},
+			watchNamespace: {},
 		}
 	}
 
@@ -234,12 +253,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	if badgerGC != nil {
-		err := mgr.Add(badgerGC)
-		if err != nil {
-			setupLog.Error(err, "unable to add GC to manager")
-			os.Exit(1)
+	if gcInterval > 0 {
+		gcIntervalDuration := time.Duration(gcInterval) * time.Minute
+		if useFilesystemStorage {
+			if err := mgr.Add(tagstorage.NewFilesystemGarbageCollector("filesystem-storage-gc", artifactStorage, mgr.GetClient(), gcIntervalDuration)); err != nil {
+				setupLog.Error(err, "unable to add filesystem storage GC to manager")
+				os.Exit(1)
+			}
+		} else {
+			if err := mgr.Add(database.NewBadgerGarbageCollector("badger-gc", badgerDB, gcIntervalDuration, discardRatio)); err != nil {
+				setupLog.Error(err, "unable to add Badger GC to manager")
+				os.Exit(1)
+			}
 		}
+	} else if useFilesystemStorage {
+		setupLog.V(1).Info("filesystem storage garbage collector is disabled")
+	} else {
+		setupLog.V(1).Info("Badger garbage collector is disabled")
 	}
 
 	probes.SetupChecks(mgr, setupLog)

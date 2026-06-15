@@ -92,6 +92,27 @@ Events:
   Normal  Succeeded  17s   image-reflector-controller  successful scan, found 211 tags
 ```
 
+## Controller storage
+
+The controller stores scanned tags in a rebuildable on-disk cache at
+`--storage-path` (`/data` by default). BadgerDB is the default backend, and
+`--storage-value-log-file-size` applies only to that backend.
+
+When the `FluxStorage` feature gate is enabled, the controller uses a filesystem
+backend based on `github.com/fluxcd/pkg/artifact/storage`. Tags are stored per
+`ImageRepository` object, keyed by `<namespace>/<name>` instead of canonical
+image name, so repositories with different credentials do not share cached tag
+sets. The file layout is:
+
+```text
+imagerepository/<namespace>/<name>/tags.txt
+imagerepository/<namespace>/<name>/tags.txt.gz
+```
+
+Each file contains one OCI tag per line. Files are compressed when the
+uncompressed content is at least `--storage-compression-threshold` KiB
+(default `64`). Switching the `FluxStorage` gate on or off wipes the tag cache.
+
 ## Writing an ImageRepository spec
 
 As with all other Kubernetes config, an ImageRepository needs `apiVersion`,

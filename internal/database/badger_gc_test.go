@@ -22,8 +22,11 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
+
+	tagstorage "github.com/fluxcd/image-reflector-controller/internal/storage"
 )
 
 func TestBadgerGarbageCollectorDoesStop(t *testing.T) {
@@ -42,9 +45,9 @@ func TestBadgerGarbageCollectorDoesStop(t *testing.T) {
 	time.Sleep(time.Second)
 
 	tags := []string{"latest", "v0.0.1", "v0.0.2"}
-	_, err := db.SetTags(testRepo, tags)
+	_, err := db.SetTags(context.Background(), tagstorage.RepoIdentity{CanonicalName: testRepo}, tags)
 	fatalIfError(t, err)
-	_, err = db.Tags(testRepo)
+	_, err = db.Tags(context.Background(), tagstorage.RepoIdentity{CanonicalName: testRepo})
 	fatalIfError(t, err)
 	t.Log("wrote tags successfully")
 

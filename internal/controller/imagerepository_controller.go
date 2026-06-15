@@ -54,6 +54,7 @@ import (
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
+	"github.com/fluxcd/image-reflector-controller/internal/storage"
 )
 
 // latestTagsCount is the number of tags to use as latest tags.
@@ -107,12 +108,9 @@ type ImageRepositoryReconciler struct {
 	kuberecorder.EventRecorder
 	helper.Metrics
 
-	ControllerName string
-	TokenCache     *cache.TokenCache
-	Database       interface {
-		DatabaseWriter
-		DatabaseReader
-	}
+	ControllerName    string
+	TokenCache        *cache.TokenCache
+	Database          storage.Database
 	AuthOptionsGetter *registry.AuthOptionsGetter
 
 	patchOptions []patch.Option
@@ -173,7 +171,7 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Examine if the object is under deletion.
 	if !obj.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(obj)
+		return r.reconcileDelete(ctx, obj)
 	}
 
 	// Add finalizer first if it doesn't exist to avoid the race condition
@@ -289,7 +287,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 
 	// Check if it can be scanned now.
-	ok, when, reasonMsg, err := r.shouldScan(*obj, startTime)
+	ok, when, reasonMsg, err := r.shouldScan(ctx, *obj, startTime)
 	if err != nil {
 		e := fmt.Errorf("failed to determine if it's scan time: %w", err)
 		conditions.MarkFalse(obj, meta.ReadyCondition, metav1.StatusFailure, "%s", e)
@@ -361,7 +359,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 //     interval
 //
 // Else it returns with next scan time.
-func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now time.Time) (bool, time.Duration, string, error) {
+func (r *ImageRepositoryReconciler) shouldScan(ctx context.Context, obj imagev1.ImageRepository, now time.Time) (bool, time.Duration, string, error) {
 	scanInterval := obj.Spec.Interval.Duration
 
 	// Never scanned; do it now.
@@ -402,7 +400,7 @@ func (r *ImageRepositoryReconciler) shouldScan(obj imagev1.ImageRepository, now 
 	// FIXME If the repo exists, has been
 	// scanned, and doesn't have any tags, this will mean a scan every
 	// time the resource comes up for reconciliation.
-	tags, err := r.Database.Tags(obj.Status.CanonicalImageName)
+	tags, err := r.Database.Tags(ctx, storage.RepoIdentity{Namespace: obj.Namespace, Name: obj.Name, CanonicalName: obj.Status.CanonicalImageName})
 	if err != nil {
 		return false, scanInterval, "", err
 	}
@@ -442,7 +440,7 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 	}
 
 	canonicalName := ref.Context().String()
-	checksum, err := r.Database.SetTags(canonicalName, filteredTags)
+	checksum, err := r.Database.SetTags(ctx, storage.RepoIdentity{Namespace: obj.Namespace, Name: obj.Name, CanonicalName: canonicalName}, filteredTags)
 	if err != nil {
 		return fmt.Errorf("failed to set tags for %q: %w", canonicalName, err)
 	}
@@ -458,7 +456,13 @@ func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.Image
 }
 
 // reconcileDelete handles the deletion of the object.
-func (r *ImageRepositoryReconciler) reconcileDelete(obj *imagev1.ImageRepository) (ctrl.Result, error) {
+func (r *ImageRepositoryReconciler) reconcileDelete(ctx context.Context, obj *imagev1.ImageRepository) (ctrl.Result, error) {
+	if r.Database != nil {
+		if err := r.Database.Delete(ctx, storage.RepoIdentity{Namespace: obj.Namespace, Name: obj.Name, CanonicalName: obj.Status.CanonicalImageName}); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	// Remove our finalizer from the list.
 	controllerutil.RemoveFinalizer(obj, imagev1.ImageFinalizer)
 

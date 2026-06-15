@@ -1276,7 +1276,7 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 
 			repo := &imagev1.ImageRepository{}
 
-			result, err := r.applyPolicy(obj, repo)
+			result, err := r.applyPolicy(ctx, obj, repo)
 			g.Expect(err != nil).To(Equal(tt.wantErr))
 			if err == nil {
 				g.Expect(result).To(Equal(tt.wantResult))

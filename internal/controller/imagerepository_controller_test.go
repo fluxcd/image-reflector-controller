@@ -47,6 +47,7 @@ import (
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 	"github.com/fluxcd/image-reflector-controller/internal/registry"
+	"github.com/fluxcd/image-reflector-controller/internal/storage"
 	"github.com/fluxcd/image-reflector-controller/internal/test"
 )
 
@@ -58,7 +59,7 @@ type mockDatabase struct {
 }
 
 // SetTags implements the DatabaseWriter interface of the Database.
-func (db *mockDatabase) SetTags(repo string, tags []string) (string, error) {
+func (db *mockDatabase) SetTags(ctx context.Context, repo storage.RepoIdentity, tags []string) (string, error) {
 	if db.WriteError != nil {
 		return "", db.WriteError
 	}
@@ -67,11 +68,16 @@ func (db *mockDatabase) SetTags(repo string, tags []string) (string, error) {
 }
 
 // Tags implements the DatabaseReader interface of the Database.
-func (db mockDatabase) Tags(repo string) ([]string, error) {
+func (db mockDatabase) Tags(ctx context.Context, repo storage.RepoIdentity) ([]string, error) {
 	if db.ReadError != nil {
 		return nil, db.ReadError
 	}
 	return db.TagData, nil
+}
+
+// Delete implements the DatabaseWriter interface of the Database.
+func (db *mockDatabase) Delete(ctx context.Context, repo storage.RepoIdentity) error {
+	return nil
 }
 
 func TestImageRepositoryReconciler_deleteBeforeFinalizer(t *testing.T) {
@@ -263,7 +269,7 @@ func TestImageRepositoryReconciler_shouldScan(t *testing.T) {
 				tt.beforeFunc(obj, tt.reconcileTime)
 			}
 
-			scan, next, scanReason, err := r.shouldScan(*obj, tt.reconcileTime)
+			scan, next, scanReason, err := r.shouldScan(ctx, *obj, tt.reconcileTime)
 			g.Expect(err != nil).To(Equal(tt.wantErr))
 			g.Expect(scan).To(Equal(tt.wantScan))
 			g.Expect(next).To(Equal(tt.wantNextScan))
@@ -398,7 +404,9 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 				g.Expect(err).NotTo(HaveOccurred())
 			}
 			if err == nil {
-				g.Expect(r.Database.Tags(imgRepo)).To(Equal(tt.wantTags))
+				tags, err := r.Database.Tags(ctx, storage.RepoIdentity{CanonicalName: imgRepo})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(tags).To(Equal(tt.wantTags))
 				if tt.wantChecksum != "" {
 					g.Expect(repo.Status.LastScanResult.Revision).To(Equal(tt.wantChecksum))
 				}
