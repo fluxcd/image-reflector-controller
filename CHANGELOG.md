@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.2.0
+
+**Release date:** 2026-06-17
+
+This minor release removes the deprecated `v1beta2` APIs, introduces an opt-in
+storage backend based on the standard Flux artifact storage, and comes with
+various dependency updates.
+
+⚠️ The `image.toolkit.fluxcd.io/v1beta2` APIs were removed. Before upgrading the
+CRDs, Flux users must follow the
+[upgrade procedure](https://github.com/fluxcd/flux2/discussions/5572) to migrate
+the cluster storage off `v1beta2`. After the upgrade, all manifests in Git which
+contain `ImagePolicy` and `ImageRepository` definitions must be updated to:
+
+```yaml
+apiVersion: image.toolkit.fluxcd.io/v1
+```
+
+### Storage
+
+The controller can now use the standard Flux artifact storage
+(`fluxcd/pkg/artifact/storage`) instead of the embedded BadgerDB for persisting
+image tags. This is gated behind the new `FluxStorage` feature gate, which is
+disabled by default. Note that enabling or disabling the gate wipes the existing
+storage.
+
+### General updates
+
+The Kubernetes dependencies have been updated to v1.36 and the controller is now
+built with Go 1.26 and controller-runtime v0.24.
+
+Improvements:
+- Remove deprecated APIs in group `image.toolkit.fluxcd.io/v1beta2`
+  [#896](https://github.com/fluxcd/image-reflector-controller/pull/896)
+- Introduce standard storage alternative
+  [#895](https://github.com/fluxcd/image-reflector-controller/pull/895)
+- Update to Kubernetes 1.36 and Go 1.26
+  [#886](https://github.com/fluxcd/image-reflector-controller/pull/886)
+- Various dependency updates
+  [#887](https://github.com/fluxcd/image-reflector-controller/pull/887)
+  [#888](https://github.com/fluxcd/image-reflector-controller/pull/888)
+  [#891](https://github.com/fluxcd/image-reflector-controller/pull/891)
+  [#892](https://github.com/fluxcd/image-reflector-controller/pull/892)
+  [#893](https://github.com/fluxcd/image-reflector-controller/pull/893)
+  [#894](https://github.com/fluxcd/image-reflector-controller/pull/894)
+
 ## 1.1.2
 
 **Release date:** 2026-05-20
