@@ -459,12 +459,19 @@ func (r *ImagePolicyReconciler) fetchDigest(ctx context.Context,
 		Namespace: obj.GetNamespace(),
 		Operation: cache.OperationReconcile,
 	}
+
+	// The timeout must span both building the auth options and the registry
+	// request, as the authenticator fetches registry credentials lazily during
+	// the request.
+	ctx, cancel := context.WithTimeout(ctx, repo.GetTimeout())
+	defer cancel()
+
 	opts, err := r.AuthOptionsGetter.GetOptions(ctx, repo, involvedObject)
 	if err != nil {
 		return "", fmt.Errorf("failed to configure authentication options: %w", err)
 	}
 
-	desc, err := remote.Head(tagRef, opts...)
+	desc, err := remote.Head(tagRef, append(opts, remote.WithContext(ctx))...)
 	if err != nil {
 		return "", fmt.Errorf("failed fetching descriptor for %q: %w", tagRef.String(), err)
 	}
