@@ -829,6 +829,44 @@ func TestImagePolicyReconciler_getImageRepository(t *testing.T) {
 	}
 }
 
+// TestImagePolicyReconciler_fetchDigest_respectsContext ensures fetchDigest
+// propagates the context to the registry request. The timeout that wraps the
+// digest fetch (and the lazily-fetched registry credentials) is derived from
+// this context, so if it is not passed to the request the fetch would run
+// unbounded on a background context. With a cancelled context, the fetch must
+// fail rather than silently succeed.
+func TestImagePolicyReconciler_fetchDigest_respectsContext(t *testing.T) {
+	g := NewWithT(t)
+
+	registryServer := test.NewRegistryServer()
+	defer registryServer.Close()
+
+	imgRepo, _, err := test.LoadImages(registryServer, "foo/bar", []string{"v1.0.0"})
+	g.Expect(err).ToNot(HaveOccurred())
+
+	r := &ImagePolicyReconciler{
+		EventRecorder:     record.NewFakeRecorder(32),
+		AuthOptionsGetter: &registry.AuthOptionsGetter{Client: fake.NewClientBuilder().Build()},
+	}
+
+	repo := &imagev1.ImageRepository{}
+	repo.Spec.Image = imgRepo
+
+	obj := &imagev1.ImagePolicy{}
+	obj.Name = "test"
+	obj.Namespace = "default"
+
+	// Cancel the context before fetching. fetchDigest must pass the context to
+	// the registry request, so the call fails instead of running unbounded on a
+	// background context.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = r.fetchDigest(ctx, repo, obj, "v1.0.0")
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(ContainSubstring("context canceled"))
+}
+
 func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 	registryServer := test.NewRegistryServer()
 	defer registryServer.Close()
