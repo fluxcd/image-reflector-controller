@@ -278,6 +278,12 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		Namespace: obj.GetNamespace(),
 		Operation: cache.OperationReconcile,
 	}
+
+	// The timeout must span both building the auth options and the scan, as the
+	// authenticator fetches registry credentials lazily during the scan.
+	ctx, cancel := context.WithTimeout(ctx, obj.GetTimeout())
+	defer cancel()
+
 	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
@@ -418,10 +424,6 @@ func (r *ImageRepositoryReconciler) shouldScan(ctx context.Context, obj imagev1.
 // scan performs repository scanning and writes the scanned result in the
 // internal database and populates the status of the ImageRepository.
 func (r *ImageRepositoryReconciler) scan(ctx context.Context, obj *imagev1.ImageRepository, ref name.Reference, options []remote.Option) error {
-	timeout := obj.GetTimeout()
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
 	options = append(options, remote.WithContext(ctx))
 
 	tags, err := remote.List(ref.Context(), options...)

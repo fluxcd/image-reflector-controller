@@ -53,10 +53,6 @@ type AuthOptionsGetter struct {
 
 func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageRepository,
 	involvedObject *cache.InvolvedObject) ([]remote.Option, error) {
-	timeout := repo.GetTimeout()
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
 	var transportOptions []func(*http.Transport)
 
 	// Load proxy configuration.

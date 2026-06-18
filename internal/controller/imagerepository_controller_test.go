@@ -419,6 +419,62 @@ func TestImageRepositoryReconciler_scan(t *testing.T) {
 	}
 }
 
+// deadlineCapturingRoundTripper records whether the request context carried a
+// deadline, then delegates to the wrapped RoundTripper.
+type deadlineCapturingRoundTripper struct {
+	rt       http.RoundTripper
+	sawDeadl *bool
+}
+
+func (d *deadlineCapturingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	if _, ok := req.Context().Deadline(); ok {
+		*d.sawDeadl = true
+	}
+	return d.rt.RoundTrip(req)
+}
+
+// TestImageRepositoryReconciler_scan_noOwnTimeout ensures scan does not apply a
+// timeout of its own. The timeout must be owned by the caller (reconcile) and
+// span the whole operation, so that the lazily-fetched registry credentials are
+// not cut short by a second, separate timeout. Given a context without a
+// deadline, scan must not introduce one.
+func TestImageRepositoryReconciler_scan_noOwnTimeout(t *testing.T) {
+	g := NewWithT(t)
+
+	registryServer := test.NewRegistryServer()
+	defer registryServer.Close()
+
+	imgRepo, _, err := test.LoadImages(registryServer, "test-scan-timeout-"+randStringRunes(5), []string{"a"})
+	g.Expect(err).ToNot(HaveOccurred())
+
+	r := ImageRepositoryReconciler{
+		EventRecorder: record.NewFakeRecorder(32),
+		Database:      &mockDatabase{},
+		patchOptions:  getPatchOptions(imageRepositoryOwnedConditions, "irc"),
+	}
+
+	repo := &imagev1.ImageRepository{}
+	repo.Spec = imagev1.ImageRepositorySpec{
+		Image:   imgRepo,
+		Timeout: &metav1.Duration{Duration: time.Hour},
+	}
+
+	ref, err := registry.ParseImageReference(imgRepo, false)
+	g.Expect(err).ToNot(HaveOccurred())
+
+	var sawDeadline bool
+	opts := []remote.Option{
+		remote.WithTransport(&deadlineCapturingRoundTripper{rt: http.DefaultTransport, sawDeadl: &sawDeadline}),
+	}
+
+	// Pass a context without a deadline. If scan adds its own timeout, the
+	// registry request context will carry a deadline.
+	err = r.scan(context.Background(), repo, ref, opts)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(sawDeadline).To(BeFalse(),
+		"scan must not apply its own timeout; the timeout is owned by reconcile and spans the whole scan")
+}
+
 func TestSortTagsAndGetLatestTags(t *testing.T) {
 	tests := []struct {
 		name           string
