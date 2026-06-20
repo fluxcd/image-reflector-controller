@@ -197,7 +197,7 @@ func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
 // +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=imgpol;imagepol
+// +kubebuilder:resource:shortName=imgpol;imagepol,categories=all;fluxcd;fluxcd-images
 // +kubebuilder:printcolumn:name="Image",type=string,JSONPath=`.status.latestRef.name`
 // +kubebuilder:printcolumn:name="Tag",type=string,JSONPath=`.status.latestRef.tag`
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""
