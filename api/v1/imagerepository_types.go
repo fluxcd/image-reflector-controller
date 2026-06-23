@@ -210,7 +210,7 @@ func (in ImageRepository) GetRequeueAfter() time.Duration {
 // +kubebuilder:storageversion
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=imgrepo;imagerepo
+// +kubebuilder:resource:shortName=imgrepo;imagerepo,categories=all;fluxcd;fluxcd-images
 // +kubebuilder:printcolumn:name="Image",type="string",JSONPath=".spec.image"
 // +kubebuilder:printcolumn:name="Tags",type=string,JSONPath=`.status.lastScanResult.tagCount`
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description=""

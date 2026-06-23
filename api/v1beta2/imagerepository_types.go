@@ -212,7 +212,6 @@ func (in ImageRepository) GetRequeueAfter() time.Duration {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:shortName=imgrepo;imagerepo
 // +kubebuilder:skipversion
 
 // ImageRepository is the Schema for the imagerepositories API
