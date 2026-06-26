@@ -198,7 +198,6 @@ func (in *ImagePolicy) SetConditions(conditions []metav1.Condition) {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:shortName=imgpol;imagepol
 // +kubebuilder:skipversion
 
 // ImagePolicy is the Schema for the imagepolicies API
