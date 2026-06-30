@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.1
+
+**Release date:** 2026-06-30
+
+This patch release fixes a bug where the `.spec.timeout` was applied twice when
+reconciling ImageRepositories. As a result the effective timeout could be up to
+nearly double the configured value, and the context for setting up registry
+authentication could be canceled before the credentials were fetched, causing
+authentication to fail. It also updates Kubernetes to 1.36.2 and the fluxcd/pkg
+dependencies, adds kubectl categories to the image-reflector CRDs and documents
+the controller's command-line options.
+
+Fixes:
+- Fix timeout created more than once
+  [#901](https://github.com/fluxcd/image-reflector-controller/pull/901)
+
+Improvements:
+- Add categories to image-reflector CRDs
+  [#904](https://github.com/fluxcd/image-reflector-controller/pull/904)
+- Document controller options
+  [#908](https://github.com/fluxcd/image-reflector-controller/pull/908)
+- Update fluxcd/pkg dependencies
+  [#906](https://github.com/fluxcd/image-reflector-controller/pull/906)
+
 ## 1.2.0
 
 **Release date:** 2026-06-17
