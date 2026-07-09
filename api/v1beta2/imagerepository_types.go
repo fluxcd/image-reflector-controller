@@ -159,7 +159,7 @@ type ImageRepositoryStatus struct {
 
 	// ObservedExclusionList is a list of observed exclusion list. It reflects
 	// the exclusion rules used for the observed scan result in
-	// spec.lastScanResult.
+	// status.lastScanResult.
 	ObservedExclusionList []string `json:"observedExclusionList,omitempty"`
 
 	meta.ReconcileRequestStatus `json:",inline"`
