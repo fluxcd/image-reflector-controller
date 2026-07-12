@@ -1041,7 +1041,7 @@ ScanResult
 <td>
 <p>ObservedExclusionList is a list of observed exclusion list. It reflects
 the exclusion rules used for the observed scan result in
-spec.lastScanResult.</p>
+status.lastScanResult.</p>
 </td>
 </tr>
 <tr>
