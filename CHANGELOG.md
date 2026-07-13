@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.3
+
+**Release date:** 2026-07-13
+
+This patch release fixes the `ImageRepository` CRD description for
+`.status.observedExclusionList`, which referred to `spec.lastScanResult` instead
+of `status.lastScanResult`.
+
+Improvements:
+- Fix ObservedExclusionList doc-comment field reference
+  [#919](https://github.com/fluxcd/image-reflector-controller/pull/919)
+
 ## 1.2.2
 
 **Release date:** 2026-07-07
