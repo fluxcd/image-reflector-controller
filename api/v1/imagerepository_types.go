@@ -237,7 +237,3 @@ type ImageRepositoryList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ImageRepository `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ImageRepository{}, &ImageRepositoryList{})
-}
