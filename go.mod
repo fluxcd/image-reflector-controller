@@ -13,8 +13,8 @@ require (
 	github.com/fluxcd/pkg/apis/acl v0.10.0
 	github.com/fluxcd/pkg/apis/event v0.27.1
 	github.com/fluxcd/pkg/apis/meta v1.30.1
-	github.com/fluxcd/pkg/artifact v0.18.1
-	github.com/fluxcd/pkg/auth v0.54.1
+	github.com/fluxcd/pkg/artifact v0.18.2
+	github.com/fluxcd/pkg/auth v0.54.2
 	github.com/fluxcd/pkg/cache v0.14.0
 	github.com/fluxcd/pkg/runtime v0.110.1
 	github.com/fluxcd/pkg/version v0.16.0
@@ -79,7 +79,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fluxcd/cli-utils v1.2.2 // indirect
 	github.com/fluxcd/pkg/lockedfile v0.8.0 // indirect
-	github.com/fluxcd/pkg/oci v0.68.0 // indirect
+	github.com/fluxcd/pkg/oci v0.68.1 // indirect
 	github.com/fluxcd/pkg/sourceignore v0.18.0 // indirect
 	github.com/fluxcd/pkg/tar v1.2.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
