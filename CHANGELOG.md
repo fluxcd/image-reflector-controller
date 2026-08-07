@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.4
+
+**Release date:** 2026-08-07
+
+This patch release updates the fluxcd/pkg dependencies, which align the ECR host
+detection with upstream. The registry host is now matched in full against the
+pattern used by the AWS ECR Credential Helper, and the detection covers the
+European Sovereign Cloud (`amazonaws.eu`) along with the dual-stack hostnames
+used for IPv6 access, including the public registry at `ecr-public.aws.com`.
+
+Improvements:
+- Update fluxcd/pkg dependencies
+  [#926](https://github.com/fluxcd/image-reflector-controller/pull/926)
+
 ## 1.2.3
 
 **Release date:** 2026-07-13
