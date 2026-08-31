@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.5
+
+**Release date:** 2026-08-31
+
+This patch release updates the fluxcd/pkg dependencies, which bring Kubernetes
+to 1.36.4.
+
+Improvements:
+- Update fluxcd/pkg dependencies
+  [#934](https://github.com/fluxcd/image-reflector-controller/pull/934)
+  [#935](https://github.com/fluxcd/image-reflector-controller/pull/935)
+
 ## 1.2.4
 
 **Release date:** 2026-08-07
