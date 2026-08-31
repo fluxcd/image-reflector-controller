@@ -16,7 +16,7 @@ require (
 	github.com/fluxcd/pkg/artifact v0.18.3
 	github.com/fluxcd/pkg/auth v0.54.3
 	github.com/fluxcd/pkg/cache v0.14.0
-	github.com/fluxcd/pkg/runtime v0.110.2
+	github.com/fluxcd/pkg/runtime v0.110.3
 	github.com/fluxcd/pkg/version v0.16.0
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.21.6
