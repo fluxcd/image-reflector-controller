@@ -25,7 +25,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	fakeclient "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
@@ -33,6 +32,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	conditionscheck "github.com/fluxcd/pkg/runtime/conditions/check"
+	"github.com/fluxcd/pkg/runtime/events"
 	"github.com/fluxcd/pkg/runtime/patch"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
@@ -119,7 +119,7 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 	r := &ImagePolicyReconciler{
 		Client:        builder.Build(),
 		Database:      database.NewBadgerDatabase(testBadgerDB),
-		EventRecorder: record.NewFakeRecorder(32),
+		EventRecorder: events.NewFakeRecorder(32, false),
 		ACLOptions: acl.Options{
 			NoCrossNamespaceRefs: true,
 		},
