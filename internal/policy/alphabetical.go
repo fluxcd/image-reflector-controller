@@ -57,10 +57,11 @@ func (p *Alphabetical) Latest(versions []string) (string, error) {
 	}
 
 	var sorted sort.StringSlice = versions
-	if p.Order == AlphabeticalOrderDesc {
+	if p.Order == AlphabeticalOrderAsc {
+		// Default StringSlice.Sort is ascending
 		sort.Sort(sorted)
 	} else {
 		sort.Sort(sort.Reverse(sorted))
 	}
-	return sorted[0], nil
+	return sorted[len(sorted)-1], nil
 }
