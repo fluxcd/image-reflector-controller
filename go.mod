@@ -7,8 +7,8 @@ replace github.com/fluxcd/image-reflector-controller/api => ./api
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/dgraph-io/badger/v4 v4.9.1
-	github.com/elazarl/goproxy v1.8.4
+	github.com/dgraph-io/badger/v4 v4.9.6
+	github.com/elazarl/goproxy v1.9.2
 	github.com/fluxcd/image-reflector-controller/api v1.2.0
 	github.com/fluxcd/pkg/apis/acl v0.12.0
 	github.com/fluxcd/pkg/apis/event v0.32.0
@@ -22,7 +22,7 @@ require (
 	github.com/google/go-containerregistry v0.22.1
 	github.com/google/go-containerregistry/pkg/authn/kubernetes v0.0.0-20260205022027-93aa2732266a
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/gomega v1.44.0
 	github.com/spf13/pflag v1.0.10
 	go.uber.org/zap v1.28.0
 	k8s.io/api v0.37.1
