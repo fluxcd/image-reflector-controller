@@ -12,6 +12,11 @@ OCI image repositories into a cluster, so they can be consulted for
 e.g., automation.</p>
 Resource Types:
 <ul class="simple"></ul>
+<h3 id="image.toolkit.fluxcd.io/v1.Action">Action
+(<code>string</code> alias)</h3>
+<p>Action describes an observable stage of the reconcile loop for the image
+API group, reported on the events the controller emits for ImageRepository
+and ImagePolicy objects.</p>
 <h3 id="image.toolkit.fluxcd.io/v1.AlphabeticalPolicy">AlphabeticalPolicy
 </h3>
 <p>

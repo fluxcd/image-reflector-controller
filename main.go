@@ -274,8 +274,8 @@ func main() {
 
 	probes.SetupChecks(mgr, setupLog)
 
-	var eventRecorder *events.Recorder
-	if eventRecorder, err = events.NewRecorder(mgr, ctrl.Log, eventsAddr, controllerName); err != nil {
+	eventRecorder, err := events.NewRecorder(ctrl.Log, eventsAddr, controllerName, events.WithManager(mgr))
+	if err != nil {
 		setupLog.Error(err, "unable to create event recorder")
 		os.Exit(1)
 	}
@@ -302,7 +302,7 @@ func main() {
 
 	if err := (&controller.ImageRepositoryReconciler{
 		Client:            mgr.GetClient(),
-		EventRecorder:     eventRecorder,
+		Recorder:          eventRecorder,
 		Metrics:           metricsH,
 		Database:          db,
 		ControllerName:    controllerName,
@@ -316,7 +316,7 @@ func main() {
 	}
 	if err := (&controller.ImagePolicyReconciler{
 		Client:                    mgr.GetClient(),
-		EventRecorder:             eventRecorder,
+		Recorder:                  eventRecorder,
 		Metrics:                   metricsH,
 		Database:                  db,
 		ACLOptions:                aclOptions,
