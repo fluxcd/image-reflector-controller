@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -127,25 +128,19 @@ func main() {
 
 	logger.SetLogger(logger.NewLogger(logOptions))
 
-	if defaultServiceAccount != "" {
-		auth.SetDefaultServiceAccount(defaultServiceAccount)
-	}
-
 	if err := featureGates.WithLogger(setupLog).SupportedFeatures(features.FeatureGates()); err != nil {
 		setupLog.Error(err, "unable to load feature gates")
 		os.Exit(1)
 	}
 
-	switch enabled, err := features.Enabled(auth.FeatureGateObjectLevelWorkloadIdentity); {
-	case err != nil:
+	objectLevelWorkloadIdentity, err := features.Enabled(auth.FeatureGateObjectLevelWorkloadIdentity)
+	if err != nil {
 		setupLog.Error(err, "unable to check feature gate "+auth.FeatureGateObjectLevelWorkloadIdentity)
 		os.Exit(1)
-	case enabled:
-		auth.EnableObjectLevelWorkloadIdentity()
 	}
-
-	if auth.InconsistentObjectLevelConfiguration() {
-		setupLog.Error(auth.ErrInconsistentObjectLevelConfiguration, "invalid configuration")
+	if defaultServiceAccount != "" && !objectLevelWorkloadIdentity {
+		setupLog.Error(errors.New("cannot set the default service account when the "+
+			auth.FeatureGateObjectLevelWorkloadIdentity+" feature gate is not enabled"), "invalid configuration")
 		os.Exit(1)
 	}
 
@@ -296,18 +291,21 @@ func main() {
 	}
 
 	authOptionsGetter := &registry.AuthOptionsGetter{
-		Client:     mgr.GetClient(),
-		TokenCache: tokenCache,
+		Client:                      mgr.GetClient(),
+		TokenCache:                  tokenCache,
+		DefaultServiceAccount:       defaultServiceAccount,
+		ObjectLevelWorkloadIdentity: objectLevelWorkloadIdentity,
 	}
 
 	if err := (&controller.ImageRepositoryReconciler{
-		Client:            mgr.GetClient(),
-		Recorder:          eventRecorder,
-		Metrics:           metricsH,
-		Database:          db,
-		ControllerName:    controllerName,
-		TokenCache:        tokenCache,
-		AuthOptionsGetter: authOptionsGetter,
+		Client:                      mgr.GetClient(),
+		Recorder:                    eventRecorder,
+		Metrics:                     metricsH,
+		Database:                    db,
+		ControllerName:              controllerName,
+		TokenCache:                  tokenCache,
+		AuthOptionsGetter:           authOptionsGetter,
+		ObjectLevelWorkloadIdentity: objectLevelWorkloadIdentity,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
@@ -315,15 +313,16 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ImagePolicyReconciler{
-		Client:                    mgr.GetClient(),
-		Recorder:                  eventRecorder,
-		Metrics:                   metricsH,
-		Database:                  db,
-		ACLOptions:                aclOptions,
-		ControllerName:            controllerName,
-		AuthOptionsGetter:         authOptionsGetter,
-		TokenCache:                tokenCache,
-		DependencyRequeueInterval: requeueDependency,
+		Client:                      mgr.GetClient(),
+		Recorder:                    eventRecorder,
+		Metrics:                     metricsH,
+		Database:                    db,
+		ACLOptions:                  aclOptions,
+		ControllerName:              controllerName,
+		AuthOptionsGetter:           authOptionsGetter,
+		TokenCache:                  tokenCache,
+		DependencyRequeueInterval:   requeueDependency,
+		ObjectLevelWorkloadIdentity: objectLevelWorkloadIdentity,
 	}).SetupWithManager(mgr, controller.ImagePolicyReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

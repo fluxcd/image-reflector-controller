@@ -60,6 +60,10 @@ var (
 	testEnv      *testenv.Environment
 	testBadgerDB *badger.DB
 	ctx          = ctrl.SetupSignalHandler()
+
+	testAuthOptionsGetter         *registry.AuthOptionsGetter
+	testImageRepositoryReconciler *ImageRepositoryReconciler
+	testImagePolicyReconciler     *ImagePolicyReconciler
 )
 
 func TestMain(m *testing.M) {
@@ -87,26 +91,28 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("Failed to create new Badger database: %v", err))
 	}
 
-	optGetter := &registry.AuthOptionsGetter{Client: testEnv}
+	testAuthOptionsGetter = &registry.AuthOptionsGetter{Client: testEnv}
 
-	if err = (&ImageRepositoryReconciler{
+	testImageRepositoryReconciler = &ImageRepositoryReconciler{
 		Client:            testEnv,
 		Database:          database.NewBadgerDatabase(testBadgerDB),
 		Recorder:          events.NewFakeRecorder(256, false),
-		AuthOptionsGetter: optGetter,
-	}).SetupWithManager(testEnv, ImageRepositoryReconcilerOptions{
+		AuthOptionsGetter: testAuthOptionsGetter,
+	}
+	if err = testImageRepositoryReconciler.SetupWithManager(testEnv, ImageRepositoryReconcilerOptions{
 		RateLimiter: controller.GetDefaultRateLimiter(),
 	}); err != nil {
 		panic(fmt.Sprintf("Failed to start ImageRepositoryReconciler: %v", err))
 	}
 
-	if err = (&ImagePolicyReconciler{
+	testImagePolicyReconciler = &ImagePolicyReconciler{
 		Client:                    testEnv,
 		Database:                  database.NewBadgerDatabase(testBadgerDB),
 		Recorder:                  events.NewFakeRecorder(256, false),
-		AuthOptionsGetter:         optGetter,
+		AuthOptionsGetter:         testAuthOptionsGetter,
 		DependencyRequeueInterval: 30 * time.Second,
-	}).SetupWithManager(testEnv, ImagePolicyReconcilerOptions{
+	}
+	if err = testImagePolicyReconciler.SetupWithManager(testEnv, ImagePolicyReconcilerOptions{
 		RateLimiter: controller.GetDefaultRateLimiter(),
 	}); err != nil {
 		panic(fmt.Sprintf("Failed to start ImagePolicyReconciler: %v", err))

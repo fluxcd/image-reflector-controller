@@ -116,6 +116,8 @@ type ImagePolicyReconciler struct {
 	TokenCache                *cache.TokenCache
 	DependencyRequeueInterval time.Duration
 
+	ObjectLevelWorkloadIdentity bool
+
 	patchOptions []patch.Option
 }
 
@@ -357,7 +359,7 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	}
 
 	// Check object-level workload identity feature gate.
-	if repo.Spec.Provider != "generic" && repo.Spec.ServiceAccountName != "" && !auth.IsObjectLevelWorkloadIdentityEnabled() {
+	if repo.Spec.Provider != "generic" && repo.Spec.ServiceAccountName != "" && !r.ObjectLevelWorkloadIdentity {
 		const msgFmt = "to use spec.serviceAccountName in the ImageRepository for provider authentication please enable the %s feature gate in the controller"
 		conditions.MarkStalled(obj, meta.FeatureGateDisabledReason, msgFmt,
 			auth.FeatureGateObjectLevelWorkloadIdentity)
@@ -465,20 +467,13 @@ func (r *ImagePolicyReconciler) fetchDigest(ctx context.Context,
 		return "", fmt.Errorf("failed parsing reference %q: %w", ref, err)
 	}
 
-	involvedObject := &cache.InvolvedObject{
-		Kind:      imagev1.ImagePolicyKind,
-		Name:      obj.GetName(),
-		Namespace: obj.GetNamespace(),
-		Operation: cache.OperationReconcile,
-	}
-
 	// The timeout must span both building the auth options and the registry
 	// request, as the authenticator fetches registry credentials lazily during
 	// the request.
 	ctx, cancel := context.WithTimeout(ctx, repo.GetTimeout())
 	defer cancel()
 
-	opts, err := r.AuthOptionsGetter.GetOptions(ctx, repo, involvedObject)
+	opts, err := r.AuthOptionsGetter.GetOptions(ctx, repo, imagev1.ImagePolicyKind, obj)
 	if err != nil {
 		return "", fmt.Errorf("failed to configure authentication options: %w", err)
 	}

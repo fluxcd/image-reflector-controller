@@ -109,6 +109,8 @@ type ImageRepositoryReconciler struct {
 	Database          storage.Database
 	AuthOptionsGetter *registry.AuthOptionsGetter
 
+	ObjectLevelWorkloadIdentity bool
+
 	patchOptions []patch.Option
 }
 
@@ -227,7 +229,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}()
 
 	// Check object-level workload identity feature gate.
-	if obj.Spec.Provider != "generic" && obj.Spec.ServiceAccountName != "" && !auth.IsObjectLevelWorkloadIdentityEnabled() {
+	if obj.Spec.Provider != "generic" && obj.Spec.ServiceAccountName != "" && !r.ObjectLevelWorkloadIdentity {
 		const msgFmt = "to use spec.serviceAccountName for provider authentication please enable the %s feature gate in the controller"
 		conditions.MarkStalled(obj, meta.FeatureGateDisabledReason, msgFmt,
 			auth.FeatureGateObjectLevelWorkloadIdentity)
@@ -268,19 +270,12 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	}
 	conditions.Delete(obj, meta.StalledCondition)
 
-	involvedObject := &cache.InvolvedObject{
-		Kind:      imagev1.ImageRepositoryKind,
-		Name:      obj.GetName(),
-		Namespace: obj.GetNamespace(),
-		Operation: cache.OperationReconcile,
-	}
-
 	// The timeout must span both building the auth options and the scan, as the
 	// authenticator fetches registry credentials lazily during the scan.
 	ctx, cancel := context.WithTimeout(ctx, obj.GetTimeout())
 	defer cancel()
 
-	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, involvedObject)
+	opts, err := r.AuthOptionsGetter.GetOptions(ctx, obj, imagev1.ImageRepositoryKind, obj)
 	if err != nil {
 		e := fmt.Errorf("failed to configure authentication options: %w", err)
 		conditions.MarkFalse(obj, meta.ReadyCondition, imagev1.AuthenticationFailedReason, "%s", e)
