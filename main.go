@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4"
 	flag "github.com/spf13/pflag"
+	"github.com/spiffe/go-spiffe/v2/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -49,6 +51,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/metrics"
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
+	fluxspiffe "github.com/fluxcd/pkg/spiffe"
 
 	// +kubebuilder:scaffold:imports
 
@@ -101,6 +104,7 @@ func main() {
 		tokenCacheOptions              pkgcache.TokenFlags
 		defaultServiceAccount          string
 		requeueDependency              time.Duration
+		authorizedEventServers         []string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -123,10 +127,14 @@ func main() {
 	tokenCacheOptions.BindFlags(flag.CommandLine, tokenCacheDefaultMaxSize)
 	flag.StringVar(&defaultServiceAccount, auth.ControllerFlagDefaultServiceAccount,
 		"", "Default service account to use for workload identity when not specified in resources.")
+	flag.StringArrayVar(&authorizedEventServers, fluxspiffe.ControllerFlagAuthorizedEventServerSPIFFEID, nil,
+		"SPIFFE ID of an event server authorized to receive events. Can be repeated.")
 
 	flag.Parse()
 
 	logger.SetLogger(logger.NewLogger(logOptions))
+
+	ctx := ctrl.SetupSignalHandler()
 
 	if err := featureGates.WithLogger(setupLog).SupportedFeatures(features.FeatureGates()); err != nil {
 		setupLog.Error(err, "unable to load feature gates")
@@ -269,7 +277,32 @@ func main() {
 
 	probes.SetupChecks(mgr, setupLog)
 
-	eventRecorder, err := events.NewRecorder(ctrl.Log, eventsAddr, controllerName, events.WithManager(mgr))
+	var eventTLSConfig *tls.Config
+	if len(authorizedEventServers) > 0 {
+		source, err := workloadapi.NewX509Source(ctx)
+		if err != nil {
+			setupLog.Error(err, "unable to create SPIFFE X.509 source")
+			os.Exit(1)
+		}
+		defer func() {
+			if err := source.Close(); err != nil {
+				setupLog.Error(err, "unable to close SPIFFE X.509 source")
+			}
+		}()
+
+		eventTLSConfig, err = fluxspiffe.BuildTLSConfig(source, authorizedEventServers...)
+		if err != nil {
+			setupLog.Error(err, "unable to configure SPIFFE mTLS for the event server")
+			os.Exit(1)
+		}
+		setupLog.Info("event server will use inter-controller mTLS via SPIFFE", "spiffeIDs", authorizedEventServers)
+	}
+
+	eventRecorderOpts := []events.RecorderOption{events.WithManager(mgr)}
+	if eventTLSConfig != nil {
+		eventRecorderOpts = append(eventRecorderOpts, events.WithTLSConfig(eventTLSConfig))
+	}
+	eventRecorder, err := events.NewRecorder(ctrl.Log, eventsAddr, controllerName, eventRecorderOpts...)
 	if err != nil {
 		setupLog.Error(err, "unable to create event recorder")
 		os.Exit(1)
@@ -332,7 +365,7 @@ func main() {
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
