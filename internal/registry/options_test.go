@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	cryptov1 "github.com/fluxcd/pkg/apis/crypto/v1"
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/secrets"
 	. "github.com/onsi/gomega"
@@ -110,6 +111,17 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	// ServiceAccount with image pull secret.
 	testServiceAccountWithSecret := testServiceAccount.DeepCopy()
 	testServiceAccountWithSecret.ImagePullSecrets = []corev1.LocalObjectReference{{Name: testSecretName}}
+
+	// ServiceAccount opted into object-level workload identity.
+	testServiceAccountWithOptIn := testServiceAccount.DeepCopy()
+	testServiceAccountWithOptIn.Annotations = map[string]string{
+		cryptov1.AnnotationCredentialProvider: cryptov1.CredentialProviderKubernetes,
+		cryptov1.AnnotationCredentialType:     cryptov1.CredentialTypeJWT,
+	}
+
+	// Opt-in ServiceAccount that also has image pull secrets.
+	testServiceAccountWithOptInAndSecret := testServiceAccountWithOptIn.DeepCopy()
+	testServiceAccountWithOptInAndSecret.ImagePullSecrets = []corev1.LocalObjectReference{{Name: testSecretName}}
 
 	tests := []struct {
 		name                        string
@@ -290,6 +302,48 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 			},
 			defaultServiceAccount:       testServiceAccountName,
 			objectLevelWorkloadIdentity: true,
+		},
+		{
+			name:     "generic provider service account without opt-in",
+			mockObjs: []client.Object{testServiceAccount},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: false,
+		},
+		{
+			name:     "generic provider service account without feature gate",
+			mockObjs: []client.Object{testServiceAccountWithOptIn},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: false,
+			wantErr:                     true,
+		},
+		{
+			name:     "generic provider service account with feature gate",
+			mockObjs: []client.Object{testServiceAccountWithOptIn},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: true,
+		},
+		{
+			name:     "generic provider opt-in service account with image pull secrets",
+			mockObjs: []client.Object{testServiceAccountWithOptInAndSecret, testSecret},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: true,
+			wantErr:                     true,
 		},
 		{
 			name: "missing default service account for provider",

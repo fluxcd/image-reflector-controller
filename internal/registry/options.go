@@ -85,22 +85,15 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	var authenticator authn.Authenticator
 
 	provider := repo.GetProvider()
-	useProviderAuth := provider != "" && provider != "generic"
 
-	// Resolve the ServiceAccount used for provider authentication. The default
-	// ServiceAccount only applies to providers that support object-level
-	// workload identity; for the generic provider, only the ServiceAccount
-	// explicitly referenced by the ImageRepository is used for image pull
-	// secrets.
+	// Apply the default ServiceAccount when the object does not specify one.
 	saName := repo.Spec.ServiceAccountName
-	if useProviderAuth && saName == "" {
+	if saName == "" {
 		saName = r.DefaultServiceAccount
 	}
+
 	var sa *corev1.ServiceAccount
 	if saName != "" {
-		if useProviderAuth && !r.ObjectLevelWorkloadIdentity {
-			return nil, auth.ErrObjectLevelWorkloadIdentityNotEnabled
-		}
 		sa = &corev1.ServiceAccount{}
 		saRef := types.NamespacedName{
 			Name:      saName,
@@ -111,27 +104,35 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		}
 	}
 
-	if useProviderAuth {
-		// Build the provider-agnostic authentication spec, validating the
-		// kubeconfig-equivalent inputs and the ServiceAccount annotations.
-		buildOpts := []cryptov1.Option{
-			cryptov1.WithServiceProvider(provider),
-			cryptov1.WithOCI(),
+	// Build the provider-agnostic authentication spec. BuildSpec is safe to call
+	// even when there is no ServiceAccount or provider-specific configuration:
+	// it returns a spec with a nil Auth in that case.
+	buildOpts := []cryptov1.Option{
+		cryptov1.WithServiceProvider(provider),
+		cryptov1.WithOCI(),
+	}
+	if sa != nil {
+		buildOpts = append(buildOpts, cryptov1.WithAnnotations(sa.Annotations))
+		if len(sa.ImagePullSecrets) > 0 {
+			buildOpts = append(buildOpts, cryptov1.WithImagePullSecrets())
 		}
-		if sa != nil {
-			buildOpts = append(buildOpts, cryptov1.WithAnnotations(sa.Annotations))
-			if len(sa.ImagePullSecrets) > 0 {
-				buildOpts = append(buildOpts, cryptov1.WithImagePullSecrets())
-			}
-		}
-		if repo.Spec.CertSecretRef != nil {
-			buildOpts = append(buildOpts, cryptov1.WithCertSecretRef())
-		}
-		spec, err := cryptov1.BuildSpec(buildOpts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate configuration: %w", err)
-		}
+	}
+	if repo.Spec.CertSecretRef != nil {
+		buildOpts = append(buildOpts, cryptov1.WithCertSecretRef())
+	}
+	spec, err := cryptov1.BuildSpec(buildOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate configuration: %w", err)
+	}
 
+	// Workload identity kicks in when the provider is not generic or the SA has
+	// opted into object-level workload identity.
+	useProviderAuth := provider != "generic" || spec.Auth.OptedIn()
+	if useProviderAuth && sa != nil && !r.ObjectLevelWorkloadIdentity {
+		return nil, auth.ErrObjectLevelWorkloadIdentityNotEnabled
+	}
+
+	if useProviderAuth {
 		authOpts := []auth.Option{
 			auth.WithClient(r.Client),
 			auth.WithObject(imagev1.GroupVersion.Group, imagev1.ImageRepositoryKind, repo),

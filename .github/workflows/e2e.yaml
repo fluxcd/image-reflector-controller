@@ -1,0 +1,28 @@
+name: e2e
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - 'main'
+      - 'release/**'
+jobs:
+  zot-oci-workload-identity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # for reading the repository code.
+    steps:
+      - name: Test suite setup
+        uses: fluxcd/gha-workflows/.github/actions/setup-kubernetes@v0.16.0
+        with:
+          go-version: 1.27.x
+      - name: Setup Flux CLI
+        uses: fluxcd/flux2/action@main
+      - name: Build container image
+        run: |
+          make docker-build IMG=test/image-reflector-controller:latest \
+            BUILD_PLATFORMS=linux/amd64
+      - name: Run Zot OCI workload identity e2e
+        run: hack/ci/oci-zot-workload-identity-e2e.sh
+        env:
+          IMG: test/image-reflector-controller:latest
