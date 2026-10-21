@@ -18,7 +18,6 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -52,6 +51,7 @@ import (
 	"github.com/fluxcd/pkg/runtime/pprof"
 	"github.com/fluxcd/pkg/runtime/probes"
 	fluxspiffe "github.com/fluxcd/pkg/spiffe"
+	fluxbroker "github.com/fluxcd/pkg/spiffe/broker"
 
 	// +kubebuilder:scaffold:imports
 
@@ -105,6 +105,8 @@ func main() {
 		defaultServiceAccount          string
 		requeueDependency              time.Duration
 		authorizedEventServers         []string
+		spiffeBrokerEndpoint           string
+		spiffeBrokerIDs                []string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -129,6 +131,10 @@ func main() {
 		"", "Default service account to use for workload identity when not specified in resources.")
 	flag.StringArrayVar(&authorizedEventServers, fluxspiffe.ControllerFlagAuthorizedEventServerSPIFFEID, nil,
 		"SPIFFE ID of an event server authorized to receive events. Can be repeated.")
+	flag.StringVar(&spiffeBrokerEndpoint, fluxspiffe.ControllerFlagSPIFFEBrokerEndpoint, "",
+		"The gRPC URL of the SPIFFE Broker endpoint.")
+	flag.StringArrayVar(&spiffeBrokerIDs, fluxspiffe.ControllerFlagSPIFFEBrokerID, nil,
+		"SPIFFE ID of the SPIFFE Broker endpoint. Can be repeated.")
 
 	flag.Parse()
 
@@ -138,17 +144,6 @@ func main() {
 
 	if err := featureGates.WithLogger(setupLog).SupportedFeatures(features.FeatureGates()); err != nil {
 		setupLog.Error(err, "unable to load feature gates")
-		os.Exit(1)
-	}
-
-	objectLevelWorkloadIdentity, err := features.Enabled(auth.FeatureGateObjectLevelWorkloadIdentity)
-	if err != nil {
-		setupLog.Error(err, "unable to check feature gate "+auth.FeatureGateObjectLevelWorkloadIdentity)
-		os.Exit(1)
-	}
-	if defaultServiceAccount != "" && !objectLevelWorkloadIdentity {
-		setupLog.Error(errors.New("cannot set the default service account when the "+
-			auth.FeatureGateObjectLevelWorkloadIdentity+" feature gate is not enabled"), "invalid configuration")
 		os.Exit(1)
 	}
 
@@ -278,7 +273,8 @@ func main() {
 	probes.SetupChecks(mgr, setupLog)
 
 	var eventTLSConfig *tls.Config
-	if len(authorizedEventServers) > 0 {
+	var spiffeBroker fluxbroker.Client
+	if len(authorizedEventServers) > 0 || spiffeBrokerEndpoint != "" || len(spiffeBrokerIDs) > 0 {
 		source, err := workloadapi.NewX509Source(ctx)
 		if err != nil {
 			setupLog.Error(err, "unable to create SPIFFE X.509 source")
@@ -290,12 +286,29 @@ func main() {
 			}
 		}()
 
-		eventTLSConfig, err = fluxspiffe.BuildTLSConfig(source, authorizedEventServers...)
-		if err != nil {
-			setupLog.Error(err, "unable to configure SPIFFE mTLS for the event server")
-			os.Exit(1)
+		if len(authorizedEventServers) > 0 {
+			eventTLSConfig, err = fluxspiffe.BuildTLSConfig(source, authorizedEventServers...)
+			if err != nil {
+				setupLog.Error(err, "unable to configure SPIFFE mTLS for the event server")
+				os.Exit(1)
+			}
+			setupLog.Info("event server will use inter-controller mTLS via SPIFFE", "spiffeIDs", authorizedEventServers)
 		}
-		setupLog.Info("event server will use inter-controller mTLS via SPIFFE", "spiffeIDs", authorizedEventServers)
+
+		if spiffeBrokerEndpoint != "" || len(spiffeBrokerIDs) > 0 {
+			spiffeBroker, err = fluxbroker.New(spiffeBrokerEndpoint, spiffeBrokerIDs, source)
+			if err != nil {
+				setupLog.Error(err, "unable to create SPIFFE Broker client")
+				os.Exit(1)
+			}
+			defer func() {
+				if err := spiffeBroker.Close(); err != nil {
+					setupLog.Error(err, "unable to close SPIFFE Broker client")
+				}
+			}()
+			setupLog.Info("object-level workload identity will use the SPIFFE Broker API",
+				"endpoint", spiffeBrokerEndpoint, "spiffeIDs", spiffeBrokerIDs)
+		}
 	}
 
 	eventRecorderOpts := []events.RecorderOption{events.WithManager(mgr)}
@@ -324,21 +337,20 @@ func main() {
 	}
 
 	authOptionsGetter := &registry.AuthOptionsGetter{
-		Client:                      mgr.GetClient(),
-		TokenCache:                  tokenCache,
-		DefaultServiceAccount:       defaultServiceAccount,
-		ObjectLevelWorkloadIdentity: objectLevelWorkloadIdentity,
+		Client:                mgr.GetClient(),
+		TokenCache:            tokenCache,
+		DefaultServiceAccount: defaultServiceAccount,
+		SPIFFEBroker:          spiffeBroker,
 	}
 
 	if err := (&controller.ImageRepositoryReconciler{
-		Client:                      mgr.GetClient(),
-		Recorder:                    eventRecorder,
-		Metrics:                     metricsH,
-		Database:                    db,
-		ControllerName:              controllerName,
-		TokenCache:                  tokenCache,
-		AuthOptionsGetter:           authOptionsGetter,
-		ObjectLevelWorkloadIdentity: objectLevelWorkloadIdentity,
+		Client:            mgr.GetClient(),
+		Recorder:          eventRecorder,
+		Metrics:           metricsH,
+		Database:          db,
+		ControllerName:    controllerName,
+		TokenCache:        tokenCache,
+		AuthOptionsGetter: authOptionsGetter,
 	}).SetupWithManager(mgr, controller.ImageRepositoryReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {
@@ -346,16 +358,15 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ImagePolicyReconciler{
-		Client:                      mgr.GetClient(),
-		Recorder:                    eventRecorder,
-		Metrics:                     metricsH,
-		Database:                    db,
-		ACLOptions:                  aclOptions,
-		ControllerName:              controllerName,
-		AuthOptionsGetter:           authOptionsGetter,
-		TokenCache:                  tokenCache,
-		DependencyRequeueInterval:   requeueDependency,
-		ObjectLevelWorkloadIdentity: objectLevelWorkloadIdentity,
+		Client:                    mgr.GetClient(),
+		Recorder:                  eventRecorder,
+		Metrics:                   metricsH,
+		Database:                  db,
+		ACLOptions:                aclOptions,
+		ControllerName:            controllerName,
+		AuthOptionsGetter:         authOptionsGetter,
+		TokenCache:                tokenCache,
+		DependencyRequeueInterval: requeueDependency,
 	}).SetupWithManager(mgr, controller.ImagePolicyReconcilerOptions{
 		RateLimiter: helper.GetRateLimiter(rateLimiterOptions),
 	}); err != nil {

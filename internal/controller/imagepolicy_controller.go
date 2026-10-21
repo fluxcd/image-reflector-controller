@@ -44,7 +44,6 @@ import (
 
 	aclapi "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
@@ -115,8 +114,6 @@ type ImagePolicyReconciler struct {
 	AuthOptionsGetter         *registry.AuthOptionsGetter
 	TokenCache                *cache.TokenCache
 	DependencyRequeueInterval time.Duration
-
-	ObjectLevelWorkloadIdentity bool
 
 	patchOptions []patch.Option
 }
@@ -354,15 +351,6 @@ func (r *ImagePolicyReconciler) reconcile(ctx context.Context, sp *patch.SerialP
 	// Check if the image is valid and mark stalled if not.
 	if _, err := registry.ParseImageReference(repo.Spec.Image, repo.Spec.Insecure); err != nil {
 		conditions.MarkStalled(obj, imagev1.ImageURLInvalidReason, "%s", err)
-		result, retErr = ctrl.Result{}, nil
-		return
-	}
-
-	// Check object-level workload identity feature gate.
-	if repo.Spec.Provider != "generic" && repo.Spec.ServiceAccountName != "" && !r.ObjectLevelWorkloadIdentity {
-		const msgFmt = "to use spec.serviceAccountName in the ImageRepository for provider authentication please enable the %s feature gate in the controller"
-		conditions.MarkStalled(obj, meta.FeatureGateDisabledReason, msgFmt,
-			auth.FeatureGateObjectLevelWorkloadIdentity)
 		result, retErr = ctrl.Result{}, nil
 		return
 	}
