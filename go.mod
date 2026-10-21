@@ -1,6 +1,6 @@
 module github.com/fluxcd/image-reflector-controller
 
-go 1.27.0
+go 1.27.3
 
 replace github.com/fluxcd/image-reflector-controller/api => ./api
 
