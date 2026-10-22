@@ -39,7 +39,6 @@ import (
 	ctrreconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	helper "github.com/fluxcd/pkg/runtime/controller"
@@ -108,8 +107,6 @@ type ImageRepositoryReconciler struct {
 	TokenCache        *cache.TokenCache
 	Database          storage.Database
 	AuthOptionsGetter *registry.AuthOptionsGetter
-
-	ObjectLevelWorkloadIdentity bool
 
 	patchOptions []patch.Option
 }
@@ -227,15 +224,6 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 
 		notify(ctx, r.Recorder, oldObj, obj, nil, imagev1.ActionScan, nextScanMsg)
 	}()
-
-	// Check object-level workload identity feature gate.
-	if obj.Spec.Provider != "generic" && obj.Spec.ServiceAccountName != "" && !r.ObjectLevelWorkloadIdentity {
-		const msgFmt = "to use spec.serviceAccountName for provider authentication please enable the %s feature gate in the controller"
-		conditions.MarkStalled(obj, meta.FeatureGateDisabledReason, msgFmt,
-			auth.FeatureGateObjectLevelWorkloadIdentity)
-		result, retErr = ctrl.Result{}, nil
-		return
-	}
 
 	// Set reconciling condition.
 	reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")

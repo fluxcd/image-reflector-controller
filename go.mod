@@ -11,14 +11,14 @@ require (
 	github.com/elazarl/goproxy v1.8.4
 	github.com/fluxcd/image-reflector-controller/api v1.2.0
 	github.com/fluxcd/pkg/apis/acl v0.12.0
-	github.com/fluxcd/pkg/apis/crypto v0.4.1-0.20261020182949-c5194b17fdad
+	github.com/fluxcd/pkg/apis/crypto v0.5.0
 	github.com/fluxcd/pkg/apis/event v0.32.0
-	github.com/fluxcd/pkg/apis/meta v1.36.1-0.20261020182949-c5194b17fdad
-	github.com/fluxcd/pkg/artifact v0.25.1-0.20261020182949-c5194b17fdad
-	github.com/fluxcd/pkg/auth v0.63.1-0.20261020182949-c5194b17fdad
-	github.com/fluxcd/pkg/cache v0.17.1-0.20261020182949-c5194b17fdad
-	github.com/fluxcd/pkg/runtime v0.120.1-0.20261020182949-c5194b17fdad
-	github.com/fluxcd/pkg/spiffe v0.0.0-20261020182949-c5194b17fdad
+	github.com/fluxcd/pkg/apis/meta v1.37.0
+	github.com/fluxcd/pkg/artifact v0.26.0
+	github.com/fluxcd/pkg/auth v0.65.0
+	github.com/fluxcd/pkg/cache v0.18.0
+	github.com/fluxcd/pkg/runtime v0.121.0
+	github.com/fluxcd/pkg/spiffe v0.1.0
 	github.com/fluxcd/pkg/version v0.19.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/go-containerregistry v0.22.1
@@ -106,6 +106,7 @@ require (
 	github.com/go-openapi/swag/stringutils v0.29.1 // indirect
 	github.com/go-openapi/swag/typeutils v0.29.1 // indirect
 	github.com/go-openapi/swag/yamlutils v0.29.1 // indirect
+	github.com/gobuffalo/flect v1.0.3 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect

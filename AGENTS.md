@@ -44,7 +44,7 @@ image-reflector-controller is a component of the [Flux GitOps Toolkit](https://f
 - `ImageRepository` — scans an OCI image repository at a fixed interval, lists the tags via the registry API, and persists them.
 - `ImagePolicy` — references an `ImageRepository`, filters its tag set (optional regex), and elects a "latest" tag using one of three policies: `semver` (Masterminds/semver ranges), `alphabetical`, or `numerical`. It can also reflect the image digest for the elected tag (`digestReflectionPolicy: Never | IfNotPresent | Always`).
 
-Scan results are stored in an on-disk BadgerDB database at `--storage-path` (default `/data`). The elected latest image ref is written to the `ImagePolicy` status and consumed by image-automation-controller, which patches that ref into Git. This controller never writes to Git. Tag listing uses `github.com/google/go-containerregistry` (`remote.List`). Auth resolves via `spec.secretRef`, `spec.serviceAccountName` (with image pull secrets), `spec.certSecretRef`, `spec.proxySecretRef`, and the `fluxcd/pkg/auth` providers for ECR, GCR/AR, and ACR (including object-level workload identity when the feature gate is enabled).
+Scan results are stored in an on-disk BadgerDB database at `--storage-path` (default `/data`). The elected latest image ref is written to the `ImagePolicy` status and consumed by image-automation-controller, which patches that ref into Git. This controller never writes to Git. Tag listing uses `github.com/google/go-containerregistry` (`remote.List`). Auth resolves via `spec.secretRef`, `spec.serviceAccountName` (with image pull secrets), `spec.certSecretRef`, `spec.proxySecretRef`, and the `fluxcd/pkg/auth` providers for ECR, GCR/AR, and ACR (including object-level workload identity).
 
 ## Repository layout
 
@@ -134,4 +134,4 @@ Bump `fluxcd/pkg/*` modules as a set. Run `make tidy` after any bump. Use `make 
 - The `filterTags.extract` replace pattern rewrites the tag string the policer sees; the original tag is still what gets published as `latestRef.tag`. Keep that distinction when adding new policies.
 - `DigestReflectionPolicy: Always` is the only mode where `ImagePolicy.spec.interval` is meaningful; the CEL validation rules on the CRD enforce that pairing. Do not loosen them without a very good reason.
 - `v1beta1` and `v1beta2` API packages exist for conversion. Removing fields or kinds from those is a breaking change for existing clusters.
-- Cloud auth feature gate: `ObjectLevelWorkloadIdentity` changes how `spec.serviceAccountName` is resolved for ECR/GCR/ACR. Changes to auth code paths must consider both gate-on and gate-off behavior, and `auth.InconsistentObjectLevelConfiguration`.
+- Cloud auth: `spec.serviceAccountName` is used for object-level workload identity with ECR/GCR/ACR.

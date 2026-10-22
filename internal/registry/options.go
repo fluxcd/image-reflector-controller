@@ -34,6 +34,7 @@ import (
 	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/secrets"
+	fluxbroker "github.com/fluxcd/pkg/spiffe/broker"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 )
@@ -50,9 +51,9 @@ import (
 // - spec.serviceAccountName
 type AuthOptionsGetter struct {
 	client.Client
-	TokenCache                  *cache.TokenCache
-	DefaultServiceAccount       string
-	ObjectLevelWorkloadIdentity bool
+	TokenCache            *cache.TokenCache
+	DefaultServiceAccount string
+	SPIFFEBroker          fluxbroker.Interface
 }
 
 func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageRepository,
@@ -111,6 +112,9 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		cryptov1.WithServiceProvider(provider),
 		cryptov1.WithOCI(),
 	}
+	if repo.Spec.SecretRef != nil {
+		buildOpts = append(buildOpts, cryptov1.WithSecretRefAuth())
+	}
 	if sa != nil {
 		buildOpts = append(buildOpts, cryptov1.WithAnnotations(sa.Annotations))
 		if len(sa.ImagePullSecrets) > 0 {
@@ -128,9 +132,6 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	// Workload identity kicks in when the provider is not generic or the SA has
 	// opted into object-level workload identity.
 	useProviderAuth := provider != "generic" || spec.Auth.OptedIn()
-	if useProviderAuth && sa != nil && !r.ObjectLevelWorkloadIdentity {
-		return nil, auth.ErrObjectLevelWorkloadIdentityNotEnabled
-	}
 
 	if useProviderAuth {
 		authOpts := []auth.Option{
@@ -138,6 +139,9 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			auth.WithObject(imagev1.GroupVersion.Group, imagev1.ImageRepositoryKind, repo),
 		}
 		authOpts = append(authOpts, auth.OptionsFromSpec(spec.Auth)...)
+		if r.SPIFFEBroker != nil {
+			authOpts = append(authOpts, auth.WithSPIFFEBroker(r.SPIFFEBroker))
+		}
 		if sa != nil {
 			authOpts = append(authOpts, auth.WithServiceAccountName(sa.Name))
 		}
