@@ -37,7 +37,6 @@ import (
 
 	aclapis "github.com/fluxcd/pkg/apis/acl"
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/auth"
 	"github.com/fluxcd/pkg/runtime/acl"
 	"github.com/fluxcd/pkg/runtime/conditions"
 	"github.com/fluxcd/pkg/runtime/events"
@@ -465,8 +464,14 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 	t.Run("enabled", func(t *testing.T) {
 		g := NewWithT(t)
 
-		auth.EnableObjectLevelWorkloadIdentity()
-		t.Cleanup(auth.DisableObjectLevelWorkloadIdentity)
+		testAuthOptionsGetter.ObjectLevelWorkloadIdentity = true
+		testImageRepositoryReconciler.ObjectLevelWorkloadIdentity = true
+		testImagePolicyReconciler.ObjectLevelWorkloadIdentity = true
+		t.Cleanup(func() {
+			testAuthOptionsGetter.ObjectLevelWorkloadIdentity = false
+			testImageRepositoryReconciler.ObjectLevelWorkloadIdentity = false
+			testImagePolicyReconciler.ObjectLevelWorkloadIdentity = false
+		})
 
 		namespaceName := "imagepolicy-" + randStringRunes(5)
 		namespace := &corev1.Namespace{
@@ -497,7 +502,7 @@ func TestImagePolicyReconciler_objectLevelWorkloadIdentityFeatureGate(t *testing
 			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(imageRepo), imageRepo)
 			logRepoStatus(t, imageRepo)
 			return err == nil && !conditions.IsReady(imageRepo) &&
-				conditions.GetReason(imageRepo, meta.ReadyCondition) == imagev1.ReadOperationFailedReason
+				conditions.GetReason(imageRepo, meta.ReadyCondition) == imagev1.AuthenticationFailedReason
 		}, timeout, interval).Should(BeTrue())
 
 		g.Eventually(func() bool {

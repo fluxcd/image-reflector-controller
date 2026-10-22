@@ -20,8 +20,8 @@ import (
 	"context"
 	"testing"
 
+	cryptov1 "github.com/fluxcd/pkg/apis/crypto/v1"
 	"github.com/fluxcd/pkg/apis/meta"
-	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/secrets"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -112,11 +112,24 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	testServiceAccountWithSecret := testServiceAccount.DeepCopy()
 	testServiceAccountWithSecret.ImagePullSecrets = []corev1.LocalObjectReference{{Name: testSecretName}}
 
+	// ServiceAccount opted into object-level workload identity.
+	testServiceAccountWithOptIn := testServiceAccount.DeepCopy()
+	testServiceAccountWithOptIn.Annotations = map[string]string{
+		cryptov1.AnnotationCredentialProvider: cryptov1.CredentialProviderKubernetes,
+		cryptov1.AnnotationCredentialType:     cryptov1.CredentialTypeJWT,
+	}
+
+	// Opt-in ServiceAccount that also has image pull secrets.
+	testServiceAccountWithOptInAndSecret := testServiceAccountWithOptIn.DeepCopy()
+	testServiceAccountWithOptInAndSecret.ImagePullSecrets = []corev1.LocalObjectReference{{Name: testSecretName}}
+
 	tests := []struct {
-		name          string
-		mockObjs      []client.Object
-		imageRepoSpec imagev1.ImageRepositorySpec
-		wantErr       bool
+		name                        string
+		mockObjs                    []client.Object
+		imageRepoSpec               imagev1.ImageRepositorySpec
+		defaultServiceAccount       string
+		objectLevelWorkloadIdentity bool
+		wantErr                     bool
 	}{
 		{
 			name: "no auth options",
@@ -260,6 +273,89 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:     "provider service account without feature gate",
+			mockObjs: []client.Object{testServiceAccount},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
+				Provider:           "aws",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: false,
+			wantErr:                     true,
+		},
+		{
+			name:     "provider service account with feature gate",
+			mockObjs: []client.Object{testServiceAccount},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
+				Provider:           "aws",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: true,
+		},
+		{
+			name:     "default service account for provider",
+			mockObjs: []client.Object{testServiceAccount},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:    "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
+				Provider: "aws",
+			},
+			defaultServiceAccount:       testServiceAccountName,
+			objectLevelWorkloadIdentity: true,
+		},
+		{
+			name:     "generic provider service account without opt-in",
+			mockObjs: []client.Object{testServiceAccount},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: false,
+		},
+		{
+			name:     "generic provider service account without feature gate",
+			mockObjs: []client.Object{testServiceAccountWithOptIn},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: false,
+			wantErr:                     true,
+		},
+		{
+			name:     "generic provider service account with feature gate",
+			mockObjs: []client.Object{testServiceAccountWithOptIn},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: true,
+		},
+		{
+			name:     "generic provider opt-in service account with image pull secrets",
+			mockObjs: []client.Object{testServiceAccountWithOptInAndSecret, testSecret},
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: testServiceAccountName,
+			},
+			objectLevelWorkloadIdentity: true,
+			wantErr:                     true,
+		},
+		{
+			name: "missing default service account for provider",
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:    "123456789000.dkr.ecr.us-east-2.amazonaws.com/test",
+				Provider: "aws",
+			},
+			defaultServiceAccount:       "missing-service-account",
+			objectLevelWorkloadIdentity: true,
+			wantErr:                     true,
+		},
+		{
 			name: "unsupported provider",
 			imageRepoSpec: imagev1.ImageRepositorySpec{
 				Image:    testImg,
@@ -275,7 +371,11 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 			k8sClient := fake.NewClientBuilder().
 				WithObjects(tt.mockObjs...).
 				Build()
-			getter := &registry.AuthOptionsGetter{Client: k8sClient}
+			getter := &registry.AuthOptionsGetter{
+				Client:                      k8sClient,
+				DefaultServiceAccount:       tt.defaultServiceAccount,
+				ObjectLevelWorkloadIdentity: tt.objectLevelWorkloadIdentity,
+			}
 
 			repo := imagev1.ImageRepository{
 				ObjectMeta: metav1.ObjectMeta{
@@ -286,7 +386,7 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 				Spec: tt.imageRepoSpec,
 			}
 
-			_, err := getter.GetOptions(context.Background(), &repo, &cache.InvolvedObject{})
+			_, err := getter.GetOptions(context.Background(), &repo, imagev1.ImageRepositoryKind, &repo)
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
 			} else {

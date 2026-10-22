@@ -18,6 +18,7 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	cryptov1 "github.com/fluxcd/pkg/apis/crypto/v1"
 	"github.com/fluxcd/pkg/auth"
 	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
@@ -48,11 +50,14 @@ import (
 // - spec.serviceAccountName
 type AuthOptionsGetter struct {
 	client.Client
-	TokenCache *cache.TokenCache
+	TokenCache                  *cache.TokenCache
+	DefaultServiceAccount       string
+	ObjectLevelWorkloadIdentity bool
 }
 
 func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageRepository,
-	involvedObject *cache.InvolvedObject) ([]remote.Option, error) {
+	involvedObjectKind string, involvedObject client.Object) ([]remote.Option, error) {
+
 	var transportOptions []func(*http.Transport)
 
 	// Load proxy configuration.
@@ -79,23 +84,73 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	var authSecret corev1.Secret
 	var authenticator authn.Authenticator
 
-	if provider := repo.GetProvider(); provider != "" && provider != "generic" {
-		// Build login provider options and use it to attempt registry login.
-		opts := []auth.Option{
+	provider := repo.GetProvider()
+
+	// Apply the default ServiceAccount when the object does not specify one.
+	saName := repo.Spec.ServiceAccountName
+	if saName == "" {
+		saName = r.DefaultServiceAccount
+	}
+
+	var sa *corev1.ServiceAccount
+	if saName != "" {
+		sa = &corev1.ServiceAccount{}
+		saRef := types.NamespacedName{
+			Name:      saName,
+			Namespace: repo.GetNamespace(),
+		}
+		if err := r.Get(ctx, saRef, sa); err != nil {
+			return nil, fmt.Errorf("failed to get service account '%s': %w", saRef, err)
+		}
+	}
+
+	// Build the provider-agnostic authentication spec. BuildSpec is safe to call
+	// even when there is no ServiceAccount or provider-specific configuration:
+	// it returns a spec with a nil Auth in that case.
+	buildOpts := []cryptov1.Option{
+		cryptov1.WithServiceProvider(provider),
+		cryptov1.WithOCI(),
+	}
+	if sa != nil {
+		buildOpts = append(buildOpts, cryptov1.WithAnnotations(sa.Annotations))
+		if len(sa.ImagePullSecrets) > 0 {
+			buildOpts = append(buildOpts, cryptov1.WithImagePullSecrets())
+		}
+	}
+	if repo.Spec.CertSecretRef != nil {
+		buildOpts = append(buildOpts, cryptov1.WithCertSecretRef())
+	}
+	spec, err := cryptov1.BuildSpec(buildOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate configuration: %w", err)
+	}
+
+	// Workload identity kicks in when the provider is not generic or the SA has
+	// opted into object-level workload identity.
+	useProviderAuth := provider != "generic" || spec.Auth.OptedIn()
+	if useProviderAuth && sa != nil && !r.ObjectLevelWorkloadIdentity {
+		return nil, auth.ErrObjectLevelWorkloadIdentityNotEnabled
+	}
+
+	if useProviderAuth {
+		authOpts := []auth.Option{
 			auth.WithClient(r.Client),
-			auth.WithServiceAccountNamespace(repo.GetNamespace()),
+			auth.WithObject(imagev1.GroupVersion.Group, imagev1.ImageRepositoryKind, repo),
+		}
+		authOpts = append(authOpts, auth.OptionsFromSpec(spec.Auth)...)
+		if sa != nil {
+			authOpts = append(authOpts, auth.WithServiceAccountName(sa.Name))
 		}
 		if proxyURL != nil {
-			opts = append(opts, auth.WithProxyURL(*proxyURL))
-		}
-		if repo.Spec.ServiceAccountName != "" {
-			opts = append(opts, auth.WithServiceAccountName(repo.Spec.ServiceAccountName))
+			authOpts = append(authOpts, auth.WithProxyURL(*proxyURL))
 		}
 		if r.TokenCache != nil {
-			opts = append(opts, auth.WithCache(*r.TokenCache, *involvedObject))
+			authOpts = append(authOpts,
+				auth.WithCache(*r.TokenCache),
+				auth.WithCacheOperation(cache.OperationReconcile),
+				auth.WithInvolvedObject(imagev1.GroupVersion.Group, involvedObjectKind, involvedObject))
 		}
-		var err error
-		authenticator, err = authutils.GetArtifactRegistryCredentials(ctx, provider, repo.Spec.Image, opts...)
+		authenticator, err = authutils.GetArtifactRegistryCredentials(ctx, provider, repo.Spec.Image, authOpts...)
 		if err != nil {
 			return nil, err
 		}
@@ -160,12 +215,8 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 			pullSecrets = append(pullSecrets, s)
 		}
 
-		if repo.Spec.ServiceAccountName != "" {
-			saRef := types.NamespacedName{
-				Name:      repo.Spec.ServiceAccountName,
-				Namespace: repo.GetNamespace(),
-			}
-			s, err := secrets.PullSecretsFromServiceAccountRef(ctx, r.Client, saRef)
+		if sa != nil {
+			s, err := secrets.PullSecretsFromServiceAccount(ctx, r.Client, sa)
 			if err != nil {
 				return nil, err
 			}
