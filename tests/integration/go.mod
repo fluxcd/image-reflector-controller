@@ -6,11 +6,11 @@ replace github.com/fluxcd/image-reflector-controller/api => ../../api
 
 require (
 	github.com/fluxcd/image-reflector-controller/api v1.1.2
-	github.com/fluxcd/pkg/apis/meta v1.35.0
+	github.com/fluxcd/pkg/apis/meta v1.38.0
 	github.com/fluxcd/test-infra/tftestenv v0.0.0-20260419142339-c6535d1fff77
 	github.com/hashicorp/terraform-exec v0.25.2
 	github.com/hashicorp/terraform-json v0.27.2
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/gomega v1.44.0
 	k8s.io/apimachinery v0.37.1
 )
 
@@ -70,7 +70,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zclconf/go-cty v1.18.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
