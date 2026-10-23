@@ -38,6 +38,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/fluxcd/pkg/runtime/conditions"
@@ -112,6 +113,44 @@ func TestImageRepositoryReconciler_deleteBeforeFinalizer(t *testing.T) {
 	// NOTE: Only a real API server responds with an error in this scenario.
 	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(imagerepo)})
 	g.Expect(err).NotTo(HaveOccurred())
+}
+
+func TestImageRepositoryReconciler_patchErrorClearsResult(t *testing.T) {
+	g := NewWithT(t)
+
+	obj := &imagev1.ImageRepository{
+		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		Spec: imagev1.ImageRepositorySpec{
+			Interval: metav1.Duration{Duration: interval},
+			Image:    "test-image",
+		},
+	}
+
+	patchErr := errors.New("patch failed")
+	c := fake.NewClientBuilder().
+		WithScheme(testEnv.GetScheme()).
+		WithObjects(obj).
+		WithStatusSubresource(&imagev1.ImageRepository{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
+				return patchErr
+			},
+			SubResourcePatch: func(context.Context, client.Client, string, client.Object, client.Patch, ...client.SubResourcePatchOption) error {
+				return patchErr
+			},
+		}).
+		Build()
+
+	r := &ImageRepositoryReconciler{
+		Client:   c,
+		Recorder: events.NewFakeRecorder(32, false),
+	}
+
+	// Adding the finalizer requests a requeue, the final patch then fails.
+	// The result must be cleared when an error is returned.
+	result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(obj)})
+	g.Expect(err).To(MatchError(patchErr))
+	g.Expect(result).To(Equal(ctrl.Result{}))
 }
 
 func TestImageRepositoryReconciler_shouldScan(t *testing.T) {

@@ -160,6 +160,12 @@ func (r *ImageRepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			retErr = kerrors.NewAggregate([]error{retErr, err})
 		}
 
+		// The result is ignored by controller-runtime when an error is
+		// returned, clear it to avoid the warning about returning both.
+		if retErr != nil {
+			result = ctrl.Result{}
+		}
+
 		// Always record duration metrics.
 		r.Metrics.RecordDuration(ctx, obj, start)
 	}()

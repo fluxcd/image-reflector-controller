@@ -33,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	aclapis "github.com/fluxcd/pkg/apis/acl"
@@ -100,6 +101,46 @@ func TestImagePolicyReconciler_imageRepoHasNoTags(t *testing.T) {
 	}, 6*time.Second).Should(BeTrue())
 
 	g.Expect(conditions.GetMessage(imagePolicy, meta.ReadyCondition)).To(BeEquivalentTo("retrying in 30s error: no tags in database"))
+}
+
+func TestImagePolicyReconciler_patchErrorClearsResult(t *testing.T) {
+	g := NewWithT(t)
+
+	obj := &imagev1.ImagePolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		Spec: imagev1.ImagePolicySpec{
+			ImageRepositoryRef: meta.NamespacedObjectReference{Name: "repo"},
+			Policy: imagev1.ImagePolicyChoice{
+				Alphabetical: &imagev1.AlphabeticalPolicy{},
+			},
+		},
+	}
+
+	patchErr := errors.New("patch failed")
+	c := fake.NewClientBuilder().
+		WithScheme(testEnv.GetScheme()).
+		WithObjects(obj).
+		WithStatusSubresource(&imagev1.ImagePolicy{}).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Patch: func(context.Context, client.WithWatch, client.Object, client.Patch, ...client.PatchOption) error {
+				return patchErr
+			},
+			SubResourcePatch: func(context.Context, client.Client, string, client.Object, client.Patch, ...client.SubResourcePatchOption) error {
+				return patchErr
+			},
+		}).
+		Build()
+
+	r := &ImagePolicyReconciler{
+		Client:   c,
+		Recorder: events.NewFakeRecorder(32, false),
+	}
+
+	// Adding the finalizer requests a requeue, the final patch then fails.
+	// The result must be cleared when an error is returned.
+	result, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(obj)})
+	g.Expect(err).To(MatchError(patchErr))
+	g.Expect(result).To(Equal(ctrl.Result{}))
 }
 
 func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
