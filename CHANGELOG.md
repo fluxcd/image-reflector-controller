@@ -1,5 +1,77 @@
 # Changelog
 
+## 1.3.0
+
+**Release date:** 2026-10-23
+
+This minor release enables the Flux artifact storage backend by default and adds
+object-level workload identity with Kubernetes ServiceAccount tokens and SPIFFE.
+
+⚠️ **Upgrade note:** `FluxStorage` is now enabled by default. Switching the gate
+wipes the local tag database, so the first reconciliation after the upgrade
+rescans every `ImageRepository`. Set `--feature-gates=FluxStorage=false` to keep
+using BadgerDB.
+
+⚠️ **Breaking change:** the `ObjectLevelWorkloadIdentity` feature gate is
+retired, and the default Flux RBAC no longer grants the `create` verb on
+`serviceaccounts/token`. Object-level workload identity is now always enabled,
+but it stops working unless you bind a ClusterRole with that permission to the
+image-reflector-controller ServiceAccount. See
+[fluxcd/flux2#6139](https://github.com/fluxcd/flux2/pull/6139) for the required
+ClusterRole and ClusterRoleBinding.
+
+### ImageRepository
+
+The `generic` provider now supports object-level workload identity. An
+`ImageRepository` can authenticate with a short-lived Kubernetes ServiceAccount
+token or a SPIFFE JWT-SVID instead of a static Secret. The credential provider is
+selected on the ServiceAccount with `credential.auth.fluxcd.io/provider`
+(`kubernetes` or `spiffe`) and `credential.auth.fluxcd.io/type: jwt`; the JWT is
+sent as a bearer token, or as the password in HTTP basic authentication when
+`credential.auth.fluxcd.io/username` is set. Audiences default to the registry
+host and can be overridden with `credential.auth.fluxcd.io/audiences`.
+
+The `ObjectLevelWorkloadIdentity` feature gate is retired, so the AWS, Azure and
+GCP providers no longer require it, and they accept either credential provider.
+
+The Flux artifact storage backend (`fluxcd/pkg/artifact/storage`) is now the
+default for the image tag database, replacing BadgerDB. Tags are stored in the
+same artifact storage used by the other Flux controllers, and the tag file is
+compressed above the configured `--storage-compression-threshold`.
+
+### SPIFFE
+
+The event recorder can send events to notification-controller over SPIFFE mTLS
+with `--authorized-event-server-spiffe-id`. The `spiffe` credential provider
+uses `SPIFFE_ENDPOINT_SOCKET` plus the `--spiffe-broker-endpoint` and
+`--spiffe-broker-id` flags.
+
+### General updates
+
+The controller is built with Kubernetes 1.37 and Go 1.27.
+
+Fixes:
+- Clear the reconcile result when the status patch fails
+  [#880](https://github.com/fluxcd/image-reflector-controller/pull/880)
+
+Improvements:
+- Enable FluxStorage by default
+  [#951](https://github.com/fluxcd/image-reflector-controller/pull/951)
+- Support Kubernetes ServiceAccount tokens for `generic` ImageRepository
+  [#946](https://github.com/fluxcd/image-reflector-controller/pull/946)
+- Add the `spiffe` credential provider and SPIFFE Broker API
+  [#950](https://github.com/fluxcd/image-reflector-controller/pull/950)
+- Retire the `ObjectLevelWorkloadIdentity` feature gate
+  [#950](https://github.com/fluxcd/image-reflector-controller/pull/950)
+- Add SPIFFE mTLS between the controllers
+  [#948](https://github.com/fluxcd/image-reflector-controller/pull/948)
+- Update to Kubernetes 1.37 and Go 1.27
+  [#939](https://github.com/fluxcd/image-reflector-controller/pull/939)
+  [#943](https://github.com/fluxcd/image-reflector-controller/pull/943)
+- Various dependency updates
+  [#933](https://github.com/fluxcd/image-reflector-controller/pull/933)
+  [#952](https://github.com/fluxcd/image-reflector-controller/pull/952)
+
 ## 1.2.5
 
 **Release date:** 2026-08-31
