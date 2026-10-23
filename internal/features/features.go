@@ -42,8 +42,8 @@ var features = map[string]bool{
 	CacheSecretsAndConfigMaps: false,
 
 	// FluxStorage
-	// opt-in from v1.2
-	FluxStorage: false,
+	// opt-out from v1.3
+	FluxStorage: true,
 }
 
 var retiredFeatures = map[string]string{
