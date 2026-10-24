@@ -651,7 +651,10 @@ string
 <td>
 <em>(Optional)</em>
 <p>ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
-the image pull if the service account has attached pull secrets.</p>
+the image pull, either with the pull secrets attached to the service account or with
+an object identity.
+For more information about object identity:
+<a href="https://fluxcd.io/flux/integrations/object-identity/">https://fluxcd.io/flux/integrations/object-identity/</a></p>
 </td>
 </tr>
 <tr>
@@ -866,7 +869,10 @@ string
 <td>
 <em>(Optional)</em>
 <p>ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
-the image pull if the service account has attached pull secrets.</p>
+the image pull, either with the pull secrets attached to the service account or with
+an object identity.
+For more information about object identity:
+<a href="https://fluxcd.io/flux/integrations/object-identity/">https://fluxcd.io/flux/integrations/object-identity/</a></p>
 </td>
 </tr>
 <tr>
