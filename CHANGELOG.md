@@ -1,5 +1,83 @@
 # Changelog
 
+## 1.3.0
+
+**Release date:** 2026-10-24
+
+This minor release graduates object-level workload identity, now renamed to
+object identity, enables the Flux artifact storage backend by default, and
+introduces SPIFFE mTLS between the controllers.
+
+### Object Identity
+
+Object-level workload identity is now generally available and renamed to object
+identity. Workload identity refers exclusively to identities assigned to Flux
+controllers, while object identity refers to identities assigned to Flux
+objects. The `ObjectLevelWorkloadIdentity` feature gate is retired and the
+feature is always enabled.
+
+⚠️ **Breaking change:** the default Flux RBAC no longer grants the `create`
+verb on the `serviceaccounts/token` resource. If your installation relies on
+the default RBAC, bind a ClusterRole with this permission to the controller
+ServiceAccount before upgrading. See
+[fluxcd/flux2#6139](https://github.com/fluxcd/flux2/pull/6139) for the required
+ClusterRole and ClusterRoleBinding, and the
+[object identity documentation](https://fluxcd.io/flux/integrations/object-identity/)
+for the API reference.
+
+Two credential providers can now supply the credential: `kubernetes`, which
+uses the Kubernetes TokenRequest API and was already available, and `spiffe`,
+which fetches a JWT-SVID from the SPIFFE Broker API. The provider is configured
+on the ServiceAccount with `credential.auth.fluxcd.io/provider`, independently
+of the service provider in `.spec.provider`.
+
+### Inter-Controller mTLS
+
+This release introduces SPIFFE mTLS for inter-controller communication. Flux
+controllers authenticate each other with X.509-SVIDs, and each traffic type is
+enabled independently by configuring the SPIFFE Workload API socket and the
+SPIFFE IDs that the controller authorizes. See the
+[inter-controller mTLS documentation](https://fluxcd.io/flux/installation/configuration/intercontroller-mtls/)
+for the controller flags and an example configuration.
+
+### ImageRepository
+
+The `generic` provider now supports object identity. The credential is sent as
+a bearer token, or as the password in HTTP basic authentication when
+`credential.auth.fluxcd.io/username` is set. Audiences default to the registry
+host and can be overridden with `credential.auth.fluxcd.io/audiences`.
+
+The Flux artifact storage backend (`fluxcd/pkg/artifact/storage`) is now the
+default for the image tag database, replacing BadgerDB. Tags are stored in the
+same artifact storage used by the other Flux controllers, and the tag file is
+compressed above the configured `--storage-compression-threshold`.
+
+### General updates
+
+The controller is built with Kubernetes 1.37 and Go 1.27.
+
+Fixes:
+- Clear the reconcile result when the status patch fails
+  [#880](https://github.com/fluxcd/image-reflector-controller/pull/880)
+
+Improvements:
+- Enable FluxStorage by default
+  [#951](https://github.com/fluxcd/image-reflector-controller/pull/951)
+- Support Kubernetes ServiceAccount tokens for `generic` ImageRepository
+  [#946](https://github.com/fluxcd/image-reflector-controller/pull/946)
+- Add the `spiffe` credential provider and SPIFFE Broker API
+  [#950](https://github.com/fluxcd/image-reflector-controller/pull/950)
+- Retire the `ObjectLevelWorkloadIdentity` feature gate
+  [#950](https://github.com/fluxcd/image-reflector-controller/pull/950)
+- Add SPIFFE mTLS between the controllers
+  [#948](https://github.com/fluxcd/image-reflector-controller/pull/948)
+- Update to Kubernetes 1.37 and Go 1.27
+  [#939](https://github.com/fluxcd/image-reflector-controller/pull/939)
+  [#943](https://github.com/fluxcd/image-reflector-controller/pull/943)
+- Various dependency updates
+  [#933](https://github.com/fluxcd/image-reflector-controller/pull/933)
+  [#952](https://github.com/fluxcd/image-reflector-controller/pull/952)
+
 ## 1.2.5
 
 **Release date:** 2026-08-31
