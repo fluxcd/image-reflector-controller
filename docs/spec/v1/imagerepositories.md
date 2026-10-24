@@ -32,8 +32,8 @@ In the above example:
 - The registry authentication is done using a generic provider, indicated by the
   `.spec.provider` field and referenced using `.spec.secretRef`. For the generic
   provider, authentication can also use the image pull secrets attached to
-  `.spec.serviceAccountName`, or a ServiceAccount token for object-level
-  workload identity. See [Provider](#provider) for more details related to
+  `.spec.serviceAccountName`, or a ServiceAccount token for object identity.
+  See [Provider](#provider) for more details related to
   registry authentication.
 - The canonical form of the image set in `.spec.image` is used to scan the
   repository. The resolved canonical form of the image is reported in the
@@ -197,15 +197,14 @@ the `.spec.provider` field:
 
 - When `.spec.provider` is set to `generic`, the controller will use the image
   pull secrets attached to the Service Account for static authentication, or
-  use the Service Account token for object-level workload identity when the
+  use the Service Account token for object identity when the
   Service Account opts in with the credential annotations described below.
 - When `.spec.provider` is set to `aws`, `azure`, or `gcp`, the Service Account
-  will be used for Workload Identity authentication.
+  will be used to acquire an object identity.
 
-For a complete guide to the ServiceAccount annotations used for object-level
-workload identity, including the `spiffe` credential provider, see the
-[ServiceAccount annotations](/flux/integrations/serviceaccount-annotations)
-docs.
+For a complete guide to the ServiceAccount annotations used for object
+identity, including the `spiffe` credential provider, see the
+[Object Identity](/flux/integrations/object-identity/) docs.
 
 **Note:** that for a publicly accessible image repository, you don't need to
 provide a `secretRef` nor `serviceAccountName`.
@@ -521,7 +520,7 @@ Supported options are:
 The `generic` provider can be used for public repositories, when
 static credentials are used for authentication, either with
 `spec.secretRef` or `spec.serviceAccountName`, or when a Kubernetes
-ServiceAccount token is used for object-level workload identity, as described
+ServiceAccount token is used for object identity, as described
 in the [ServiceAccount name](#serviceaccount-name) section.
 If you do not specify `.spec.provider`, it defaults to `generic`.
 

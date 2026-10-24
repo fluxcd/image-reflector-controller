@@ -60,7 +60,10 @@ type ImageRepositorySpec struct {
 	ProxySecretRef *meta.LocalObjectReference `json:"proxySecretRef,omitempty"`
 
 	// ServiceAccountName is the name of the Kubernetes ServiceAccount used to authenticate
-	// the image pull if the service account has attached pull secrets.
+	// the image pull, either with the pull secrets attached to the service account or with
+	// an object identity.
+	// For more information about object identity:
+	// https://fluxcd.io/flux/integrations/object-identity/
 	// +kubebuilder:validation:MaxLength=253
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
