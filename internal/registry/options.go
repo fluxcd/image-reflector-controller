@@ -34,7 +34,7 @@ import (
 	authutils "github.com/fluxcd/pkg/auth/utils"
 	"github.com/fluxcd/pkg/cache"
 	"github.com/fluxcd/pkg/runtime/secrets"
-	fluxbroker "github.com/fluxcd/pkg/spiffe/broker"
+	fluxbroker "github.com/fluxcd/pkg/spiffe/brokerapi"
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 )
@@ -140,7 +140,7 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 		}
 		authOpts = append(authOpts, auth.OptionsFromSpec(spec.Auth)...)
 		if r.SPIFFEBroker != nil {
-			authOpts = append(authOpts, auth.WithSPIFFEBroker(r.SPIFFEBroker))
+			authOpts = append(authOpts, auth.WithSPIFFEBrokerAPI(r.SPIFFEBroker))
 		}
 		if sa != nil {
 			authOpts = append(authOpts, auth.WithServiceAccountName(sa.Name))
