@@ -15,7 +15,7 @@ require (
 	github.com/fluxcd/pkg/apis/event v0.32.0
 	github.com/fluxcd/pkg/apis/meta v1.38.0
 	github.com/fluxcd/pkg/artifact v0.27.1
-	github.com/fluxcd/pkg/auth v0.66.1
+	github.com/fluxcd/pkg/auth v0.66.2
 	github.com/fluxcd/pkg/cache v0.19.0
 	github.com/fluxcd/pkg/runtime v0.122.0
 	github.com/fluxcd/pkg/spiffe v0.2.0
