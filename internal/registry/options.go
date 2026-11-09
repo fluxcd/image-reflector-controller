@@ -88,8 +88,11 @@ func (r *AuthOptionsGetter) GetOptions(ctx context.Context, repo *imagev1.ImageR
 	provider := repo.GetProvider()
 
 	// Apply the default ServiceAccount when the object does not specify one.
+	// The generic provider only uses a ServiceAccount when explicitly
+	// referenced by the object. Applying the default ServiceAccount to the
+	// generic provider would be a breaking change, so it is not supported.
 	saName := repo.Spec.ServiceAccountName
-	if saName == "" {
+	if saName == "" && provider != "generic" {
 		saName = r.DefaultServiceAccount
 	}
 
