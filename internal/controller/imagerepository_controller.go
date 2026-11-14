@@ -463,6 +463,8 @@ func (r *ImageRepositoryReconciler) reconcileDelete(ctx context.Context, obj *im
 
 // filterOutTags filters the given tags through the given regular expression
 // patterns and returns a list of tags that don't match with the pattern.
+// It compacts tags in place and clears unused entries. Invalid patterns leave
+// tags unchanged.
 func filterOutTags(tags []string, patterns []string) ([]string, error) {
 	// Compile all the regex first.
 	compiledRegexp := []*regexp.Regexp{}
@@ -475,7 +477,7 @@ func filterOutTags(tags []string, patterns []string) ([]string, error) {
 	}
 
 	// Pass the tags through the compiled regex and collect the filtered tags.
-	filteredTags := []string{}
+	filteredTags := tags[:0]
 	for _, tag := range tags {
 		match := false
 		for _, regex := range compiledRegexp {
@@ -487,6 +489,10 @@ func filterOutTags(tags []string, patterns []string) ([]string, error) {
 		if !match {
 			filteredTags = append(filteredTags, tag)
 		}
+	}
+	clear(tags[len(filteredTags):])
+	if len(filteredTags) == 0 {
+		return []string{}, nil
 	}
 	return filteredTags, nil
 }
