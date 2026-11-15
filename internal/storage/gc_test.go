@@ -25,7 +25,6 @@ import (
 
 	artifactstorage "github.com/fluxcd/pkg/artifact/storage"
 	"github.com/go-logr/logr/testr"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -41,7 +40,7 @@ func TestFilesystemGarbageCollectorNeedLeaderElection(t *testing.T) {
 }
 
 func TestFilesystemGarbageCollectorDeletesOrphans(t *testing.T) {
-	st, cl := newGCTestStorage(t, &imagev1.ImageRepository{ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "keep"}})
+	st, cl := newGCTestStorage(t, &imagev1.ImageRepository{Namespace: "default", Name: "keep"})
 	createRepoDir(t, st, "default", "keep")
 	createRepoDir(t, st, "default", "orphan")
 
@@ -85,7 +84,7 @@ func TestFilesystemGarbageCollectorEmptyResponsibleSetDeletesAll(t *testing.T) {
 }
 
 func TestFilesystemGarbageCollectorPrunesEmptyNamespaceDirs(t *testing.T) {
-	st, cl := newGCTestStorage(t, &imagev1.ImageRepository{ObjectMeta: metav1.ObjectMeta{Namespace: "keep-ns", Name: "keep"}})
+	st, cl := newGCTestStorage(t, &imagev1.ImageRepository{Namespace: "keep-ns", Name: "keep"})
 	createRepoDir(t, st, "keep-ns", "keep")
 	// orphan repo whose namespace becomes empty once it's pruned
 	createRepoDir(t, st, "orphan-ns", "orphan")

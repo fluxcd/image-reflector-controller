@@ -89,9 +89,9 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), contextTimeout)
 	defer cancel()
 
-	ns := corev1.Namespace{}
-	ns.Name = "cross-ns-test-" + randStringRunes(5)
-	ns.Labels = namespaceLabels
+	ns := corev1.Namespace{
+		Name:   "cross-ns-test-" + randStringRunes(5),
+		Labels: namespaceLabels}
 
 	imagePolicyName := types.NamespacedName{
 		Namespace: ns.Name,
@@ -109,9 +109,9 @@ func TestImagePolicyReconciler_crossNamespaceRefsDisallowed(t *testing.T) {
 				},
 			},
 		},
-	}
-	imagePolicy.Namespace = imagePolicyName.Namespace
-	imagePolicy.Name = imagePolicyName.Name
+
+		Namespace: imagePolicyName.Namespace,
+		Name:      imagePolicyName.Name}
 
 	builder := fakeclient.NewClientBuilder().WithScheme(testEnv.GetScheme())
 	builder.WithObjects(&repo, &ns, &imagePolicy)
@@ -218,9 +218,9 @@ func TestImagePolicyReconciler_calculateImageFromRepoTags(t *testing.T) {
 					},
 					Policy: tt.policy,
 				},
-			}
-			pol.Namespace = polName.Namespace
-			pol.Name = polName.Name
+
+				Namespace: polName.Namespace,
+				Name:      polName.Name}
 
 			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 
@@ -332,9 +332,9 @@ func TestImagePolicyReconciler_filterTags(t *testing.T) {
 						},
 					},
 				},
-			}
-			pol.Namespace = polName.Namespace
-			pol.Name = polName.Name
+
+				Namespace: polName.Namespace,
+				Name:      polName.Name}
 
 			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 
@@ -508,9 +508,9 @@ func TestImagePolicyReconciler_accessImageRepo(t *testing.T) {
 						},
 					},
 				},
-			}
-			pol.Namespace = polName.Namespace
-			pol.Name = polName.Name
+
+				Namespace: polName.Namespace,
+				Name:      polName.Name}
 
 			g.Expect(testEnv.Create(ctx, &pol)).To(Succeed())
 

@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -133,10 +134,5 @@ func readEntryNames(t *testing.T, dir string) []string {
 }
 
 func contains(items []string, item string) bool {
-	for _, v := range items {
-		if v == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(items, item)
 }

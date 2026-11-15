@@ -242,9 +242,6 @@ func TestMain(m *testing.M) {
 	}
 
 	exitCode = m.Run()
-
-	// log.Println("Uninstalling flux")
-	// uninstallFlux(ctx, kubeconfigPath, fluxInstallManifestPath)
 }
 
 // getProviderConfig returns the test configuration of supported providers.

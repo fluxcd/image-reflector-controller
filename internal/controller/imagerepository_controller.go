@@ -509,13 +509,7 @@ func isEqualSliceContent(a, b []string) bool {
 		return false
 	}
 	for _, x := range a {
-		found := false
-		for _, y := range b {
-			if x == y {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(b, x)
 		if !found {
 			return false
 		}

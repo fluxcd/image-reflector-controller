@@ -78,7 +78,7 @@ const maxDiscards = 1000
 
 func (gc *BadgerGarbageCollector) discardValueLogFiles() {
 	gc.log.V(1).Info("Running Badger GC")
-	for c := 0; c < maxDiscards; c++ {
+	for c := range maxDiscards {
 		err := gc.db.RunValueLogGC(gc.DiscardRatio)
 		if errors.Is(err, badger.ErrNoRewrite) {
 			// there is no more garbage to discard
