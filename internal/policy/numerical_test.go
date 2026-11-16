@@ -101,6 +101,17 @@ func TestNumerical_Latest(t *testing.T) {
 			expectedVersion: "1606234201",
 		},
 		{
+			label:           "With large integers exceeding float64 precision ascending",
+			versions:        []string{"1696591200000000000", "1696591200000000002", "1696591200000000001"},
+			expectedVersion: "1696591200000000002",
+		},
+		{
+			label:           "With large integers exceeding float64 precision descending",
+			versions:        []string{"1696591200000000000", "1696591200000000002", "1696591200000000001"},
+			order:           NumericalOrderDesc,
+			expectedVersion: "1696591200000000000",
+		},
+		{
 			label:           "With single value ascending",
 			versions:        []string{"1"},
 			expectedVersion: "1",
