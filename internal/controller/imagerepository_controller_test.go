@@ -86,7 +86,7 @@ func TestImageRepositoryReconciler_deleteBeforeFinalizer(t *testing.T) {
 
 	namespaceName := "imagerepo-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -119,7 +119,7 @@ func TestImageRepositoryReconciler_patchErrorClearsResult(t *testing.T) {
 	g := NewWithT(t)
 
 	obj := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		Name: "test", Namespace: "default",
 		Spec: imagev1.ImageRepositorySpec{
 			Interval: metav1.Duration{Duration: interval},
 			Image:    "test-image",
@@ -713,10 +713,8 @@ func TestImageRepositoryReconciler_TLS(t *testing.T) {
 
 	// Construct ImageRepository.
 	obj := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "repo-" + randStringRunes(5),
-			Namespace: testNamespace,
-		},
+		Name:      "repo-" + randStringRunes(5),
+		Namespace: testNamespace,
 		Spec: imagev1.ImageRepositorySpec{
 			Image: repoURL,
 			CertSecretRef: &meta.LocalObjectReference{
@@ -759,7 +757,7 @@ func TestImageRepositoryReconciler_reconcileRequestStatus(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -767,10 +765,8 @@ func TestImageRepositoryReconciler_reconcileRequestStatus(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/stefanprodan/podinfo",
 		},

@@ -25,7 +25,6 @@ import (
 	"github.com/fluxcd/pkg/runtime/secrets"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -75,11 +74,9 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 	}
 
 	testProxySecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-proxy-secret",
-			Namespace: testNamespace,
-		},
-		Type: corev1.SecretTypeOpaque,
+		Name:      "test-proxy-secret",
+		Namespace: testNamespace,
+		Type:      corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			"address": []byte("http://proxy.example.com"),
 		},
@@ -348,12 +345,10 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 			}
 
 			repo := imagev1.ImageRepository{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "reconcile-repo-",
-					Generation:   1,
-					Namespace:    testNamespace,
-				},
-				Spec: tt.imageRepoSpec,
+				GenerateName: "reconcile-repo-",
+				Generation:   1,
+				Namespace:    testNamespace,
+				Spec:         tt.imageRepoSpec,
 			}
 
 			_, err := getter.GetOptions(context.Background(), &repo, imagev1.ImageRepositoryKind, &repo)

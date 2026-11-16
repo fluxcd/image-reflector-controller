@@ -29,7 +29,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
 
 	"github.com/fluxcd/pkg/runtime/controller"
 	"github.com/fluxcd/pkg/runtime/events"
@@ -151,14 +150,4 @@ func randStringRunes(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
-}
-
-func logRepoStatus(t *testing.T, obj *imagev1.ImageRepository) {
-	sts, _ := yaml.Marshal(obj.Status)
-	t.Log(string(sts))
-}
-
-func logPolicyStatus(t *testing.T, obj *imagev1.ImagePolicy) {
-	sts, _ := yaml.Marshal(obj.Status)
-	t.Log(string(sts))
 }

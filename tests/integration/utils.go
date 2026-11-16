@@ -69,10 +69,3 @@ func installFlux(ctx context.Context, kubeconfig, installManifest string) error 
 		tftestenv.RunCommandOptions{},
 	)
 }
-
-func uninstallFlux(ctx context.Context, kubeconfig, installManifest string) error {
-	return tftestenv.RunCommand(ctx, "./",
-		fmt.Sprintf("kubectl --kubeconfig=%s delete -f %s", kubeconfig, installManifest),
-		tftestenv.RunCommandOptions{},
-	)
-}

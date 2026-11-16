@@ -21,7 +21,6 @@ import (
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	eventv1 "github.com/fluxcd/pkg/apis/event/v1"
@@ -137,10 +136,8 @@ func TestNotifyRelatedObject(t *testing.T) {
 		{
 			name: "related ImageRepository is recorded on the event",
 			related: &imagev1.ImageRepository{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "repo",
-					Namespace: "ns",
-				},
+				Name:      "repo",
+				Namespace: "ns",
 			},
 			wantRelated: &corev1.ObjectReference{
 				Name:      "repo",

@@ -38,7 +38,7 @@ import (
 // This log is different from the debug log in the Recorder, in the sense
 // that this is a simple log. While the debug log contains complete details
 // about the event.
-func eventLogf(ctx context.Context, r events.Recorder, obj runtime.Object, related runtime.Object, eventType string, reason string, action imagev1.Action, messageFmt string, args ...interface{}) {
+func eventLogf(ctx context.Context, r events.Recorder, obj runtime.Object, related runtime.Object, eventType string, reason string, action imagev1.Action, messageFmt string, args ...any) {
 	msg := fmt.Sprintf(messageFmt, args...)
 	// Log and emit event.
 	if eventType == corev1.EventTypeWarning {

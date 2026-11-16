@@ -28,7 +28,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +53,7 @@ func TestImagePolicyReconciler_imageRepoHasNoTags(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -62,10 +61,8 @@ func TestImagePolicyReconciler_imageRepoHasNoTags(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/doesnot/exist",
 		},
@@ -76,10 +73,8 @@ func TestImagePolicyReconciler_imageRepoHasNoTags(t *testing.T) {
 	})
 
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
@@ -107,7 +102,7 @@ func TestImagePolicyReconciler_patchErrorClearsResult(t *testing.T) {
 	g := NewWithT(t)
 
 	obj := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		Name: "test", Namespace: "default",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{Name: "repo"},
 			Policy: imagev1.ImagePolicyChoice{
@@ -148,7 +143,7 @@ func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -156,10 +151,8 @@ func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/stefanprodan/podinfo",
 		},
@@ -175,10 +168,8 @@ func TestImagePolicyReconciler_ignoresImageRepoNotReadyEvent(t *testing.T) {
 	}, timeout).Should(BeTrue())
 
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
@@ -234,7 +225,7 @@ func TestImagePolicyReconciler_imageRepoRevisionLifeCycle(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -242,10 +233,8 @@ func TestImagePolicyReconciler_imageRepoRevisionLifeCycle(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/stefanprodan/podinfo",
 		},
@@ -262,10 +251,8 @@ func TestImagePolicyReconciler_imageRepoRevisionLifeCycle(t *testing.T) {
 	}, timeout).Should(BeTrue())
 
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
@@ -375,7 +362,7 @@ func TestImagePolicyReconciler_invalidImage(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -383,10 +370,8 @@ func TestImagePolicyReconciler_invalidImage(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image:   "ghcr.io/stefanprodan/podinfo/foo:bar:zzz:qqq/aaa",
 			Suspend: true,
@@ -408,10 +393,8 @@ func TestImagePolicyReconciler_invalidImage(t *testing.T) {
 	}).Should(BeTrue())
 
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
@@ -471,7 +454,7 @@ func TestImagePolicyReconciler_apiServerValidation(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -480,10 +463,8 @@ func TestImagePolicyReconciler_apiServerValidation(t *testing.T) {
 
 	// Test invalid ImagePolicy spec due to interval set without digestReflectionPolicy=Always.
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: "foo",
@@ -513,7 +494,7 @@ func TestImagePolicyReconciler_deleteBeforeFinalizer(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -717,11 +698,9 @@ func TestImagePolicyReconciler_getImageRepository(t *testing.T) {
 			}
 
 			obj := &imagev1.ImagePolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "reconcile-policy-",
-					Generation:   1,
-					Namespace:    testNamespace1,
-				},
+				GenerateName: "reconcile-policy-",
+				Generation:   1,
+				Namespace:    testNamespace1,
 			}
 			obj.Spec = tt.imagePolicySpec
 
@@ -991,10 +970,8 @@ func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 
 			// Create ImageRepository.
 			imageRepo := &imagev1.ImageRepository{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: ns.Name,
-					Name:      "digref-test",
-				},
+				Namespace: ns.Name,
+				Name:      "digref-test",
 				Spec: imagev1.ImageRepositorySpec{
 					Image: imgRepo,
 				},
@@ -1013,11 +990,9 @@ func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 			}
 
 			imagePol := &imagev1.ImagePolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:  ns.Name,
-					Name:       "digref-test",
-					Finalizers: []string{imagev1.ImageFinalizer},
-				},
+				Namespace:  ns.Name,
+				Name:       "digref-test",
+				Finalizers: []string{imagev1.ImageFinalizer},
 				Spec: imagev1.ImagePolicySpec{
 					ImageRepositoryRef: meta.NamespacedObjectReference{
 						Name: imageRepo.Name,
@@ -1054,10 +1029,8 @@ func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 			}
 
 			res, err := r.Reconcile(context.Background(), ctrl.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: ns.Name,
-					Name:      imagePol.Name,
-				},
+				Namespace: ns.Name,
+				Name:      imagePol.Name,
 			})
 
 			g.Expect(err).NotTo(HaveOccurred(), "reconciliation failed")
@@ -1095,10 +1068,8 @@ func TestImagePolicyReconciler_digestReflection(t *testing.T) {
 			}()
 
 			res, err = r.Reconcile(context.Background(), ctrl.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: ns.Name,
-					Name:      imagePol.Name,
-				},
+				Namespace: ns.Name,
+				Name:      imagePol.Name,
 			})
 
 			g.Expect(err).NotTo(HaveOccurred(), "reconciliation failed")
@@ -1209,10 +1180,8 @@ func TestImagePolicyReconciler_applyPolicy(t *testing.T) {
 			}
 
 			obj := &imagev1.ImagePolicy{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: "reconcile-policy-",
-					Generation:   1,
-				},
+				GenerateName: "reconcile-policy-",
+				Generation:   1,
 			}
 			obj.Spec.Policy = tt.policy
 			obj.Spec.FilterTags = tt.filter
@@ -1330,7 +1299,7 @@ func TestImagePolicyReconciler_intervalBasedReconciliation(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -1338,10 +1307,8 @@ func TestImagePolicyReconciler_intervalBasedReconciliation(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/stefanprodan/podinfo",
 		},
@@ -1362,10 +1329,8 @@ func TestImagePolicyReconciler_intervalBasedReconciliation(t *testing.T) {
 
 	// Create ImagePolicy with DigestReflectionPolicy=Always and 1-minute interval
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
@@ -1397,10 +1362,8 @@ func TestImagePolicyReconciler_intervalBasedReconciliation(t *testing.T) {
 
 	// Create another ImagePolicy without interval (DigestReflectionPolicy=Never by default)
 	imagePolicyNoInterval := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy-no-interval",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy-no-interval",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
@@ -1433,7 +1396,7 @@ func TestImagePolicyReconciler_suspend(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -1441,10 +1404,8 @@ func TestImagePolicyReconciler_suspend(t *testing.T) {
 	})
 
 	obj := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			Suspend: true,
 		},
@@ -1472,7 +1433,7 @@ func TestImagePolicyReconciler_reconcileRequestStatus(t *testing.T) {
 
 	namespaceName := "imagepolicy-" + randStringRunes(5)
 	namespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{Name: namespaceName},
+		Name: namespaceName,
 	}
 	g.Expect(k8sClient.Create(ctx, namespace)).ToNot(HaveOccurred())
 	t.Cleanup(func() {
@@ -1480,10 +1441,8 @@ func TestImagePolicyReconciler_reconcileRequestStatus(t *testing.T) {
 	})
 
 	imageRepo := &imagev1.ImageRepository{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "repo",
-		},
+		Namespace: namespaceName,
+		Name:      "repo",
 		Spec: imagev1.ImageRepositorySpec{
 			Image: "ghcr.io/stefanprodan/podinfo",
 		},
@@ -1499,10 +1458,8 @@ func TestImagePolicyReconciler_reconcileRequestStatus(t *testing.T) {
 	}, timeout).Should(BeTrue())
 
 	imagePolicy := &imagev1.ImagePolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespaceName,
-			Name:      "test-imagepolicy",
-		},
+		Namespace: namespaceName,
+		Name:      "test-imagepolicy",
 		Spec: imagev1.ImagePolicySpec{
 			ImageRepositoryRef: meta.NamespacedObjectReference{
 				Name: imageRepo.Name,
