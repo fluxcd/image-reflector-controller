@@ -299,6 +299,23 @@ func TestNewAuthOptionsGetter_GetOptions(t *testing.T) {
 			},
 		},
 		{
+			name: "generic provider ignores default service account",
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:    testImg,
+				Provider: "generic",
+			},
+			defaultServiceAccount: "missing-service-account",
+		},
+		{
+			name: "generic provider with missing service account",
+			imageRepoSpec: imagev1.ImageRepositorySpec{
+				Image:              testImg,
+				Provider:           "generic",
+				ServiceAccountName: "missing-service-account",
+			},
+			wantErr: true,
+		},
+		{
 			name:     "generic provider service account",
 			mockObjs: []client.Object{testServiceAccountWithOptIn},
 			imageRepoSpec: imagev1.ImageRepositorySpec{
