@@ -18,7 +18,7 @@ package policy
 
 import (
 	"fmt"
-	"strconv"
+	"math/big"
 )
 
 const (
@@ -57,17 +57,17 @@ func (p *Numerical) Latest(versions []string) (string, error) {
 	}
 
 	var latest string
-	var pv float64
+	var pv *big.Rat
 	for i, version := range versions {
-		cv, err := strconv.ParseFloat(version, 64)
-		if err != nil {
+		cv, ok := new(big.Rat).SetString(version)
+		if !ok {
 			return "", fmt.Errorf("failed to parse invalid numeric value '%s'", version)
 		}
 
 		switch {
 		case i == 0:
 			// First iteration, nothing to compare
-		case p.Order == NumericalOrderAsc && cv < pv, p.Order == NumericalOrderDesc && cv > pv:
+		case p.Order == NumericalOrderAsc && cv.Cmp(pv) < 0, p.Order == NumericalOrderDesc && cv.Cmp(pv) > 0:
 			continue
 		}
 
