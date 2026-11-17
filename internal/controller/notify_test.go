@@ -17,7 +17,10 @@ limitations under the License.
 package controller
 
 import (
+	"context"
+	"errors"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +33,46 @@ import (
 
 	imagev1 "github.com/fluxcd/image-reflector-controller/api/v1"
 )
+
+func TestNotifyContext(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		context   func() context.Context
+		wantEvent bool
+	}{
+		{name: "active", context: context.Background, wantEvent: true},
+		{name: "canceled", context: func() context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		}},
+		{name: "canceled with cause", context: func() context.Context {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cancel(errors.New("manager stopped"))
+			return ctx
+		}},
+		{name: "deadline exceeded", context: func() context.Context {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			cancel()
+			return ctx
+		}, wantEvent: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			oldObj := &imagev1.ImageRepository{}
+			conditions.MarkTrue(oldObj, meta.ReadyCondition, meta.SucceededReason, "found tags")
+			newObj := oldObj.DeepCopy()
+			conditions.MarkFalse(newObj, meta.ReadyCondition, meta.FailedReason, "context canceled")
+			recorder := events.NewFakeRecorder(1, false)
+			notify(tt.context(), recorder, oldObj, newObj, nil, imagev1.ActionScan, "")
+			if tt.wantEvent {
+				g.Expect(recorder.GetEvents()).To(HaveLen(1))
+			} else {
+				g.Expect(recorder.GetEvents()).To(BeEmpty())
+			}
+		})
+	}
+}
 
 func TestNotify(t *testing.T) {
 	nextScanMsg := "foo"

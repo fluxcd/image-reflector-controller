@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"hash/adler32"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -512,6 +513,90 @@ func TestImageRepositoryReconciler_scan_noOwnTimeout(t *testing.T) {
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(sawDeadline).To(BeFalse(),
 		"scan must not apply its own timeout; the timeout is owned by reconcile and spans the whole scan")
+}
+
+func TestImageRepositoryReconciler_notificationContext(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		cancel        bool
+		timeout       bool
+		registryError bool
+	}{
+		{name: "success"},
+		{name: "registry error", registryError: true},
+		{name: "scan timeout", timeout: true},
+		{name: "shutdown", cancel: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				if !strings.HasSuffix(req.URL.Path, "/tags/list") {
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				if tt.cancel || tt.timeout {
+					if tt.cancel {
+						cancel()
+					}
+					<-req.Context().Done()
+					return
+				}
+				if tt.registryError {
+					http.Error(w, "registry failed", http.StatusForbidden)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, `{"name":"test","tags":["v1"]}`)
+			}))
+			t.Cleanup(srv.Close)
+			obj := &imagev1.ImageRepository{
+				Name: "test", Namespace: "default",
+				Spec: imagev1.ImageRepositorySpec{
+					Image:    test.RegistryName(srv) + "/test",
+					Insecure: true,
+					Interval: metav1.Duration{Duration: time.Minute},
+				},
+			}
+			if tt.timeout {
+				obj.Spec.Timeout = &metav1.Duration{Duration: 100 * time.Millisecond}
+			}
+			c := fake.NewClientBuilder().WithScheme(testEnv.GetScheme()).WithObjects(obj).
+				WithStatusSubresource(&imagev1.ImageRepository{}).Build()
+			recorder := events.NewFakeRecorder(1, false)
+			r := &ImageRepositoryReconciler{
+				Client:            c,
+				Recorder:          recorder,
+				Database:          &mockDatabase{},
+				AuthOptionsGetter: &registry.AuthOptionsGetter{Client: c},
+				patchOptions:      getPatchOptions(imageRepositoryOwnedConditions, "irc"),
+			}
+			_, err := r.reconcile(ctx, patch.NewSerialPatcher(obj, c), obj, time.Now())
+			if tt.cancel || tt.timeout || tt.registryError {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(conditions.IsReady(obj)).To(BeFalse())
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(conditions.IsReady(obj)).To(BeTrue())
+			}
+			switch {
+			case tt.cancel:
+				g.Expect(errors.Is(err, context.Canceled)).To(BeTrue())
+				expectEvent(g, recorder, nil)
+			case tt.timeout:
+				g.Expect(errors.Is(err, context.DeadlineExceeded)).To(BeTrue())
+				expectEvent(g, recorder, &corev1.Event{Type: corev1.EventTypeWarning, Reason: imagev1.ReadOperationFailedReason,
+					Action: imagev1.ActionScan.String(), Message: "context deadline exceeded"})
+			case tt.registryError:
+				expectEvent(g, recorder, &corev1.Event{Type: corev1.EventTypeWarning, Reason: imagev1.ReadOperationFailedReason,
+					Action: imagev1.ActionScan.String(), Message: "registry failed"})
+			default:
+				expectEvent(g, recorder, &corev1.Event{Type: corev1.EventTypeNormal, Reason: meta.SucceededReason,
+					Action: imagev1.ActionScan.String(), Message: "successful scan"})
+			}
+		})
+	}
 }
 
 func TestSortTagsAndGetLatestTags(t *testing.T) {

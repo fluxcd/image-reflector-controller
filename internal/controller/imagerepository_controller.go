@@ -206,7 +206,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 	// Set a default next scan time before processing the object.
 	nextScanTime := obj.GetRequeueAfter()
 
-	defer func() {
+	defer func(ctx context.Context) {
 		// Define the meaning of success based on the value of next scan time.
 		isSuccess := func(res ctrl.Result, err error) bool {
 			if err != nil || res.RequeueAfter != nextScanTime || res.Requeue {
@@ -229,7 +229,7 @@ func (r *ImageRepositoryReconciler) reconcile(ctx context.Context, sp *patch.Ser
 		}
 
 		notify(ctx, r.Recorder, oldObj, obj, nil, imagev1.ActionScan, nextScanMsg)
-	}()
+	}(ctx)
 
 	// Set reconciling condition.
 	reconcile.ProgressiveStatus(false, obj, meta.ProgressingReason, "reconciliation in progress")

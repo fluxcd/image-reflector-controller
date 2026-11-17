@@ -58,6 +58,10 @@ func eventLogf(ctx context.Context, r events.Recorder, obj runtime.Object, relat
 // event, such as the ImageRepository an ImagePolicy selects from. It may be
 // nil when there is no related object to annotate.
 func notify(ctx context.Context, r events.Recorder, oldObj, newObj conditions.Setter, related runtime.Object, action imagev1.Action, statusMsg string) {
+	if ctx.Err() == context.Canceled {
+		return
+	}
+
 	ready := conditions.Get(newObj, meta.ReadyCondition)
 
 	// Was ready before and is ready now, but the results have changed.
