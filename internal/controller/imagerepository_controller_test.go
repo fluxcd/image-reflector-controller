@@ -25,6 +25,7 @@ import (
 	"hash/adler32"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -579,6 +580,34 @@ func TestFilterOutTags(t *testing.T) {
 		wantTags []string
 	}{
 		{
+			name:     "nil tags",
+			wantTags: []string{},
+		},
+		{
+			name:     "empty tags",
+			tags:     []string{},
+			patterns: []string{".*"},
+			wantTags: []string{},
+		},
+		{
+			name:     "all tags excluded",
+			tags:     []string{"a", "b", "c", "d"},
+			patterns: []string{".*"},
+			wantTags: []string{},
+		},
+		{
+			name:     "no tags excluded",
+			tags:     []string{"a", "b", "c", "d"},
+			patterns: []string{"^z"},
+			wantTags: []string{"a", "b", "c", "d"},
+		},
+		{
+			name:     "preserves order and duplicates",
+			tags:     []string{"c", "a", "b", "c", "a"},
+			patterns: []string{"^a$"},
+			wantTags: []string{"c", "b", "c"},
+		},
+		{
 			name:     "no pattern",
 			tags:     []string{"a", "b", "c", "d"},
 			wantTags: []string{"a", "b", "c", "d"},
@@ -601,6 +630,12 @@ func TestFilterOutTags(t *testing.T) {
 			wantErr:  true,
 		},
 		{
+			name:     "invalid pattern after valid exclusion",
+			tags:     []string{"a", "b", "c", "d"},
+			patterns: []string{"^a$", "[="},
+			wantErr:  true,
+		},
+		{
 			name:     "version tags",
 			tags:     []string{"0.1.0", "0.2.0", "0.2.-alpha", "0.3.0", "0.4.0", "0.4.0.sig"},
 			patterns: []string{"^.*\\-alpha$", "^.*\\.sig$"},
@@ -618,10 +653,62 @@ func TestFilterOutTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
+			original := slices.Clone(tt.tags)
 			result, err := filterOutTags(tt.tags, tt.patterns)
 			g.Expect(err != nil).To(Equal(tt.wantErr))
 			g.Expect(result).To(Equal(tt.wantTags))
+			if tt.wantErr {
+				g.Expect(tt.tags).To(Equal(original))
+			} else {
+				for _, tag := range tt.tags[len(result):] {
+					g.Expect(tag).To(BeEmpty(), "unused entries must not retain tag strings")
+				}
+				if len(result) == 0 {
+					g.Expect(cap(result)).To(BeZero(), "empty results must not retain the input array")
+				}
+			}
 		})
+	}
+}
+
+func BenchmarkFilterOutTags(b *testing.B) {
+	for _, size := range []int{10000, 100000} {
+		for _, tt := range []struct {
+			name     string
+			excluded int
+			patterns []string
+		}{
+			{name: "no-patterns"},
+			{name: "exclude-0-percent", patterns: []string{"^excluded-"}},
+			{name: "exclude-50-percent", excluded: 50, patterns: []string{"^excluded-"}},
+			{name: "exclude-99-percent", excluded: 99, patterns: []string{"^excluded-"}},
+			{name: "exclude-100-percent", excluded: 100, patterns: []string{"^excluded-"}},
+		} {
+			b.Run(fmt.Sprintf("%d/%s", size, tt.name), func(b *testing.B) {
+				tags := make([]string, size)
+				for i := range tags {
+					prefix := "retained"
+					if i%100 < tt.excluded {
+						prefix = "excluded"
+					}
+					tags[i] = fmt.Sprintf("%s-%06d", prefix, i)
+				}
+				input := make([]string, len(tags))
+				wantLen := size * (100 - tt.excluded) / 100
+				b.ReportAllocs()
+				for b.Loop() {
+					// Reset the input because filtering may compact it in place.
+					copy(input, tags)
+					result, err := filterOutTags(input, tt.patterns)
+					if err != nil {
+						b.Fatal(err)
+					}
+					if len(result) != wantLen {
+						b.Fatalf("got %d tags, want %d", len(result), wantLen)
+					}
+				}
+			})
+		}
 	}
 }
 
