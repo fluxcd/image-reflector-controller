@@ -560,7 +560,7 @@ access to them.
 
 ##### Workload Identity
 
-When using Workload Identity to enable access to GCR or Artifact Registry, add
+When using Workload Identity to enable access to GCR or Artifact Registry with service account impersonation, add
 the following patch to your bootstrap repository, in the
 `flux-system/kustomization.yaml` file:
 
@@ -587,8 +587,12 @@ The Artifact Registry service uses the permission `artifactregistry.repositories
 that is located under the Artifact Registry Reader role. If you are using
 Google Container Registry service, the needed permission is instead `storage.objects.list`
 which can be bound as part of the Container Registry Service Agent role.
-Take a look at [this guide](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
-for more information about setting up GKE Workload Identity.
+
+Take a look at [this guide](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) and
+[this guide](https://cloud.google.com/iam/docs/workload-identity-federation-with-kubernetes#authenticate)
+for more information about setting up GKE Workload Identity. Note that GCP now recommends using
+[direct resource access](https://cloud.google.com/iam/docs/workload-identity-federation#direct-resource-access) as opposed
+to service account impersonation when using Workload Identity.
 
 #### Authentication on other platforms
 
