@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.3.1
+
+**Release date:** 2026-11-20
+
+This patch release stops resolving the default ServiceAccount for the `generic`
+provider, which does not use one: object identity for `generic` now only applies
+to ImageRepositories that set `.spec.serviceAccountName` explicitly, restoring
+the behavior before Flux 2.10. It also fixes the registry credentials cache key
+to include the credential username and the GCP workload identity provider, so
+changing the `credential.auth.fluxcd.io/username` ServiceAccount annotation, or
+the GCP workload identity provider, takes effect on the next reconcile instead
+of keeping the previously cached authenticator until the entry expires or the
+controller restarts.
+
+Fixes:
+- Fix resolving the default ServiceAccount for providers that don't use it
+  [#973](https://github.com/fluxcd/image-reflector-controller/pull/973)
+- Update fluxcd/pkg dependencies
+  [#965](https://github.com/fluxcd/image-reflector-controller/pull/965)
+
+Improvements:
+- Remove leftover object-level workload identity log message
+  [#972](https://github.com/fluxcd/image-reflector-controller/pull/972)
+- Update fluxcd/pkg dependencies
+  [#966](https://github.com/fluxcd/image-reflector-controller/pull/966)
+
 ## 1.3.0
 
 **Release date:** 2026-10-24
